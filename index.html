@@ -7,7 +7,27 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app">
+    <section id="login-view" class="login-screen">
+      <div class="login-card">
+        <p class="eyebrow">Territory Game</p>
+        <h1>Log in</h1>
+        <p class="lead">Use the username and password from the server. An admin can manage maps and contests. A student can look through contests and join them.</p>
+        <form id="login-form" class="problem-editor">
+          <label>
+            Username
+            <input id="login-username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="login-password" type="password" autocomplete="current-password" required />
+          </label>
+          <button id="login-submit" type="submit">Log in</button>
+          <p id="login-error" class="form-error" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <div class="app" id="app-shell" hidden>
       <aside class="sidebar">
         <button class="brand" id="home-button" type="button">Territory Game</button>
         <nav aria-label="Sections">
@@ -20,8 +40,10 @@
           </ul>
         </nav>
         <div class="account">
-          <p id="account-name">Admin</p>
-          <button id="account-button" type="button">Log in</button>
+          <img id="account-pfp" class="account-pfp" alt="" hidden />
+          <p id="account-name"></p>
+          <p id="account-role"></p>
+          <button id="account-button" type="button">Log out</button>
         </div>
       </aside>
 
@@ -154,25 +176,6 @@
           <ul id="contestant-list" class="problem-list" hidden></ul>
           <button id="join-contest" class="join-contest" type="button" hidden>Join contest</button>
           <p id="joined-note" class="field-note" hidden></p>
-        </section>
-
-        <section id="login-view" hidden>
-          <p class="eyebrow">Account</p>
-          <h1>Contestant login</h1>
-          <p class="lead">A contestant can look through contests and join them.</p>
-          <form id="login-form" class="problem-editor">
-            <label>
-              Username
-              <input id="login-username" type="text" autocomplete="username" />
-            </label>
-            <label>
-              Password
-              <input id="login-password" type="password" autocomplete="current-password" />
-            </label>
-            <button type="submit">Log in</button>
-            <p id="login-error" class="form-error" hidden></p>
-          </form>
-          <p class="field-note">Testing contestant: s22f26, password 1234.</p>
         </section>
 
         <section id="editor-view" hidden>

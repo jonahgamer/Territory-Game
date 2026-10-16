@@ -1,9 +1,8 @@
 const STORAGE_KEY = "territory-game-maps";
 const PROBLEMS_KEY = "territory-game-problems";
 const CONTESTS_KEY = "territory-game-contests";
-const ACCOUNT_KEY = "territory-game-account";
-const CONTESTANT_USERNAME = "s22f26";
-const CONTESTANT_PASSWORD = "1234";
+const SESSION_KEY = "territory-game-session";
+const LOGIN_URL = "/api/login";
 const MIN_SIZE = 1;
 const MAX_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
@@ -21,7 +20,10 @@ const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
 const creditsLabel = document.querySelector("#credits-label");
 const settingsLabel = document.querySelector("#settings-label");
+const appShell = document.querySelector("#app-shell");
 const accountName = document.querySelector("#account-name");
+const accountRole = document.querySelector("#account-role");
+const accountPfp = document.querySelector("#account-pfp");
 const accountButton = document.querySelector("#account-button");
 const homeView = document.querySelector("#home-view");
 const homeLead = homeView.querySelector(".lead");
@@ -92,11 +94,12 @@ const loginForm = document.querySelector("#login-form");
 const loginUsername = document.querySelector("#login-username");
 const loginPassword = document.querySelector("#login-password");
 const loginError = document.querySelector("#login-error");
+const loginSubmit = document.querySelector("#login-submit");
 
 let problems = readStoredProblems();
 let maps = readStoredMaps();
 let contests = readStoredContests();
-let account = readStoredAccount();
+let session = readStoredSession();
 let openMapId = null;
 let openContestId = null;
 let paintKind = "problem";
@@ -114,7 +117,7 @@ homeButton.addEventListener("click", showHome);
 mapsButton.addEventListener("click", showMaps);
 problemsButton.addEventListener("click", showProblems);
 competitionsButton.addEventListener("click", showCompetitions);
-accountButton.addEventListener("click", onAccountClick);
+accountButton.addEventListener("click", logOut);
 createContestForm.addEventListener("submit", createContest);
 contestList.addEventListener("click", onContestListClick);
 contestBackButton.addEventListener("click", showCompetitions);
@@ -167,6 +170,7 @@ problemNoInput.addEventListener("input", () => {
 });
 
 function showHome() {
+  if (!requireSession()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -179,6 +183,7 @@ function showHome() {
 }
 
 function showMaps() {
+  if (!requireSession()) return;
   if (isContestant()) {
     showCompetitions();
     return;
@@ -195,6 +200,7 @@ function showMaps() {
 }
 
 function showProblems() {
+  if (!requireSession()) return;
   if (isContestant()) {
     showCompetitions();
     return;
@@ -211,6 +217,7 @@ function showProblems() {
 }
 
 function showEditor(mapId, options = {}) {
+  if (!requireSession()) return;
   if (isContestant()) {
     showCompetitions();
     return;
@@ -972,71 +979,139 @@ function persistMaps() {
   }
 }
 
+function isSignedIn() {
+  return Boolean(session?.user?.username && session.token);
+}
+
+function isAdmin() {
+  return session?.user?.role === "admin";
+}
+
 function isContestant() {
-  return account === "contestant";
+  return isSignedIn() && !isAdmin();
+}
+
+function contestantId() {
+  return session?.user?.username || "";
+}
+
+function requireSession() {
+  if (isSignedIn()) return true;
+  showLogin();
+  return false;
 }
 
 function applyAccount() {
+  if (!isSignedIn()) {
+    appShell.hidden = true;
+    showLogin();
+    return;
+  }
+
+  appShell.hidden = false;
+  loginView.hidden = true;
   const contestant = isContestant();
+  const user = session.user;
   mapsButton.hidden = contestant;
   problemsButton.hidden = contestant;
   creditsLabel.hidden = contestant;
   settingsLabel.hidden = contestant;
-  accountName.textContent = contestant ? CONTESTANT_USERNAME : "Admin";
-  accountButton.textContent = contestant ? "Log out" : "Log in";
+  accountName.textContent = user.displayName || user.username;
+  accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
+  const pfp = safePfp(user.pfp);
+  accountPfp.hidden = !pfp;
+  accountPfp.src = pfp;
   updateHomeLead();
 }
 
 function updateHomeLead() {
+  const user = session?.user;
   homeLead.textContent = isContestant()
-    ? "Signed in as s22f26. Open Competition to see contests and join one."
+    ? `Signed in as ${user.displayName || user.username}. Open Competition to see contests and join one.`
     : "Welcome to Territory Game.";
 }
 
-function onAccountClick() {
-  if (isContestant()) {
-    account = "admin";
-    persistAccount();
-    applyAccount();
-    showHome();
-    return;
-  }
-  showLogin();
-}
-
 function showLogin() {
-  if (isContestant()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
   editingProblemNo = null;
   editingProblemType = null;
-  hideViews();
+  appShell.hidden = true;
   loginView.hidden = false;
   setCurrentSection(null);
   loginError.hidden = true;
-  loginUsername.value = "";
-  loginPassword.value = "";
+  loginSubmit.disabled = false;
   loginUsername.focus();
 }
 
-function logIn(event) {
+function logOut() {
+  session = null;
+  persistSession();
+  loginUsername.value = "";
+  loginPassword.value = "";
+  showLogin();
+}
+
+async function logIn(event) {
   event.preventDefault();
   const username = loginUsername.value.trim();
   const password = loginPassword.value;
-  if (username === CONTESTANT_USERNAME && password === CONTESTANT_PASSWORD) {
-    account = "contestant";
-    persistAccount();
-    loginPassword.value = "";
-    applyAccount();
-    showCompetitions();
+  if (!username || !password) {
+    showLoginError("Enter your username and password.");
     return;
   }
+
+  loginSubmit.disabled = true;
+  loginError.hidden = true;
+  try {
+    const response = await fetch(LOGIN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success || !data.token || !data.user?.username) {
+      showLoginError(loginFailureMessage(response, data));
+      return;
+    }
+
+    session = {
+      token: data.token,
+      user: {
+        username: String(data.user.username),
+        displayName: String(data.user.displayName || data.user.username),
+        role: data.user.role === "admin" ? "admin" : "student",
+        pfp: safePfp(data.user.pfp),
+      },
+    };
+    persistSession();
+    loginPassword.value = "";
+    applyAccount();
+    if (isAdmin()) showHome();
+    else showCompetitions();
+  } catch {
+    showLoginError("Could not reach the server.");
+  } finally {
+    loginSubmit.disabled = false;
+  }
+}
+
+function showLoginError(message) {
   loginError.hidden = false;
-  loginError.textContent = "That username or password is not a contestant account.";
+  loginError.textContent = message;
+}
+
+function loginFailureMessage(response, data) {
+  if (typeof data.message === "string" && data.message) return data.message;
+  if (response.status === 429) return "Too many login attempts. Please try again later.";
+  if (response.status === 401) return "Invalid username or password";
+  if (response.status === 404) return "Login is not available on this server.";
+  return "Could not sign in.";
 }
 
 function showCompetitions() {
+  if (!requireSession()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -1140,8 +1215,8 @@ function onContestantListClick(event) {
 function joinContest(contestId) {
   if (!isContestant()) return;
   const contest = contests.find((item) => item.id === contestId);
-  if (!contest || contest.contestantIds.includes(CONTESTANT_USERNAME)) return;
-  contest.contestantIds.push(CONTESTANT_USERNAME);
+  if (!contest || contest.contestantIds.includes(contestantId())) return;
+  contest.contestantIds.push(contestantId());
   persistContests();
   if (openContestId === contestId) renderContest();
   else renderCompetitions();
@@ -1151,7 +1226,7 @@ function renderCompetitions() {
   const contestant = isContestant();
   createContestForm.hidden = contestant;
   competitionsLead.textContent = contestant
-    ? "These are the contests you can join. Your contestant id is s22f26."
+    ? `These are the contests you can join. Your contestant id is ${contestantId()}.`
     : "Each contest uses one map. Contestants join with their id, and that id is stored on the contest.";
   if (!contestant) fillMapSelect(contestMapSelect, contestMapSelect.value);
   contestFormError.hidden = true;
@@ -1179,7 +1254,7 @@ function renderCompetitions() {
     item.append(openButton);
 
     if (contestant) {
-      if (contest.contestantIds.includes(CONTESTANT_USERNAME)) {
+      if (contest.contestantIds.includes(contestantId())) {
         const joined = document.createElement("span");
         joined.className = "joined-flag";
         joined.textContent = "Joined";
@@ -1207,14 +1282,14 @@ function renderContest() {
 
   const contestant = isContestant();
   const map = maps.find((item) => item.id === contest.mapId);
-  const joined = contest.contestantIds.includes(CONTESTANT_USERNAME);
+  const joined = contest.contestantIds.includes(contestantId());
   contestTitle.textContent = contest.name;
   contestForm.hidden = contestant;
   contestSummary.hidden = !contestant;
   deleteOpenContestButton.hidden = contestant;
   joinContestButton.hidden = !contestant || joined;
   joinedNote.hidden = !contestant || !joined;
-  joinedNote.textContent = "Joined as s22f26.";
+  joinedNote.textContent = `Joined as ${contestantId()}.`;
 
   if (contestant) {
     contestSummary.textContent = map
@@ -1300,20 +1375,63 @@ function readContestName(value) {
   return name;
 }
 
-function readStoredAccount() {
+function readStoredSession() {
   try {
-    return localStorage.getItem(ACCOUNT_KEY) === "contestant" ? "contestant" : "admin";
+    const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!stored || typeof stored.token !== "string" || !stored.user) return null;
+    if (tokenExpired(stored.token)) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    const username = String(stored.user.username || "").trim();
+    if (!username) return null;
+    return {
+      token: stored.token,
+      user: {
+        username,
+        displayName: String(stored.user.displayName || username),
+        role: stored.user.role === "admin" ? "admin" : "student",
+        pfp: safePfp(stored.user.pfp),
+      },
+    };
   } catch {
-    return "admin";
+    return null;
   }
 }
 
-function persistAccount() {
+function persistSession() {
   try {
-    localStorage.setItem(ACCOUNT_KEY, account);
+    if (!session) localStorage.removeItem(SESSION_KEY);
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch {
-    // Stay on this account for the visit if storage is unavailable.
+    // Stay signed in for this visit if storage is unavailable.
   }
+}
+
+function tokenExpired(token) {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return true;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const data = JSON.parse(json);
+    return typeof data.exp !== "number" || data.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
+function safePfp(value) {
+  if (typeof value !== "string") return "";
+  const url = value.trim();
+  if (!url || url.length > 500) return "";
+  if (url.startsWith("/") && !url.startsWith("//")) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") return url;
+  } catch {
+    return "";
+  }
+  return "";
 }
 
 function readStoredContests() {
@@ -1338,7 +1456,7 @@ function normalizeContest(value) {
   for (const id of value.contestantIds) {
     if (typeof id !== "string") return null;
     const contestantId = id.trim();
-    if (!contestantId || contestantId.length > 40 || contestantIds.includes(contestantId)) continue;
+    if (!contestantId || contestantId.length > 80 || contestantIds.includes(contestantId)) continue;
     contestantIds.push(contestantId);
   }
   return { id: value.id, name, mapId: value.mapId, contestantIds };
