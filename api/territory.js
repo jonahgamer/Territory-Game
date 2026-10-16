@@ -7,9 +7,12 @@
 //   POST /api/territory  { action: 'save-maps',     maps }
 //   POST /api/territory  { action: 'save-problems', problems }
 //   POST /api/territory  { action: 'save-contests', contests }
+//   POST /api/territory  { action: 'join-contest', contestId }
+//   POST /api/territory  { action: 'remove-contestant', contestId, contestantId }
+//   POST /api/territory  { action: 'choose-spawn', contestId, cell }
 //
-// All write ops are admin-only.
-// All reads require a valid JWT.
+// Map and problem writes, contest saves, and removing a contestant are admin-only.
+// Joining and choosing a spawn point are for a signed-in contestant.
 
 import jwt from 'jsonwebtoken';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
@@ -44,6 +47,9 @@ const MAX_PROBLEM_NO = 999;
 const MAX_PROBLEM_TEXT = 5000;
 const MAX_NAME_LEN = 60;
 const MAX_CONTESTANT_ID_LEN = 80;
+const MAX_CONTEST_MINUTES = 10080;
+const MIN_START_AT = Date.parse('2000-01-01T00:00:00Z');
+const MAX_START_AT = Date.parse('2100-01-01T00:00:00Z');
 const PROBLEM_TYPES = ['math', 'oi', 'science', 'puzzle'];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -74,16 +80,19 @@ function readBody(req) {
 // Validators
 // ═══════════════════════════════════════════════════════════════════
 
-function isValidCell(cell) {
-  if (!cell || typeof cell !== 'object') return false;
-  if (cell.kind === 'empty' || cell.kind === 'obstacle') return true;
-  if (cell.kind === 'problem') {
-    return Number.isInteger(cell.problemNo)
-      && cell.problemNo >= MIN_PROBLEM_NO
-      && cell.problemNo <= MAX_PROBLEM_NO
-      && PROBLEM_TYPES.includes(cell.type);
+function cleanCell(cell) {
+  if (!cell || typeof cell !== 'object') return null;
+  if (cell.kind === 'empty' || cell.kind === 'obstacle' || cell.kind === 'spawnpoint') {
+    return { kind: cell.kind };
   }
-  return false;
+  if (cell.kind === 'problem') {
+    if (!Number.isInteger(cell.problemNo)
+      || cell.problemNo < MIN_PROBLEM_NO
+      || cell.problemNo > MAX_PROBLEM_NO
+      || !PROBLEM_TYPES.includes(cell.type)) return null;
+    return { kind: 'problem', problemNo: cell.problemNo, type: cell.type };
+  }
+  return null;
 }
 
 function normalizeMap(v) {
@@ -95,8 +104,9 @@ function normalizeMap(v) {
   if (!Number.isInteger(v.cols) || v.cols < MIN_MAP_SIZE || v.cols > MAX_MAP_SIZE) return null;
   if (!Number.isInteger(v.rows) || v.rows < MIN_MAP_SIZE || v.rows > MAX_MAP_SIZE) return null;
   if (!Array.isArray(v.cells) || v.cells.length !== v.cols * v.rows) return null;
-  if (!v.cells.every(isValidCell)) return null;
-  return { id: v.id, name, cols: v.cols, rows: v.rows, cells: v.cells };
+  const cells = v.cells.map(cleanCell);
+  if (cells.some((cell) => !cell)) return null;
+  return { id: v.id, name, cols: v.cols, rows: v.rows, cells };
 }
 
 function normalizeProblem(v) {
@@ -108,6 +118,39 @@ function normalizeProblem(v) {
   return { index: v.index, type: v.type, prompt: v.prompt, answer: v.answer };
 }
 
+function cleanSpawns(value) {
+  if (!Array.isArray(value)) return [];
+  const spawns = [];
+  for (const spawn of value) {
+    if (!spawn || typeof spawn.contestantId !== 'string') continue;
+    const contestantId = spawn.contestantId.trim();
+    if (!contestantId || contestantId.length > MAX_CONTESTANT_ID_LEN) continue;
+    if (!Number.isInteger(spawn.cell) || spawn.cell < 0) continue;
+    if (spawns.some((item) => item.contestantId === contestantId)) continue;
+    spawns.push({ contestantId, cell: spawn.cell });
+  }
+  return spawns;
+}
+
+function contestWindow(contest) {
+  if (!contest || !Number.isInteger(contest.startAt)) return null;
+  if (contest.startAt < MIN_START_AT || contest.startAt > MAX_START_AT) return null;
+  const duration = contest.durationMinutes;
+  const spawn = contest.spawnMinutes;
+  const ready = contest.readyMinutes;
+  if (![duration, spawn, ready].every((value) => Number.isInteger(value))) return null;
+  if (duration < 1 || duration > MAX_CONTEST_MINUTES) return null;
+  if (spawn < 0 || ready < 0 || spawn > MAX_CONTEST_MINUTES || ready > MAX_CONTEST_MINUTES) return null;
+  if (spawn + ready >= duration) return null;
+  const minute = 60 * 1000;
+  return {
+    startAt: contest.startAt,
+    spawnEnd: contest.startAt + spawn * minute,
+    liveAt: contest.startAt + (spawn + ready) * minute,
+    endAt: contest.startAt + duration * minute,
+  };
+}
+
 function normalizeContest(v) {
   if (!v || typeof v !== 'object') return null;
   if (typeof v.id !== 'string' || !v.id || v.id.length > 80) return null;
@@ -116,6 +159,7 @@ function normalizeContest(v) {
   if (!name || name.length > MAX_NAME_LEN) return null;
   if (typeof v.mapId !== 'string') return null;
   if (!Array.isArray(v.contestantIds)) return null;
+  if (!contestWindow(v)) return null;
   const ids = [];
   for (const raw of v.contestantIds) {
     if (typeof raw !== 'string') continue;
@@ -124,7 +168,16 @@ function normalizeContest(v) {
     if (ids.includes(id)) continue;
     ids.push(id);
   }
-  return { id: v.id, name, mapId: v.mapId, contestantIds: ids };
+  return {
+    id: v.id,
+    name,
+    mapId: v.mapId,
+    contestantIds: ids,
+    startAt: v.startAt,
+    durationMinutes: v.durationMinutes,
+    spawnMinutes: v.spawnMinutes,
+    readyMinutes: v.readyMinutes,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -180,8 +233,17 @@ async function handleBootstrap(req, res, db, user) {
     return problem;
   });
   const cleanContests = contests.map(c => ({
-    id: c.id, name: c.name, mapId: c.mapId,
+    id: c.id,
+    name: c.name,
+    mapId: c.mapId,
     contestantIds: Array.isArray(c.contestantIds) ? c.contestantIds : [],
+    startAt: Number.isInteger(c.startAt) ? c.startAt : null,
+    durationMinutes: Number.isInteger(c.durationMinutes) ? c.durationMinutes : null,
+    spawnMinutes: Number.isInteger(c.spawnMinutes) ? c.spawnMinutes : null,
+    readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
+    spawns: cleanSpawns(c.spawns).filter((spawn) => (
+      Array.isArray(c.contestantIds) && c.contestantIds.includes(spawn.contestantId)
+    )),
   }));
 
   return res.status(200).json({
@@ -233,9 +295,25 @@ async function handleSaveContests(req, res, db, user, body) {
         const contestantIds = stored && Array.isArray(stored.contestantIds)
           ? stored.contestantIds
           : contest.contestantIds;
+        const sameMap = stored && stored.mapId === contest.mapId;
+        const spawns = sameMap
+          ? cleanSpawns(stored.spawns).filter((spawn) => contestantIds.includes(spawn.contestantId))
+          : [];
         await col.updateOne(
           { id: contest.id },
-          { $set: { name: contest.name, mapId: contest.mapId, contestantIds, updatedAt: new Date() } },
+          {
+            $set: {
+              name: contest.name,
+              mapId: contest.mapId,
+              contestantIds,
+              startAt: contest.startAt,
+              durationMinutes: contest.durationMinutes,
+              spawnMinutes: contest.spawnMinutes,
+              readyMinutes: contest.readyMinutes,
+              spawns,
+              updatedAt: new Date(),
+            },
+          },
           { upsert: true, session }
         );
       }
@@ -277,13 +355,70 @@ async function handleRemoveContestant(req, res, db, user, body) {
   const col = db.collection('contests');
   const result = await col.updateOne(
     { id: contestId },
-    { $pull: { contestantIds: contestantId }, $set: { updatedAt: new Date() } }
+    {
+      $pull: { contestantIds: contestantId, spawns: { contestantId } },
+      $set: { updatedAt: new Date() },
+    }
   );
   if (result.matchedCount === 0) {
     return res.status(404).json({ success: false, message: 'Contest not found' });
   }
   const contest = await col.findOne({ id: contestId });
   return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
+}
+
+async function handleChooseSpawn(req, res, db, user, body) {
+  const contestId = String(body.contestId || '').trim();
+  const contestantId = String(user.username || '').trim();
+  const cell = body.cell;
+  if (!contestId || !contestantId || !Number.isInteger(cell) || cell < 0) {
+    return res.status(400).json({ success: false, message: 'Choose a spawn point on the map.' });
+  }
+
+  const col = db.collection('contests');
+  const contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  if (!Array.isArray(contest.contestantIds) || !contest.contestantIds.includes(contestantId)) {
+    return res.status(403).json({ success: false, message: 'Join the contest before choosing a spawn point.' });
+  }
+
+  const timing = contestWindow(contest);
+  const now = Date.now();
+  if (!timing) return res.status(400).json({ success: false, message: 'This contest has no schedule.', serverNow: now });
+  if (now < timing.startAt || now >= timing.spawnEnd) {
+    return res.status(400).json({ success: false, message: 'Spawning is not open.', serverNow: now });
+  }
+
+  const map = await db.collection('maps').findOne({ id: contest.mapId });
+  if (!map || !Array.isArray(map.cells) || cell >= map.cells.length || map.cells[cell]?.kind !== 'spawnpoint') {
+    return res.status(400).json({ success: false, message: 'That cell is not a spawn point.', serverNow: now });
+  }
+
+  await col.updateOne({ id: contestId }, [
+    {
+      $set: {
+        spawns: {
+          $concatArrays: [
+            {
+              $filter: {
+                input: { $ifNull: ['$spawns', []] },
+                cond: { $ne: ['$$this.contestantId', contestantId] },
+              },
+            },
+            [{ contestantId, cell }],
+          ],
+        },
+        updatedAt: new Date(),
+      },
+    },
+  ]);
+
+  const updated = await col.findOne({ id: contestId });
+  return res.status(200).json({
+    success: true,
+    spawns: cleanSpawns(updated?.spawns),
+    serverNow: Date.now(),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -327,6 +462,7 @@ export default async function handler(req, res) {
       case 'save-contests': return await handleSaveContests(req, res, db, user, body);
       case 'join-contest':  return await handleJoinContest(req, res, db, user, body);
       case 'remove-contestant': return await handleRemoveContestant(req, res, db, user, body);
+      case 'choose-spawn':  return await handleChooseSpawn(req, res, db, user, body);
       default:
         return res.status(400).json({ success: false, message: 'Unknown action' });
     }
