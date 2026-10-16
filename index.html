@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Territory Game</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <button class="brand" id="home-button" type="button">Territory Game</button>
+        <nav aria-label="Sections">
+          <ul>
+            <li><button id="maps-button" type="button">Problem map</button></li>
+            <li><button id="problems-button" type="button">Problems</button></li>
+            <li><button id="competitions-button" type="button">Competition</button></li>
+            <li class="section-label" id="credits-label">Credits</li>
+            <li class="section-label" id="settings-label">Settings</li>
+          </ul>
+        </nav>
+        <div class="account">
+          <p id="account-name">Admin</p>
+          <button id="account-button" type="button">Log in</button>
+        </div>
+      </aside>
+
+      <main>
+        <section id="home-view">
+          <p class="eyebrow">Home</p>
+          <h1>Territory Game</h1>
+          <p class="lead">Welcome to Territory Game.</p>
+        </section>
+
+        <section id="maps-view" hidden>
+          <p class="eyebrow">Problem map</p>
+          <h1>Problem map</h1>
+          <p class="lead">Each map is a grid. Choose a name, width, and height, then create it. Open a map to place problems and obstacles.</p>
+
+          <form id="create-map-form" class="create-map">
+            <label>
+              Name
+              <input id="map-name" class="contest-name" name="name" type="text" maxlength="60" required />
+            </label>
+            <label>
+              Width
+              <input id="map-cols" name="cols" type="number" min="1" max="40" value="8" required />
+            </label>
+            <label>
+              Height
+              <input id="map-rows" name="rows" type="number" min="1" max="40" value="8" required />
+            </label>
+            <button type="submit">Create map</button>
+            <p id="map-form-error" class="form-error" hidden></p>
+          </form>
+
+          <h2>Created maps</h2>
+          <p id="map-empty">No maps yet.</p>
+          <ul id="map-list" class="map-list" hidden></ul>
+        </section>
+
+        <section id="problems-view" hidden>
+          <p class="eyebrow">Problems</p>
+          <h1>Problems</h1>
+          <p class="lead">Choose Math, OI, Science, or Puzzle to see those problems. The map shows the tag followed by the index: MO, OI, SCI, or PUZ. Click a problem to edit it.</p>
+          <div class="kind-choices" id="problem-section-choices">
+            <button type="button" data-section="math" aria-pressed="false">Math</button>
+            <button type="button" data-section="oi" aria-pressed="false">OI</button>
+            <button type="button" data-section="science" aria-pressed="false">Science</button>
+            <button type="button" data-section="puzzle" aria-pressed="false">Puzzle</button>
+          </div>
+          <div id="problem-section" class="problem-section" hidden>
+            <div class="problem-group-head">
+              <h2 id="problem-section-title"></h2>
+              <button id="add-problem" class="add-problem" type="button">Add problem</button>
+            </div>
+            <p id="problem-empty" class="problem-group-empty" hidden></p>
+            <ul id="problem-list" class="problem-list" hidden></ul>
+          </div>
+        </section>
+
+        <section id="problem-editor-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="problem-back-button" type="button">Back to problems</button>
+            <button class="delete-map" id="delete-open-problem" type="button">Delete</button>
+          </div>
+          <p class="eyebrow">Problems</p>
+          <h1 id="problem-editor-title"></h1>
+          <form id="problem-editor-form" class="problem-editor">
+            <label>
+              Index
+              <input id="problem-index-input" type="number" min="1" max="999" />
+            </label>
+            <p class="field-note">The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+            <p id="problem-index-error" class="form-error" hidden></p>
+            <div class="kind-choices" id="problem-type-choices">
+              <button type="button" data-problem-type="math">Math</button>
+              <button type="button" data-problem-type="oi">OI</button>
+              <button type="button" data-problem-type="science">Science</button>
+              <button type="button" data-problem-type="puzzle">Puzzle</button>
+            </div>
+            <label>
+              Problem
+              <textarea id="problem-prompt" rows="3"></textarea>
+            </label>
+            <label>
+              Answer
+              <textarea id="problem-answer" rows="2"></textarea>
+            </label>
+          </form>
+        </section>
+
+        <section id="competitions-view" hidden>
+          <p class="eyebrow">Competition</p>
+          <h1>Competition</h1>
+          <p class="lead" id="competitions-lead">Each contest uses one map. Contestants join with their id, and that id is stored on the contest.</p>
+          <form id="create-contest-form" class="create-map">
+            <label>
+              Name
+              <input id="contest-name" class="contest-name" name="name" type="text" maxlength="60" required />
+            </label>
+            <label>
+              Map
+              <select id="contest-map" name="map" required></select>
+            </label>
+            <button type="submit">Create contest</button>
+            <p id="contest-form-error" class="form-error" hidden></p>
+          </form>
+          <h2>Contests</h2>
+          <p id="contest-empty">No contests yet.</p>
+          <ul id="contest-list" class="problem-list" hidden></ul>
+        </section>
+
+        <section id="contest-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="contest-back-button" type="button">Back to contests</button>
+            <button class="delete-map" id="delete-open-contest" type="button">Delete contest</button>
+          </div>
+          <p class="eyebrow">Competition</p>
+          <h1 id="contest-title"></h1>
+          <form id="contest-form" class="problem-editor">
+            <label>
+              Name
+              <input id="contest-name-input" class="contest-name" type="text" maxlength="60" />
+            </label>
+            <label>
+              Map
+              <select id="contest-map-input"></select>
+            </label>
+          </form>
+          <p id="contest-summary" class="lead" hidden></p>
+          <h2>Contestants</h2>
+          <p id="contestant-empty">No contestants yet.</p>
+          <ul id="contestant-list" class="problem-list" hidden></ul>
+          <button id="join-contest" class="join-contest" type="button" hidden>Join contest</button>
+          <p id="joined-note" class="field-note" hidden></p>
+        </section>
+
+        <section id="login-view" hidden>
+          <p class="eyebrow">Account</p>
+          <h1>Contestant login</h1>
+          <p class="lead">A contestant can look through contests and join them.</p>
+          <form id="login-form" class="problem-editor">
+            <label>
+              Username
+              <input id="login-username" type="text" autocomplete="username" />
+            </label>
+            <label>
+              Password
+              <input id="login-password" type="password" autocomplete="current-password" />
+            </label>
+            <button type="submit">Log in</button>
+            <p id="login-error" class="form-error" hidden></p>
+          </form>
+          <p class="field-note">Testing contestant: s22f26, password 1234.</p>
+        </section>
+
+        <section id="editor-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="back-button" type="button">Back to maps</button>
+            <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
+          </div>
+          <p class="eyebrow">Problem map</p>
+          <h1 id="editor-title"></h1>
+          <p id="editor-size" class="field-note"></p>
+          <label class="map-name-field">
+            Name
+            <input id="map-name-input" type="text" maxlength="60" />
+          </label>
+          <p class="lead">Click or drag to place and clear cells. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem.</p>
+          <div class="kind-choices">
+            <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
+            <button id="kind-obstacle" type="button" aria-pressed="false">Obstacle</button>
+            <button id="kind-empty" type="button" aria-pressed="false">Clear</button>
+          </div>
+          <div id="problem-options" class="problem-options">
+            <div class="kind-choices place-types" id="place-type-choices">
+              <button type="button" data-place-type="math" aria-pressed="true">Math</button>
+              <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
+              <button type="button" data-place-type="science" aria-pressed="false">Science</button>
+              <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
+            </div>
+            <label id="problem-no-field">
+              Problem no.
+              <input id="problem-no" type="number" min="1" max="999" value="1" />
+            </label>
+            <label class="next-number">
+              <input id="next-number" type="checkbox" checked />
+              Use the next number for each cell
+            </label>
+            <p id="problem-no-error" class="form-error" hidden></p>
+          </div>
+          <ul class="legend">
+            <li><span class="swatch problem"></span>Problem</li>
+            <li><span class="swatch obstacle"></span>Obstacle</li>
+            <li><span class="swatch empty"></span>Empty</li>
+          </ul>
+          <div class="grid-scroll">
+            <div id="editor-grid" class="editor-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>
