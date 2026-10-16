@@ -1,0 +1,615 @@
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Georgia, "Times New Roman", serif;
+  color: #1c1915;
+  background: #efe6d6;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  padding: 32px 20px;
+  background: #1c1915;
+  color: #f7f1e6;
+}
+
+.brand {
+  display: block;
+  width: 100%;
+  margin: 0 0 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+nav button,
+.section-label {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 15px;
+  text-align: left;
+}
+
+nav button {
+  cursor: pointer;
+}
+
+nav button[aria-current="page"] {
+  background: #f7f1e6;
+  color: #1c1915;
+}
+
+.account {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(247, 241, 230, 0.25);
+}
+
+.account p {
+  margin: 0 0 10px;
+  padding: 0 12px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account button {
+  margin-left: 12px;
+  padding: 8px 12px;
+  border: 1px solid #f7f1e6;
+  background: transparent;
+  color: inherit;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+main {
+  min-width: 0;
+  padding: 56px 64px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 48px;
+  font-weight: normal;
+}
+
+h2 {
+  margin: 36px 0 12px;
+  font-size: 22px;
+  font-weight: normal;
+}
+
+.lead {
+  margin: 0;
+  max-width: 32rem;
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+.create-map {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  margin-top: 28px;
+  max-width: 36rem;
+}
+
+.create-map label {
+  display: grid;
+  gap: 6px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.create-map input,
+.create-map select,
+.problem-editor select {
+  width: 7rem;
+  padding: 8px 10px;
+  border: 1px solid #c9b89a;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+}
+
+.create-map select,
+.problem-editor select,
+.create-map input.contest-name,
+.problem-editor input.contest-name,
+#login-username,
+#login-password {
+  width: 16rem;
+}
+
+button[type="submit"],
+.delete-map,
+.add-problem,
+.join-contest {
+  padding: 8px 12px;
+  border: 0;
+  background: #1c1915;
+  color: #f7f1e6;
+  font: inherit;
+  cursor: pointer;
+}
+
+.join-contest {
+  margin-top: 16px;
+}
+
+.problem-list .join-contest {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.remove-contestant,
+.joined-flag {
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.remove-contestant {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.joined-flag {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.form-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #8a2e24;
+}
+
+.map-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 40rem;
+}
+
+.map-list li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #d8cbb6;
+  background: rgba(255, 252, 246, 0.92);
+}
+
+.open-map {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-name {
+  font-size: 22px;
+}
+
+.map-size {
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.map-name-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  width: fit-content;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.map-name-field input {
+  width: 16rem;
+  padding: 8px 10px;
+  border: 1px solid #c9b89a;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+}
+
+.map-preview,
+.editor-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.map-preview {
+  width: 112px;
+  height: 112px;
+  flex-shrink: 0;
+  padding: 4px;
+  background: #efe6d6;
+  border: 1px solid #d8cbb6;
+}
+
+.preview-cell,
+.grid-cell,
+.swatch {
+  min-width: 0;
+  min-height: 0;
+}
+
+.preview-cell,
+.swatch {
+  background: #fffdf8;
+}
+
+.preview-cell.problem,
+.grid-cell.problem,
+.swatch.problem {
+  background: #9c4228;
+  color: #fffdf8;
+}
+
+.preview-cell.obstacle,
+.grid-cell.obstacle,
+.swatch.obstacle {
+  background: #1c1915;
+}
+
+.preview-cell.empty,
+.swatch.empty {
+  background: #fffdf8;
+  box-shadow: inset 0 0 0 1px #d8cbb6;
+}
+
+.preview-cell {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.back-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+}
+
+.grid-scroll {
+  margin-top: 28px;
+  overflow: auto;
+  max-width: 100%;
+}
+
+.editor-grid {
+  width: max-content;
+  grid-auto-flow: row;
+  user-select: none;
+}
+
+.grid-cell {
+  width: 48px;
+  height: 48px;
+  padding: 0 2px;
+  border: 0;
+  background: #fffdf8;
+  box-shadow: inset 0 0 0 1px #d8cbb6;
+  color: inherit;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.grid-cell.problem {
+  font-size: 11px;
+  letter-spacing: -0.03em;
+}
+
+.kind-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 0;
+}
+
+.problem-editor .kind-choices,
+.problem-types {
+  margin: 0;
+}
+
+.problem-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  margin-top: 16px;
+}
+
+.place-types {
+  margin: 0;
+}
+
+.next-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.kind-choices button {
+  padding: 8px 12px;
+  border: 1px solid #1c1915;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.kind-choices button[aria-pressed="true"] {
+  background: #1c1915;
+  color: #f7f1e6;
+}
+
+#problem-no-field {
+  display: grid;
+  gap: 6px;
+  width: fit-content;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+#problem-no {
+  width: 7rem;
+  padding: 8px 10px;
+  border: 1px solid #c9b89a;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+}
+
+.add-problem {
+  margin-top: 24px;
+}
+
+.problem-section {
+  margin-top: 28px;
+  max-width: 52rem;
+}
+
+.problem-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.problem-section h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.problem-section .add-problem {
+  margin-top: 0;
+}
+
+.problem-tag {
+  margin-left: 8px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.problem-group-empty {
+  margin: 12px 0 0;
+}
+
+.problem-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.problem-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 14px;
+  border: 1px solid #d8cbb6;
+  background: rgba(255, 252, 246, 0.92);
+}
+
+.open-problem {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.problem-index {
+  min-width: 4.5ch;
+  font-size: 22px;
+}
+
+.contest-name-label {
+  font-size: 22px;
+  white-space: nowrap;
+}
+
+.problem-snippet {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problem-editor {
+  display: grid;
+  gap: 12px;
+  max-width: 40rem;
+  margin-top: 8px;
+}
+
+.problem-editor label {
+  display: grid;
+  gap: 6px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.problem-editor input,
+.problem-editor textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #c9b89a;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+.problem-editor input {
+  width: 7rem;
+  font-size: 18px;
+}
+
+.problem-editor textarea {
+  resize: vertical;
+}
+
+.field-note {
+  margin: 0;
+  max-width: 36rem;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+@media (max-width: 700px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  main {
+    padding: 32px 24px 48px;
+  }
+
+  h1 {
+    font-size: 36px;
+  }
+}
