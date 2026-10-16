@@ -93,6 +93,21 @@ const contestantEmpty = document.querySelector("#contestant-empty");
 const contestantList = document.querySelector("#contestant-list");
 const joinContestButton = document.querySelector("#join-contest");
 const joinedNote = document.querySelector("#joined-note");
+const studentView = document.querySelector("#student-view");
+const studentError = document.querySelector("#student-error");
+const studentEmpty = document.querySelector("#student-empty");
+const studentContestList = document.querySelector("#student-contest-list");
+const studentPlayView = document.querySelector("#student-play-view");
+const studentBack = document.querySelector("#student-back");
+const studentPlayTitle = document.querySelector("#student-play-title");
+const studentPlayMeta = document.querySelector("#student-play-meta");
+const studentJoin = document.querySelector("#student-join");
+const studentJoined = document.querySelector("#student-joined");
+const studentBoard = document.querySelector("#student-board");
+const studentGrid = document.querySelector("#student-grid");
+const studentProblem = document.querySelector("#student-problem");
+const studentProblemTag = document.querySelector("#student-problem-tag");
+const studentProblemPrompt = document.querySelector("#student-problem-prompt");
 
 // ═══════════════════════════════════════════════════════════════════
 // In-memory state (populated by bootstrap)
@@ -180,6 +195,10 @@ contestNameField.addEventListener("change", () => {
 });
 contestMapField.addEventListener("change", commitContestMap);
 contestantList.addEventListener("click", onContestantListClick);
+studentContestList.addEventListener("click", onStudentListClick);
+studentBack.addEventListener("click", showStudent);
+studentJoin.addEventListener("click", () => joinContest(openContestId));
+studentGrid.addEventListener("click", onStudentGridClick);
 joinContestButton.addEventListener("click", () => joinContest(openContestId));
 problemSectionChoices.addEventListener("click", onProblemSectionClick);
 problemSection.addEventListener("click", onProblemListClick);
@@ -249,6 +268,10 @@ function persistContests() {
 
 function showHome() {
   if (!requireSession()) return;
+  if (isContestant()) {
+    showStudent();
+    return;
+  }
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -314,6 +337,8 @@ function hideViews() {
   problemEditorView.hidden = true;
   competitionsView.hidden = true;
   contestView.hidden = true;
+  studentView.hidden = true;
+  studentPlayView.hidden = true;
   editorView.hidden = true;
 }
 
@@ -1069,7 +1094,7 @@ function applyAccount() {
   problemsButton.hidden = contestant;
   creditsLabel.hidden = contestant;
   settingsLabel.hidden = contestant;
-  accountName.textContent = user.displayName || user.username;
+  competitionsButton.textContent = contestant ? "Contests" : "Competition";
   accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
   accountPfp.hidden = !pfp;
@@ -1080,7 +1105,7 @@ function applyAccount() {
 function updateHomeLead() {
   const user = session?.user;
   homeLead.textContent = isContestant()
-    ? `Signed in as ${user.displayName || user.username}. Open Competition to see contests and join one.`
+    ? `Signed in as ${user.displayName || user.username}. Open Contests to join one and read the problems.`
     : "Welcome to Territory Game.";
 }
 
@@ -1096,6 +1121,10 @@ function logOut() {
 
 function showCompetitions() {
   if (!requireSession()) return;
+  if (isContestant()) {
+    showStudent();
+    return;
+  }
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -1217,12 +1246,17 @@ async function joinContest(contestId) {
   try {
     await apiCall("join-contest", { contestId });
   } catch (e) {
-    // Rollback
     contest.contestantIds = contest.contestantIds.filter((id) => id !== contestantId());
     alert("Failed to join contest: " + e.message);
-    if (openContestId === contestId) renderContest();
-    else renderCompetitions();
   }
+  refreshOpenContest();
+}
+
+function refreshOpenContest() {
+  if (!studentPlayView.hidden) renderStudentPlay();
+  else if (!studentView.hidden) renderStudent();
+  else if (!contestView.hidden) renderContest();
+  else renderCompetitions();
 }
 
 function renderCompetitions() {
@@ -1321,6 +1355,172 @@ function renderContest() {
     }
     contestantList.append(item);
   }
+}
+
+let selectedStudentCell = null;
+
+function showStudent() {
+  if (!requireSession()) return;
+  if (!isContestant()) {
+    showCompetitions();
+    return;
+  }
+  stopPaint();
+  openMapId = null;
+  openContestId = null;
+  selectedStudentCell = null;
+  editingProblemNo = null;
+  editingProblemType = null;
+  hideViews();
+  studentView.hidden = false;
+  setCurrentSection(competitionsButton);
+  renderStudent();
+}
+
+function showStudentPlay(contestId) {
+  if (!requireSession() || !isContestant()) return;
+  stopPaint();
+  openMapId = null;
+  openContestId = contestId;
+  selectedStudentCell = null;
+  editingProblemNo = null;
+  editingProblemType = null;
+  hideViews();
+  studentPlayView.hidden = false;
+  setCurrentSection(competitionsButton);
+  renderStudentPlay();
+}
+
+function renderStudent() {
+  studentError.hidden = loadError.hidden;
+  studentError.textContent = loadError.textContent;
+  studentContestList.replaceChildren();
+  studentEmpty.hidden = contests.length > 0;
+  studentContestList.hidden = contests.length === 0;
+
+  for (const contest of contests) {
+    const item = document.createElement("li");
+    const openButton = document.createElement("button");
+    const name = document.createElement("span");
+    const detail = document.createElement("span");
+    const map = maps.find((item) => item.id === contest.mapId);
+    const joined = contest.contestantIds.includes(contestantId());
+
+    openButton.type = "button";
+    openButton.className = "open-problem";
+    openButton.dataset.studentOpen = contest.id;
+    openButton.setAttribute("aria-label", `Open contest ${contest.name}`);
+    name.className = "contest-name-label";
+    name.textContent = contest.name;
+    detail.className = "problem-snippet";
+    detail.textContent = map ? mapOptionLabel(map) : "Map removed";
+    openButton.append(name, detail);
+    item.append(openButton);
+
+    if (joined) {
+      const flag = document.createElement("span");
+      flag.className = "joined-flag";
+      flag.textContent = "Joined";
+      item.append(flag);
+    } else {
+      const joinButton = document.createElement("button");
+      joinButton.type = "button";
+      joinButton.className = "join-contest";
+      joinButton.dataset.joinId = contest.id;
+      joinButton.textContent = "Join";
+      item.append(joinButton);
+    }
+    studentContestList.append(item);
+  }
+}
+
+function onStudentListClick(event) {
+  const openButton = event.target.closest("[data-student-open]");
+  if (openButton) {
+    showStudentPlay(openButton.dataset.studentOpen);
+    return;
+  }
+  const joinButton = event.target.closest("[data-join-id]");
+  if (joinButton) joinContest(joinButton.dataset.joinId);
+}
+
+function renderStudentPlay() {
+  const contest = currentContest();
+  if (!contest) {
+    showStudent();
+    return;
+  }
+
+  const map = maps.find((item) => item.id === contest.mapId);
+  const joined = contest.contestantIds.includes(contestantId());
+  studentPlayTitle.textContent = contest.name;
+  studentJoin.hidden = joined;
+  studentJoined.hidden = !joined;
+  studentJoined.textContent = `Joined as ${contestantId()}.`;
+  studentBoard.hidden = !joined;
+  studentProblem.hidden = true;
+
+  if (!map) {
+    studentPlayMeta.textContent = "The map for this contest has been removed.";
+    studentBoard.hidden = true;
+    return;
+  }
+
+  studentPlayMeta.textContent = joined
+    ? `${map.name} · ${map.cols} × ${map.rows}. Click a problem to read it.`
+    : `${map.name} · ${map.cols} × ${map.rows}. Join to open the map.`;
+
+  if (!joined) return;
+
+  studentGrid.style.gridTemplateColumns = `repeat(${map.cols}, ${CELL_SIZE}px)`;
+  studentGrid.style.gridTemplateRows = `repeat(${map.rows}, ${CELL_SIZE}px)`;
+  studentGrid.replaceChildren();
+
+  map.cells.forEach((cell, index) => {
+    const button = document.createElement("button");
+    const row = Math.floor(index / map.cols) + 1;
+    const column = (index % map.cols) + 1;
+    button.type = "button";
+    button.className = `grid-cell student-cell ${cell.kind}`;
+    button.dataset.index = String(index);
+    button.setAttribute("aria-label", cellLabel(cell, row, column));
+    if (cell.kind === "problem") {
+      button.textContent = problemTag(cell.problemNo, cell.type);
+      button.setAttribute("aria-pressed", selectedStudentCell === index ? "true" : "false");
+    } else {
+      button.disabled = true;
+    }
+    studentGrid.append(button);
+  });
+
+  showStudentProblem(map);
+}
+
+function showStudentProblem(map) {
+  const cell = selectedStudentCell === null ? null : map.cells[selectedStudentCell];
+  if (!cell || cell.kind !== "problem") {
+    studentProblem.hidden = true;
+    return;
+  }
+  const problem = findProblem(cell.problemNo, cell.type);
+  studentProblem.hidden = false;
+  studentProblemTag.textContent = problemTag(cell.problemNo, cell.type);
+  studentProblemPrompt.textContent = problem && problem.prompt.trim()
+    ? problem.prompt
+    : "This problem has no text yet.";
+}
+
+function onStudentGridClick(event) {
+  const button = event.target.closest("[data-index]");
+  if (!button || button.disabled) return;
+  const contest = currentContest();
+  const map = contest && maps.find((item) => item.id === contest.mapId);
+  if (!map || !contest.contestantIds.includes(contestantId())) return;
+  const index = Number(button.dataset.index);
+  const cell = map.cells[index];
+  if (!cell || cell.kind !== "problem") return;
+  selectedStudentCell = index;
+  renderStudentPlay();
 }
 
 function fillMapSelect(select, selectedId) {
@@ -1464,6 +1664,7 @@ async function bootstrap() {
 
     applyAccount();
     updateHomeLead();
+    if (isContestant()) showStudent();
   } catch (e) {
     console.error("[bootstrap]", e);
     if (String(e.message).includes("Unauthorized")) {
@@ -1475,6 +1676,7 @@ async function bootstrap() {
     loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
     applyAccount();
     updateHomeLead();
+    if (isContestant()) showStudent();
   }
 }
 

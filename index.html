@@ -159,6 +159,35 @@
           <p id="joined-note" class="field-note" hidden></p>
         </section>
 
+        <section id="student-view" hidden>
+          <p class="eyebrow">Student</p>
+          <h1>Contests</h1>
+          <p class="lead">Join a contest, then open it. The map shows each problem. The answer stays hidden.</p>
+          <p id="student-error" class="form-error" hidden></p>
+          <p id="student-empty">No contests yet.</p>
+          <ul id="student-contest-list" class="problem-list" hidden></ul>
+        </section>
+
+        <section id="student-play-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="student-back" type="button">Back to contests</button>
+          </div>
+          <p class="eyebrow">Contest</p>
+          <h1 id="student-play-title"></h1>
+          <p id="student-play-meta" class="lead"></p>
+          <button id="student-join" class="join-contest" type="button" hidden>Join contest</button>
+          <p id="student-joined" class="field-note" hidden></p>
+          <div id="student-board" class="student-board" hidden>
+            <div class="grid-scroll">
+              <div id="student-grid" class="editor-grid"></div>
+            </div>
+            <article id="student-problem" class="student-problem" hidden>
+              <h2 id="student-problem-tag"></h2>
+              <p id="student-problem-prompt"></p>
+            </article>
+          </div>
+        </section>
+
         <section id="editor-view" hidden>
           <div class="editor-toolbar">
             <button class="back-button" id="back-button" type="button">Back to maps</button>
