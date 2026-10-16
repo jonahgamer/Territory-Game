@@ -2,7 +2,6 @@ const STORAGE_KEY = "territory-game-maps";
 const PROBLEMS_KEY = "territory-game-problems";
 const CONTESTS_KEY = "territory-game-contests";
 const SESSION_KEY = "territory-game-session";
-const LOGIN_URL = "/api/login";
 const MIN_SIZE = 1;
 const MAX_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
@@ -20,7 +19,6 @@ const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
 const creditsLabel = document.querySelector("#credits-label");
 const settingsLabel = document.querySelector("#settings-label");
-const appShell = document.querySelector("#app-shell");
 const accountName = document.querySelector("#account-name");
 const accountRole = document.querySelector("#account-role");
 const accountPfp = document.querySelector("#account-pfp");
@@ -33,7 +31,6 @@ const problemEditorView = document.querySelector("#problem-editor-view");
 const competitionsView = document.querySelector("#competitions-view");
 const competitionsLead = document.querySelector("#competitions-lead");
 const contestView = document.querySelector("#contest-view");
-const loginView = document.querySelector("#login-view");
 const editorView = document.querySelector("#editor-view");
 const createForm = document.querySelector("#create-map-form");
 const mapNameInput = document.querySelector("#map-name");
@@ -90,11 +87,6 @@ const contestantEmpty = document.querySelector("#contestant-empty");
 const contestantList = document.querySelector("#contestant-list");
 const joinContestButton = document.querySelector("#join-contest");
 const joinedNote = document.querySelector("#joined-note");
-const loginForm = document.querySelector("#login-form");
-const loginUsername = document.querySelector("#login-username");
-const loginPassword = document.querySelector("#login-password");
-const loginError = document.querySelector("#login-error");
-const loginSubmit = document.querySelector("#login-submit");
 
 let problems = readStoredProblems();
 let maps = readStoredMaps();
@@ -131,7 +123,6 @@ contestNameField.addEventListener("change", () => {
 contestMapField.addEventListener("change", commitContestMap);
 contestantList.addEventListener("click", onContestantListClick);
 joinContestButton.addEventListener("click", () => joinContest(openContestId));
-loginForm.addEventListener("submit", logIn);
 problemSectionChoices.addEventListener("click", onProblemSectionClick);
 problemSection.addEventListener("click", onProblemListClick);
 placeTypeChoices.addEventListener("click", onPlaceTypeClick);
@@ -245,7 +236,6 @@ function hideViews() {
   problemEditorView.hidden = true;
   competitionsView.hidden = true;
   contestView.hidden = true;
-  loginView.hidden = true;
   editorView.hidden = true;
 }
 
@@ -997,19 +987,16 @@ function contestantId() {
 
 function requireSession() {
   if (isSignedIn()) return true;
-  showLogin();
+  location.replace("login.html");
   return false;
 }
 
 function applyAccount() {
   if (!isSignedIn()) {
-    appShell.hidden = true;
-    showLogin();
+    location.replace("login.html");
     return;
   }
 
-  appShell.hidden = false;
-  loginView.hidden = true;
   const contestant = isContestant();
   const user = session.user;
   mapsButton.hidden = contestant;
@@ -1031,83 +1018,10 @@ function updateHomeLead() {
     : "Welcome to Territory Game.";
 }
 
-function showLogin() {
-  stopPaint();
-  openMapId = null;
-  openContestId = null;
-  editingProblemNo = null;
-  editingProblemType = null;
-  appShell.hidden = true;
-  loginView.hidden = false;
-  setCurrentSection(null);
-  loginError.hidden = true;
-  loginSubmit.disabled = false;
-  loginUsername.focus();
-}
-
 function logOut() {
   session = null;
   persistSession();
-  loginUsername.value = "";
-  loginPassword.value = "";
-  showLogin();
-}
-
-async function logIn(event) {
-  event.preventDefault();
-  const username = loginUsername.value.trim();
-  const password = loginPassword.value;
-  if (!username || !password) {
-    showLoginError("Enter your username and password.");
-    return;
-  }
-
-  loginSubmit.disabled = true;
-  loginError.hidden = true;
-  try {
-    const response = await fetch(LOGIN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success || !data.token || !data.user?.username) {
-      showLoginError(loginFailureMessage(response, data));
-      return;
-    }
-
-    session = {
-      token: data.token,
-      user: {
-        username: String(data.user.username),
-        displayName: String(data.user.displayName || data.user.username),
-        role: data.user.role === "admin" ? "admin" : "student",
-        pfp: safePfp(data.user.pfp),
-      },
-    };
-    persistSession();
-    loginPassword.value = "";
-    applyAccount();
-    if (isAdmin()) showHome();
-    else showCompetitions();
-  } catch {
-    showLoginError("Could not reach the server.");
-  } finally {
-    loginSubmit.disabled = false;
-  }
-}
-
-function showLoginError(message) {
-  loginError.hidden = false;
-  loginError.textContent = message;
-}
-
-function loginFailureMessage(response, data) {
-  if (typeof data.message === "string" && data.message) return data.message;
-  if (response.status === 429) return "Too many login attempts. Please try again later.";
-  if (response.status === 401) return "Invalid username or password";
-  if (response.status === 404) return "Login is not available on this server.";
-  return "Could not sign in.";
+  location.replace("login.html");
 }
 
 function showCompetitions() {
