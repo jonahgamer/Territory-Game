@@ -1,14 +1,20 @@
 {
   "name": "territory-game",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "description": "Territory Game — a math/OI/science/puzzle territory game for WYK Maths Team",
   "engines": {
     "node": ">=20.0.0"
   },
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "start": "node dev-server.mjs"
+  },
   "dependencies": {
-    "bcrypt": "^6.0.0",
-    "jsonwebtoken": "^9.0.3",
-    "mongodb": "^4.17.2"
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.10.0"
   },
   "license": "ISC"
 }
