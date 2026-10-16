@@ -1,6 +1,9 @@
-const STORAGE_KEY = "territory-game-maps";
-const PROBLEMS_KEY = "territory-game-problems";
-const CONTESTS_KEY = "territory-game-contests";
+// script.js
+// ═══════════════════════════════════════════════════════════════════
+// Territory Game — frontend
+// All persistence goes through /api/territory
+// ═══════════════════════════════════════════════════════════════════
+
 const SESSION_KEY = "territory-game-session";
 const MIN_SIZE = 1;
 const MAX_SIZE = 40;
@@ -12,6 +15,8 @@ const PROBLEM_TYPES = [
   { id: "science", name: "Science", tag: "SCI" },
   { id: "puzzle", name: "Puzzle", tag: "PUZ" },
 ];
+
+const API_BASE = "/api/territory";
 
 const homeButton = document.querySelector("#home-button");
 const mapsButton = document.querySelector("#maps-button");
@@ -88,10 +93,15 @@ const contestantList = document.querySelector("#contestant-list");
 const joinContestButton = document.querySelector("#join-contest");
 const joinedNote = document.querySelector("#joined-note");
 
-let problems = readStoredProblems();
-let maps = readStoredMaps();
-let contests = readStoredContests();
+// ═══════════════════════════════════════════════════════════════════
+// In-memory state (populated by bootstrap)
+// ═══════════════════════════════════════════════════════════════════
+
+let problems = [];
+let maps = [];
+let contests = [];
 let session = readStoredSession();
+let bootstrapped = false;
 let openMapId = null;
 let openContestId = null;
 let paintKind = "problem";
@@ -104,6 +114,53 @@ let editingProblemType = null;
 let problemReturn = "list";
 let activeProblemType = null;
 let placeType = "math";
+
+// ═══════════════════════════════════════════════════════════════════
+// API layer
+// ═══════════════════════════════════════════════════════════════════
+
+async function apiCall(action, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (session?.token) headers["Authorization"] = `Bearer ${session.token}`;
+
+  const isPost = !!body;
+  const url = isPost ? API_BASE : `${API_BASE}?action=${encodeURIComponent(action)}`;
+
+  const r = await fetch(url, {
+    method: isPost ? "POST" : "GET",
+    headers,
+    body: isPost ? JSON.stringify({ action, ...body }) : undefined,
+  });
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+  return data;
+}
+
+function debounce(fn, ms = 500) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+const _persistMapsDebounced = debounce(
+  () => apiCall("save-maps", { maps }).catch(e => console.error("[save-maps]", e)),
+  600
+);
+const _persistProblemsDebounced = debounce(
+  () => apiCall("save-problems", { problems }).catch(e => console.error("[save-problems]", e)),
+  600
+);
+const _persistContestsDebounced = debounce(
+  () => apiCall("save-contests", { contests }).catch(e => console.error("[save-contests]", e)),
+  600
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// Event wiring
+// ═══════════════════════════════════════════════════════════════════
 
 homeButton.addEventListener("click", showHome);
 mapsButton.addEventListener("click", showMaps);
@@ -141,8 +198,14 @@ problemTypeChoices.addEventListener("click", (event) => {
   if (!button || editingProblemNo === null) return;
   setProblemType(editingProblemNo, button.dataset.problemType);
 });
-problemPrompt.addEventListener("input", () => updateProblemField("prompt", problemPrompt.value));
-problemAnswer.addEventListener("input", () => updateProblemField("answer", problemAnswer.value));
+problemPrompt.addEventListener("input", () => {
+  updateProblemField("prompt", problemPrompt.value);
+  requestAnimationFrame(renderProblemPreview);
+});
+problemAnswer.addEventListener("input", () => {
+  updateProblemField("answer", problemAnswer.value);
+  requestAnimationFrame(renderProblemPreview);
+});
 backButton.addEventListener("click", showMaps);
 deleteOpenMapButton.addEventListener("click", deleteOpenMap);
 createForm.addEventListener("submit", createMap);
@@ -160,6 +223,29 @@ problemNoInput.addEventListener("input", () => {
   problemNoError.hidden = true;
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// Persistence
+// ═══════════════════════════════════════════════════════════════════
+
+function persistMaps() {
+  if (!bootstrapped) return;
+  _persistMapsDebounced();
+}
+
+function persistProblems() {
+  if (!bootstrapped) return;
+  _persistProblemsDebounced();
+}
+
+function persistContests() {
+  if (!bootstrapped) return;
+  _persistContestsDebounced();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Views
+// ═══════════════════════════════════════════════════════════════════
+
 function showHome() {
   if (!requireSession()) return;
   stopPaint();
@@ -175,10 +261,7 @@ function showHome() {
 
 function showMaps() {
   if (!requireSession()) return;
-  if (isContestant()) {
-    showCompetitions();
-    return;
-  }
+  if (isContestant()) { showCompetitions(); return; }
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -192,10 +275,7 @@ function showMaps() {
 
 function showProblems() {
   if (!requireSession()) return;
-  if (isContestant()) {
-    showCompetitions();
-    return;
-  }
+  if (isContestant()) { showCompetitions(); return; }
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -209,10 +289,7 @@ function showProblems() {
 
 function showEditor(mapId, options = {}) {
   if (!requireSession()) return;
-  if (isContestant()) {
-    showCompetitions();
-    return;
-  }
+  if (isContestant()) { showCompetitions(); return; }
   stopPaint();
   openMapId = mapId;
   openContestId = null;
@@ -246,6 +323,10 @@ function setCurrentSection(button) {
   if (button) button.setAttribute("aria-current", "page");
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Map CRUD
+// ═══════════════════════════════════════════════════════════════════
+
 function deleteOpenMap() {
   maps = maps.filter((map) => map.id !== openMapId);
   persistMaps();
@@ -263,7 +344,6 @@ function createMap(event) {
     formError.textContent = "Give the map a name.";
     return;
   }
-
   if (cols === null || rows === null) {
     formError.hidden = false;
     formError.textContent = `Width and height must be whole numbers from ${MIN_SIZE} to ${MAX_SIZE}.`;
@@ -298,6 +378,10 @@ function onMapListClick(event) {
   const openButton = event.target.closest("[data-open-id]");
   if (openButton) showEditor(openButton.dataset.openId);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Painting
+// ═══════════════════════════════════════════════════════════════════
 
 function chooseTool(kind) {
   paintKind = kind;
@@ -418,6 +502,10 @@ function cellIndexFromPoint(x, y) {
   return cellIndexFromTarget(element);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Map rendering
+// ═══════════════════════════════════════════════════════════════════
+
 function renderMaps() {
   mapList.replaceChildren();
   emptyMessage.hidden = maps.length > 0;
@@ -448,10 +536,7 @@ function renderMaps() {
 
 function renderEditor() {
   const map = currentMap();
-  if (!map) {
-    showMaps();
-    return;
-  }
+  if (!map) { showMaps(); return; }
 
   editorTitle.textContent = map.name;
   editorSize.textContent = `${map.cols} × ${map.rows}`;
@@ -489,7 +574,6 @@ function createPreview(map) {
     if (cell.kind === "problem" && showNumbers) node.textContent = problemTag(cell.problemNo, cell.type);
     preview.append(node);
   }
-
   return preview;
 }
 
@@ -510,6 +594,10 @@ function nextProblemNo(type) {
   return max >= MAX_PROBLEM_NO ? MIN_PROBLEM_NO : max + 1;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Place type
+// ═══════════════════════════════════════════════════════════════════
+
 function onPlaceTypeClick(event) {
   const button = event.target.closest("[data-place-type]");
   if (!button || !typeInfo(button.dataset.placeType)) return;
@@ -523,6 +611,10 @@ function renderPlaceType() {
     button.setAttribute("aria-pressed", String(button.dataset.placeType === placeType));
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Problems
+// ═══════════════════════════════════════════════════════════════════
 
 function onProblemSectionClick(event) {
   const button = event.target.closest("[data-section]");
@@ -813,16 +905,18 @@ function createProblemEntity(problem) {
 }
 
 function problemSnippet(problem) {
-  const text = problem.prompt.trim().replace(/\s+/g, " ");
-  return text || "No text yet";
+  const raw = (problem.prompt || "").trim();
+  if (!raw) return "No text yet";
+  // Strip tags for list display
+  const div = document.createElement("div");
+  div.innerHTML = raw;
+  const text = (div.textContent || "").replace(/\s+/g, " ").trim();
+  return text || "(empty)";
 }
 
 function renderProblemEditor() {
   const problem = findProblem(editingProblemNo, editingProblemType);
-  if (!problem) {
-    showProblems();
-    return;
-  }
+  if (!problem) { showProblems(); return; }
 
   const tag = problemTag(problem.index, problem.type);
   problemEditorTitle.textContent = tag;
@@ -835,7 +929,65 @@ function renderProblemEditor() {
   }
   problemPrompt.value = problem.prompt;
   problemAnswer.value = problem.answer;
+
+  // Render HTML preview
+  requestAnimationFrame(renderProblemPreview);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// HTML preview for problem fields
+// ═══════════════════════════════════════════════════════════════════
+
+function renderProblemPreview() {
+  if (!problemEditorForm) return;
+
+  let previewEl = document.querySelector("#problem-preview");
+  if (!previewEl) {
+    previewEl = document.createElement("div");
+    previewEl.id = "problem-preview";
+    previewEl.className = "problem-preview";
+    problemEditorForm.appendChild(previewEl);
+  }
+  previewEl.innerHTML = "";
+
+  const promptHtml = (problemPrompt.value || "").trim();
+  const answerHtml = (problemAnswer.value || "").trim();
+
+  if (!promptHtml && !answerHtml) {
+    previewEl.hidden = true;
+    return;
+  }
+  previewEl.hidden = false;
+
+  const box = document.createElement("div");
+  box.className = "problem-preview-box";
+
+  if (promptHtml) {
+    const title = document.createElement("div");
+    title.className = "problem-preview-title";
+    title.textContent = "Prompt — preview";
+    const content = document.createElement("div");
+    content.className = "problem-preview-content";
+    content.innerHTML = promptHtml;
+    box.append(title, content);
+  }
+
+  if (answerHtml) {
+    const title = document.createElement("div");
+    title.className = "problem-preview-title";
+    title.textContent = "Answer — preview";
+    const content = document.createElement("div");
+    content.className = "problem-preview-content";
+    content.innerHTML = answerHtml;
+    box.append(title, content);
+  }
+
+  previewEl.appendChild(box);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════
 
 function typeInfo(type) {
   return PROBLEM_TYPES.find((item) => item.id === type) || null;
@@ -852,41 +1004,6 @@ function findProblem(index, type) {
 
 function blankProblem(index) {
   return { index, type: "math", prompt: "", answer: "" };
-}
-
-function readStoredProblems() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(PROBLEMS_KEY) || "[]");
-    if (!Array.isArray(stored)) return [];
-    return stored.flatMap((value) => {
-      const problem = normalizeProblem(value);
-      return problem ? [problem] : [];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function normalizeProblem(value) {
-  if (!value || !Number.isInteger(value.index)) return null;
-  if (value.index < MIN_PROBLEM_NO || value.index > MAX_PROBLEM_NO) return null;
-  const type = value.type === "question" ? "math" : value.type;
-  if (!typeInfo(type)) return null;
-  if (typeof value.prompt !== "string" || typeof value.answer !== "string") return null;
-  return {
-    index: value.index,
-    type,
-    prompt: value.prompt,
-    answer: value.answer,
-  };
-}
-
-function persistProblems() {
-  try {
-    localStorage.setItem(PROBLEMS_KEY, JSON.stringify(problems));
-  } catch {
-    // Keep the list for this visit if storage is unavailable.
-  }
 }
 
 function cellLabel(cell, row, column) {
@@ -913,61 +1030,9 @@ function readProblemNo(value) {
   return problemNo;
 }
 
-function readStoredMaps() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(stored)) return [];
-    return stored.flatMap((value) => {
-      const map = normalizeMap(value);
-      return map ? [map] : [];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function normalizeMap(value) {
-  if (!value || typeof value.id !== "string") return null;
-  if (!Number.isInteger(value.cols) || !Number.isInteger(value.rows)) return null;
-  if (value.cols < MIN_SIZE || value.cols > MAX_SIZE) return null;
-  if (value.rows < MIN_SIZE || value.rows > MAX_SIZE) return null;
-
-  const count = value.cols * value.rows;
-  let cells = emptyCells(count);
-  if (Array.isArray(value.cells) && value.cells.length === count) {
-    const normalized = value.cells.map(normalizeCell);
-    if (normalized.some((cell) => cell === null)) return null;
-    cells = normalized;
-  }
-
-  const name = typeof value.name === "string" ? value.name.trim().slice(0, 60) : "";
-  return { id: value.id, name: name || `${value.cols} × ${value.rows}`, cols: value.cols, rows: value.rows, cells };
-}
-
-function normalizeCell(cell) {
-  if (!cell || typeof cell !== "object") return null;
-  if (cell.kind === "empty") return { kind: "empty" };
-  if (cell.kind === "obstacle") return { kind: "obstacle" };
-  if (
-    cell.kind === "problem" &&
-    Number.isInteger(cell.problemNo) &&
-    cell.problemNo >= MIN_PROBLEM_NO &&
-    cell.problemNo <= MAX_PROBLEM_NO
-  ) {
-    const storedType = typeInfo(cell.type) ? cell.type : null;
-    const match = problems.find((problem) => problem.index === cell.problemNo);
-    return { kind: "problem", problemNo: cell.problemNo, type: storedType || match?.type || "math" };
-  }
-  return null;
-}
-
-function persistMaps() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(maps));
-  } catch {
-    // Keep the list for this visit if storage is unavailable.
-  }
-}
+// ═══════════════════════════════════════════════════════════════════
+// Session
+// ═══════════════════════════════════════════════════════════════════
 
 function isSignedIn() {
   return Boolean(session?.user?.username && session.token);
@@ -1023,6 +1088,10 @@ function logOut() {
   persistSession();
   location.replace("login.html");
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Contests
+// ═══════════════════════════════════════════════════════════════════
 
 function showCompetitions() {
   if (!requireSession()) return;
@@ -1126,14 +1195,25 @@ function onContestantListClick(event) {
   renderContest();
 }
 
-function joinContest(contestId) {
+async function joinContest(contestId) {
   if (!isContestant()) return;
   const contest = contests.find((item) => item.id === contestId);
   if (!contest || contest.contestantIds.includes(contestantId())) return;
+
+  // Optimistic local update
   contest.contestantIds.push(contestantId());
-  persistContests();
   if (openContestId === contestId) renderContest();
   else renderCompetitions();
+
+  try {
+    await apiCall("join-contest", { contestId });
+  } catch (e) {
+    // Rollback
+    contest.contestantIds = contest.contestantIds.filter((id) => id !== contestantId());
+    alert("Failed to join contest: " + e.message);
+    if (openContestId === contestId) renderContest();
+    else renderCompetitions();
+  }
 }
 
 function renderCompetitions() {
@@ -1189,10 +1269,7 @@ function renderCompetitions() {
 
 function renderContest() {
   const contest = currentContest();
-  if (!contest) {
-    showCompetitions();
-    return;
-  }
+  if (!contest) { showCompetitions(); return; }
 
   const contestant = isContestant();
   const map = maps.find((item) => item.id === contest.mapId);
@@ -1289,6 +1366,10 @@ function readContestName(value) {
   return name;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Session storage
+// ═══════════════════════════════════════════════════════════════════
+
 function readStoredSession() {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
@@ -1348,40 +1429,41 @@ function safePfp(value) {
   return "";
 }
 
-function readStoredContests() {
+// ═══════════════════════════════════════════════════════════════════
+// Bootstrap
+// ═══════════════════════════════════════════════════════════════════
+
+async function bootstrap() {
+  if (!isSignedIn()) {
+    location.replace("login.html");
+    return;
+  }
+
   try {
-    const stored = JSON.parse(localStorage.getItem(CONTESTS_KEY) || "[]");
-    if (!Array.isArray(stored)) return [];
-    return stored.flatMap((value) => {
-      const contest = normalizeContest(value);
-      return contest ? [contest] : [];
-    });
-  } catch {
-    return [];
+    const data = await apiCall("bootstrap");
+    maps = Array.isArray(data.maps) ? data.maps : [];
+    problems = Array.isArray(data.problems) ? data.problems : [];
+    contests = Array.isArray(data.contests) ? data.contests : [];
+    bootstrapped = true;
+
+    if (data.user) {
+      session.user = { ...session.user, ...data.user };
+      persistSession();
+    }
+
+    applyAccount();
+    updateHomeLead();
+  } catch (e) {
+    console.error("[bootstrap]", e);
+    if (String(e.message).includes("Unauthorized")) {
+      logOut();
+      return;
+    }
+    // Non-fatal: continue with empty state
+    bootstrapped = true;
+    applyAccount();
+    updateHomeLead();
   }
 }
 
-function normalizeContest(value) {
-  if (!value || typeof value.id !== "string" || typeof value.name !== "string") return null;
-  const name = value.name.trim();
-  if (!name || name.length > 60 || typeof value.mapId !== "string") return null;
-  if (!Array.isArray(value.contestantIds)) return null;
-  const contestantIds = [];
-  for (const id of value.contestantIds) {
-    if (typeof id !== "string") return null;
-    const contestantId = id.trim();
-    if (!contestantId || contestantId.length > 80 || contestantIds.includes(contestantId)) continue;
-    contestantIds.push(contestantId);
-  }
-  return { id: value.id, name, mapId: value.mapId, contestantIds };
-}
-
-function persistContests() {
-  try {
-    localStorage.setItem(CONTESTS_KEY, JSON.stringify(contests));
-  } catch {
-    // Keep the list for this visit if storage is unavailable.
-  }
-}
-
-applyAccount();
+bootstrap();
