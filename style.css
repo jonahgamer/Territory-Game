@@ -189,6 +189,8 @@ h2 {
 .problem-editor select,
 .create-map input.contest-name,
 .problem-editor input.contest-name,
+.create-map input.contest-time,
+.problem-editor input.contest-time,
 #login-username,
 #login-password {
   width: 16rem;
@@ -343,6 +345,18 @@ button[type="submit"],
   color: #fffdf8;
 }
 
+.preview-cell.spawnpoint,
+.grid-cell.spawnpoint,
+.swatch.spawnpoint {
+  background: #1f6b4a;
+  color: #fffdf8;
+}
+
+.grid-cell.spawnpoint {
+  font-size: 11px;
+  letter-spacing: -0.03em;
+}
+
 .preview-cell.obstacle,
 .grid-cell.obstacle,
 .swatch.obstacle {
@@ -441,8 +455,32 @@ button[type="submit"],
   opacity: 1;
 }
 
-.grid-cell.student-cell.problem {
+.grid-cell.student-cell.problem,
+.grid-cell.student-cell.spawnpoint:not(:disabled) {
   cursor: pointer;
+}
+
+.contest-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.create-map .contest-schedule {
+  flex-basis: 100%;
+}
+
+.contest-schedule legend {
+  flex-basis: 100%;
+  padding: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .grid-cell.student-cell[aria-pressed="true"] {

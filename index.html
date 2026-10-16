@@ -116,7 +116,7 @@
         <section id="competitions-view" hidden>
           <p class="eyebrow">Competition</p>
           <h1>Competition</h1>
-          <p class="lead" id="competitions-lead">Each contest uses one map. Contestants join with their id, and that id is stored on the contest.</p>
+          <p class="lead" id="competitions-lead">Each contest uses one map. Spawning starts at the start time. Spawn time and the wait after it are part of the duration, and the contest is the time that remains.</p>
           <form id="create-contest-form" class="create-map">
             <label>
               Name
@@ -126,6 +126,26 @@
               Map
               <select id="contest-map" name="map" required></select>
             </label>
+            <p id="contest-map-note" class="field-note" hidden></p>
+            <fieldset class="contest-schedule">
+              <legend>Schedule</legend>
+              <label>
+                Start time
+                <input id="contest-start" class="contest-time" name="start" type="text" placeholder="YYYY-MM-DD HH:MM:SS" required />
+              </label>
+              <label>
+                Duration (minutes)
+                <input id="contest-duration" name="duration" type="number" min="1" max="10080" value="60" required />
+              </label>
+              <label>
+                Spawn time (minutes)
+                <input id="contest-spawn" name="spawn" type="number" min="0" max="10080" value="10" required />
+              </label>
+              <label>
+                Wait after spawn (minutes)
+                <input id="contest-ready" name="ready" type="number" min="0" max="10080" value="5" required />
+              </label>
+            </fieldset>
             <button type="submit">Create contest</button>
             <p id="contest-form-error" class="form-error" hidden></p>
           </form>
@@ -150,6 +170,27 @@
               Map
               <select id="contest-map-input"></select>
             </label>
+            <p id="contest-map-edit-note" class="field-note" hidden></p>
+            <fieldset class="contest-schedule">
+              <legend>Schedule</legend>
+              <label>
+                Start time
+                <input id="contest-start-input" class="contest-time" type="text" placeholder="YYYY-MM-DD HH:MM:SS" />
+              </label>
+              <label>
+                Duration (minutes)
+                <input id="contest-duration-input" type="number" min="1" max="10080" />
+              </label>
+              <label>
+                Spawn time (minutes)
+                <input id="contest-spawn-input" type="number" min="0" max="10080" />
+              </label>
+              <label>
+                Wait after spawn (minutes)
+                <input id="contest-ready-input" type="number" min="0" max="10080" />
+              </label>
+            </fieldset>
+            <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
           <p id="contest-summary" class="lead" hidden></p>
           <h2>Contestants</h2>
@@ -175,6 +216,7 @@
           <p class="eyebrow">Contest</p>
           <h1 id="student-play-title"></h1>
           <p id="student-play-meta" class="lead"></p>
+          <p id="student-spawn-note" class="field-note" hidden></p>
           <button id="student-join" class="join-contest" type="button" hidden>Join contest</button>
           <p id="student-joined" class="field-note" hidden></p>
           <div id="student-board" class="student-board" hidden>
@@ -200,9 +242,10 @@
             Name
             <input id="map-name-input" type="text" maxlength="60" />
           </label>
-          <p class="lead">Click or drag to place and clear cells. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem.</p>
+          <p class="lead">Click or drag to place and clear cells. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. Spawn points are where contestants can start.</p>
           <div class="kind-choices">
             <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
+            <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
             <button id="kind-obstacle" type="button" aria-pressed="false">Obstacle</button>
             <button id="kind-empty" type="button" aria-pressed="false">Clear</button>
           </div>
@@ -225,6 +268,7 @@
           </div>
           <ul class="legend">
             <li><span class="swatch problem"></span>Problem</li>
+            <li><span class="swatch spawnpoint"></span>Spawn point</li>
             <li><span class="swatch obstacle"></span>Obstacle</li>
             <li><span class="swatch empty"></span>Empty</li>
           </ul>
