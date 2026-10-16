@@ -437,6 +437,41 @@ button[type="submit"],
   letter-spacing: -0.03em;
 }
 
+.grid-cell.student-cell:disabled {
+  opacity: 1;
+}
+
+.grid-cell.student-cell.problem {
+  cursor: pointer;
+}
+
+.grid-cell.student-cell[aria-pressed="true"] {
+  outline: 3px solid #f7f1e6;
+  outline-offset: -5px;
+}
+
+.student-board {
+  display: grid;
+  gap: 28px;
+  margin-top: 28px;
+}
+
+.student-problem {
+  max-width: 40rem;
+}
+
+.student-problem h2 {
+  margin: 0 0 12px;
+  font-size: 28px;
+}
+
+.student-problem p {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .kind-choices {
   display: flex;
   flex-wrap: wrap;
