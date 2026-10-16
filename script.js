@@ -30,6 +30,7 @@ const accountPfp = document.querySelector("#account-pfp");
 const accountButton = document.querySelector("#account-button");
 const homeView = document.querySelector("#home-view");
 const homeLead = homeView.querySelector(".lead");
+const loadError = document.querySelector("#load-error");
 const mapsView = document.querySelector("#maps-view");
 const problemsView = document.querySelector("#problems-view");
 const problemEditorView = document.querySelector("#problem-editor-view");
@@ -228,17 +229,17 @@ problemNoInput.addEventListener("input", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 function persistMaps() {
-  if (!bootstrapped) return;
+  if (!bootstrapped || !isAdmin()) return;
   _persistMapsDebounced();
 }
 
 function persistProblems() {
-  if (!bootstrapped) return;
+  if (!bootstrapped || !isAdmin()) return;
   _persistProblemsDebounced();
 }
 
 function persistContests() {
-  if (!bootstrapped) return;
+  if (!bootstrapped || !isAdmin()) return;
   _persistContestsDebounced();
 }
 
@@ -1185,14 +1186,22 @@ function commitContestMap() {
   persistContests();
 }
 
-function onContestantListClick(event) {
+async function onContestantListClick(event) {
   const button = event.target.closest("[data-remove-contestant]");
   if (!button || isContestant()) return;
   const contest = currentContest();
   if (!contest) return;
-  contest.contestantIds = contest.contestantIds.filter((id) => id !== button.dataset.removeContestant);
-  persistContests();
+  const removed = button.dataset.removeContestant;
+  const previous = contest.contestantIds.slice();
+  contest.contestantIds = previous.filter((id) => id !== removed);
   renderContest();
+  try {
+    await apiCall("remove-contestant", { contestId: contest.id, contestantId: removed });
+  } catch (error) {
+    contest.contestantIds = previous;
+    renderContest();
+    alert(`Could not remove ${removed}: ${error.message}`);
+  }
 }
 
 async function joinContest(contestId) {
@@ -1445,9 +1454,11 @@ async function bootstrap() {
     problems = Array.isArray(data.problems) ? data.problems : [];
     contests = Array.isArray(data.contests) ? data.contests : [];
     bootstrapped = true;
+    loadError.hidden = true;
 
     if (data.user) {
       session.user = { ...session.user, ...data.user };
+      if (!isAdmin()) session.user.role = "student";
       persistSession();
     }
 
@@ -1459,8 +1470,9 @@ async function bootstrap() {
       logOut();
       return;
     }
-    // Non-fatal: continue with empty state
-    bootstrapped = true;
+    bootstrapped = false;
+    loadError.hidden = false;
+    loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
     applyAccount();
     updateHomeLead();
   }

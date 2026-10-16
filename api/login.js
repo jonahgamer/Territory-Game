@@ -1,239 +1,142 @@
-// api/login.js
-//
-// Username / password login endpoint.
-//
 // POST /api/login
-//   Body: { username, password }
-//   Success: { success: true, token, user: { username, displayName, role, pfp } }
-//   Errors:  { success: false, message: "..." }
-//
-// Rate limit: 20 attempts / 5 min per IP
-// Password hashing: bcrypt (matches main site pattern)
+// Body: { username, password }
+// Success: { success: true, token, user: { username, displayName, role, pfp } }
 
-import { MongoClient } from 'mongodb';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-
-// ═══════════════════════════════════════════════════════════════════
-// MongoDB connection (lazy, cached)
-// ═══════════════════════════════════════════════════════════════════
-
-let _client = null;
-let _db = null;
-
-async function connectToDatabase() {
-  if (_db) return _db;
-
-  const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB || 'territory_game';
-  if (!uri) throw new Error('MONGODB_URI not defined');
-
-  _client = new MongoClient(uri, {
-    maxPoolSize: 10,
-    minPoolSize: 1,
-    serverSelectionTimeoutMS: 20000,
-    socketTimeoutMS: 30000,
-  });
-  await _client.connect();
-  _db = _client.db(dbName);
-  return _db;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Rate limit (in-memory, per-IP)
-// ═══════════════════════════════════════════════════════════════════
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import { applyCors, connectToDatabase } from "./_db.js";
 
 const MAX_ATTEMPTS = 20;
-const WINDOW_MS = 5 * 60_000;
-const ENTRY_TTL_MS = 30 * 60_000;
-const CLEANUP_INTERVAL_MS = 60_000;
-
-const _rateLimitMap = new Map();
-let _lastCleanup = 0;
-
-function cleanupRateMap(now) {
-  if (now - _lastCleanup < CLEANUP_INTERVAL_MS) return;
-  _lastCleanup = now;
-  for (const [ip, rec] of _rateLimitMap) {
-    if (now - rec.firstAttempt > ENTRY_TTL_MS) {
-      _rateLimitMap.delete(ip);
-    }
-  }
-}
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  cleanupRateMap(now);
-
-  const rec = _rateLimitMap.get(ip);
-  if (!rec) {
-    _rateLimitMap.set(ip, { count: 1, firstAttempt: now });
-    return { ok: true };
-  }
-
-  if (now - rec.firstAttempt > WINDOW_MS) {
-    _rateLimitMap.set(ip, { count: 1, firstAttempt: now });
-    return { ok: true };
-  }
-
-  if (rec.count >= MAX_ATTEMPTS) {
-    const remainMs = WINDOW_MS - (now - rec.firstAttempt);
-    return { ok: false, remainSec: Math.ceil(remainMs / 1000) };
-  }
-
-  rec.count++;
-  return { ok: true };
-}
+const WINDOW_MS = 5 * 60 * 1000;
+const ENTRY_TTL_MS = 30 * 60 * 1000;
+// Valid bcrypt hash used only to spend the same time when the account is missing.
+const DUMMY_HASH = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
 function getClientIP(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-    || req.connection?.remoteAddress
-    || req.socket?.remoteAddress
-    || 'unknown';
+  return (
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    if (req.body && typeof req.body === 'object') return resolve(req.body);
-    let raw = '';
-    req.on('data', chunk => {
+    if (req.body && typeof req.body === "object") return resolve(req.body);
+    let raw = "";
+    req.on("data", (chunk) => {
       raw += chunk;
       if (raw.length > 100_000) {
         req.destroy();
-        reject(new Error('Payload too large'));
+        reject(new Error("Payload too large"));
       }
     });
-    req.on('end', () => {
+    req.on("end", () => {
       if (!raw) return resolve({});
-      try { resolve(JSON.parse(raw)); }
-      catch { resolve({}); }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve({});
+      }
     });
-    req.on('error', reject);
+    req.on("error", reject);
   });
 }
 
 function safeUser(user) {
   return {
-    username: String(user.username || ''),
-    displayName: String(user.displayName || user.username || ''),
-    role: (user.role === 'admin' || user.role === 'root') ? 'admin' : 'student',
-    pfp: typeof user.pfp === 'string' ? user.pfp : '',
+    username: String(user.username || ""),
+    displayName: String(user.displayName || user.username || ""),
+    role: user.role === "admin" || user.role === "root" ? "admin" : "student",
+    pfp: typeof user.pfp === "string" ? user.pfp : "",
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Main handler
-// ═══════════════════════════════════════════════════════════════════
+async function tooManyAttempts(db, ip) {
+  const attempts = db.collection("login_attempts");
+  const now = new Date();
+  await attempts.deleteMany({ at: { $lt: new Date(now.getTime() - ENTRY_TTL_MS) } });
+  const count = await attempts.countDocuments({
+    ip,
+    at: { $gte: new Date(now.getTime() - WINDOW_MS) },
+  });
+  if (count >= MAX_ATTEMPTS) return true;
+  await attempts.insertOne({ ip, at: now });
+  return false;
+}
 
 export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
-
-  // CORS (adjust if your frontend is on a different origin)
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  if (req.method === 'OPTIONS') return res.status(204).end();
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
+  res.setHeader("Cache-Control", "no-store");
+  applyCors(req, res);
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, message: "Method not allowed" });
   }
 
-  // ── Rate limit ──
-  const ip = getClientIP(req);
-  const rl = checkRateLimit(ip);
-  if (!rl.ok) {
-    return res.status(429).json({
-      success: false,
-      message: 'Too many login attempts. Please try again later.',
-    });
-  }
-
-  // ── Config check ──
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    console.error('[login] JWT_SECRET not set');
-    return res.status(500).json({ success: false, message: 'Server misconfigured' });
+    console.error("[login] JWT_SECRET not set");
+    return res.status(500).json({ success: false, message: "Server misconfigured" });
   }
 
-  // ── Read body ──
   let body;
   try {
     body = await readBody(req);
-  } catch (e) {
-    return res.status(400).json({ success: false, message: 'Invalid request body' });
+  } catch {
+    return res.status(400).json({ success: false, message: "Invalid request body" });
   }
 
-  const username = String(body.username || '').trim();
-  const password = String(body.password || '');
-
+  const username = String(body.username || "").trim();
+  const password = String(body.password || "");
   if (!username || !password) {
-    return res.status(400).json({ success: false, message: 'Missing fields' });
+    return res.status(400).json({ success: false, message: "Missing fields" });
   }
-
   if (username.length > 64 || password.length > 256) {
-    return res.status(400).json({ success: false, message: 'Invalid credentials' });
+    return res.status(401).json({ success: false, message: "Invalid username or password" });
   }
 
-  // ── Database check ──
   let db;
   try {
     db = await connectToDatabase();
   } catch (err) {
-    console.error('[login] DB connection failed:', err.message);
-    return res.status(500).json({ success: false, message: 'Database unavailable' });
+    console.error("[login] DB connection failed:", err.message);
+    return res.status(500).json({ success: false, message: "Database unavailable" });
   }
 
-  // ── User lookup ──
+  try {
+    if (await tooManyAttempts(db, getClientIP(req))) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many login attempts. Please try again later.",
+      });
+    }
+  } catch (err) {
+    console.error("[login] rate limit failed:", err.message);
+    return res.status(500).json({ success: false, message: "Internal error" });
+  }
+
   let user;
   try {
-    user = await db.collection('users').findOne({ username });
+    user = await db.collection("users").findOne({ username });
   } catch (err) {
-    console.error('[login] user lookup failed:', err.message);
-    return res.status(500).json({ success: false, message: 'Internal error' });
+    console.error("[login] user lookup failed:", err.message);
+    return res.status(500).json({ success: false, message: "Internal error" });
   }
 
-  // Same response for "no user" and "wrong password" (prevent user enumeration)
-  if (!user) {
-    // Dummy compare to equalize timing
-    try { await bcrypt.compare(password, '$2b$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); } catch {}
-    return res.status(401).json({ success: false, message: 'Invalid username or password' });
-  }
-
-  if (user.banned === true) {
-    return res.status(401).json({ success: false, message: 'Account suspended' });
-  }
-
-  if (!user.password || typeof user.password !== 'string') {
-    // User exists but has no password (e.g. SSO-only account)
-    return res.status(401).json({ success: false, message: 'Invalid username or password' });
-  }
-
-  // ── Password check ──
+  const passwordHash = user && typeof user.password === "string" ? user.password : DUMMY_HASH;
   let match = false;
   try {
-    match = await bcrypt.compare(password, user.password);
+    match = await bcrypt.compare(password, passwordHash);
   } catch (err) {
-    console.error('[login] bcrypt compare failed:', err.message);
-    return res.status(500).json({ success: false, message: 'Internal error' });
+    console.error("[login] bcrypt compare failed:", err.message);
+    return res.status(500).json({ success: false, message: "Internal error" });
   }
 
-  if (!match) {
-    return res.status(401).json({ success: false, message: 'Invalid username or password' });
+  if (!user || !match || user.banned === true) {
+    return res.status(401).json({ success: false, message: "Invalid username or password" });
   }
 
-  // ── Sign JWT ──
   const safe = safeUser(user);
   let token;
   try {
@@ -245,30 +148,23 @@ export default async function handler(req, res) {
         pfp: safe.pfp,
       },
       jwtSecret,
-      { expiresIn: '7d' }
+      { expiresIn: "7d" }
     );
   } catch (err) {
-    console.error('[login] jwt sign failed:', err.message);
-    return res.status(500).json({ success: false, message: 'Internal error' });
+    console.error("[login] jwt sign failed:", err.message);
+    return res.status(500).json({ success: false, message: "Internal error" });
   }
 
-  // ── Update lastLoginAt (best-effort) ──
   try {
-    await db.collection('users').updateOne(
+    await db.collection("users").updateOne(
       { username: safe.username },
-      { $set: { lastLoginAt: new Date(), lastLoginIP: ip } }
+      { $set: { lastLoginAt: new Date() } }
     );
-  } catch {}
+  } catch {
+    // Login still succeeds if the timestamp cannot be stored.
+  }
 
-  // ── Success ──
-  return res.status(200).json({
-    success: true,
-    token,
-    user: safe,
-  });
+  return res.status(200).json({ success: true, token, user: safe });
 }
 
-// Vercel: allow up to 10s
-export const config = {
-  maxDuration: 10,
-};
+export const config = { maxDuration: 10 };

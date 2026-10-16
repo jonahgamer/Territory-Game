@@ -11,31 +11,8 @@
 // All write ops are admin-only.
 // All reads require a valid JWT.
 
-import { MongoClient } from 'mongodb';
 import jwt from 'jsonwebtoken';
-
-// ═══════════════════════════════════════════════════════════════════
-// MongoDB (lazy, cached)
-// ═══════════════════════════════════════════════════════════════════
-
-let _client = null;
-let _db = null;
-
-async function getDb() {
-  if (_db) return _db;
-  const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB || 'territory_game';
-  if (!uri) throw new Error('MONGODB_URI not defined');
-  _client = new MongoClient(uri, {
-    maxPoolSize: 10,
-    minPoolSize: 1,
-    serverSelectionTimeoutMS: 20000,
-    socketTimeoutMS: 30000,
-  });
-  await _client.connect();
-  _db = _client.db(dbName);
-  return _db;
-}
+import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -154,6 +131,40 @@ function normalizeContest(v) {
 // Handlers
 // ═══════════════════════════════════════════════════════════════════
 
+function rejectList(label) {
+  return { error: `${label} contains an invalid item` };
+}
+
+function collectUnique(raw, normalize, keyOf, label) {
+  if (!Array.isArray(raw)) return { error: `${label} must be a list` };
+  const items = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const normalized = normalize(item);
+    if (!normalized) return rejectList(label);
+    const key = keyOf(normalized);
+    if (seen.has(key)) return { error: `${label} contains a duplicate` };
+    seen.add(key);
+    items.push(normalized);
+  }
+  return { items };
+}
+
+async function replaceCollection(db, name, docs) {
+  const col = db.collection(name);
+  const session = getMongoClient().startSession();
+  try {
+    await session.withTransaction(async () => {
+      await col.deleteMany({}, { session });
+      if (docs.length > 0) {
+        await col.insertMany(docs.map((doc) => ({ ...doc, updatedAt: new Date() })), { session });
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+}
+
 async function handleBootstrap(req, res, db, user) {
   const [maps, problems, contests] = await Promise.all([
     db.collection('maps').find({}).toArray(),
@@ -161,9 +172,13 @@ async function handleBootstrap(req, res, db, user) {
     db.collection('contests').find({}).toArray(),
   ]);
 
-  // Strip _id, keep only public fields
-  const cleanMaps     = maps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
-  const cleanProblems = problems.map(p => ({ index: p.index, type: p.type, prompt: p.prompt, answer: p.answer }));
+  const admin = isAdmin(user);
+  const cleanMaps = maps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
+  const cleanProblems = problems.map(p => {
+    const problem = { index: p.index, type: p.type, prompt: p.prompt };
+    if (admin) problem.answer = p.answer;
+    return problem;
+  });
   const cleanContests = contests.map(c => ({
     id: c.id, name: c.name, mapId: c.mapId,
     contestantIds: Array.isArray(c.contestantIds) ? c.contestantIds : [],
@@ -181,96 +196,94 @@ async function handleBootstrap(req, res, db, user) {
 
 async function handleSaveMaps(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
-
-  const raw = Array.isArray(body.maps) ? body.maps : [];
-  const maps = [];
-  const seen = new Set();
-  for (const item of raw) {
-    const m = normalizeMap(item);
-    if (!m) continue;
-    if (seen.has(m.id)) continue;
-    seen.add(m.id);
-    maps.push(m);
-  }
-
-  const col = db.collection('maps');
-  await col.deleteMany({});
-  if (maps.length > 0) {
-    await col.insertMany(maps.map(m => ({ ...m, updatedAt: new Date() })));
-  }
-
-  return res.status(200).json({ success: true, count: maps.length });
+  const parsed = collectUnique(body.maps, normalizeMap, (map) => map.id, 'Maps');
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+  await replaceCollection(db, 'maps', parsed.items);
+  return res.status(200).json({ success: true, count: parsed.items.length });
 }
 
 async function handleSaveProblems(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
-
-  const raw = Array.isArray(body.problems) ? body.problems : [];
-  const problems = [];
-  const seen = new Set();
-  for (const item of raw) {
-    const p = normalizeProblem(item);
-    if (!p) continue;
-    const key = `${p.type}:${p.index}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    problems.push(p);
-  }
-
-  const col = db.collection('problems');
-  await col.deleteMany({});
-  if (problems.length > 0) {
-    await col.insertMany(problems.map(p => ({ ...p, updatedAt: new Date() })));
-  }
-
-  return res.status(200).json({ success: true, count: problems.length });
+  const parsed = collectUnique(
+    body.problems,
+    normalizeProblem,
+    (problem) => `${problem.type}:${problem.index}`,
+    'Problems'
+  );
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+  await replaceCollection(db, 'problems', parsed.items);
+  return res.status(200).json({ success: true, count: parsed.items.length });
 }
 
 async function handleSaveContests(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
-
-  const raw = Array.isArray(body.contests) ? body.contests : [];
-  const contests = [];
-  const seen = new Set();
-  for (const item of raw) {
-    const c = normalizeContest(item);
-    if (!c) continue;
-    if (seen.has(c.id)) continue;
-    seen.add(c.id);
-    contests.push(c);
-  }
+  const parsed = collectUnique(body.contests, normalizeContest, (contest) => contest.id, 'Contests');
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
 
   const col = db.collection('contests');
-  await col.deleteMany({});
-  if (contests.length > 0) {
-    await col.insertMany(contests.map(c => ({ ...c, updatedAt: new Date() })));
+  const session = getMongoClient().startSession();
+  try {
+    await session.withTransaction(async () => {
+      const existing = await col.find({}, { session }).toArray();
+      const previous = new Map(existing.map((contest) => [contest.id, contest]));
+      const keepIds = parsed.items.map((contest) => contest.id);
+      await col.deleteMany({ id: { $nin: keepIds } }, { session });
+      for (const contest of parsed.items) {
+        const stored = previous.get(contest.id);
+        const contestantIds = stored && Array.isArray(stored.contestantIds)
+          ? stored.contestantIds
+          : contest.contestantIds;
+        await col.updateOne(
+          { id: contest.id },
+          { $set: { name: contest.name, mapId: contest.mapId, contestantIds, updatedAt: new Date() } },
+          { upsert: true, session }
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
   }
 
-  return res.status(200).json({ success: true, count: contests.length });
+  return res.status(200).json({ success: true, count: parsed.items.length });
 }
 
-// ── 学生自己 join contest（不需要 admin） ──
 async function handleJoinContest(req, res, db, user, body) {
   const contestId = String(body.contestId || '').trim();
-  if (!contestId) return res.status(400).json({ success: false, message: 'Missing contestId' });
-
-  const col = db.collection('contests');
-  const contest = await col.findOne({ id: contestId });
-  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
-
   const contestantId = String(user.username || '').trim();
-  if (!contestantId) return res.status(400).json({ success: false, message: 'No username' });
-
-  if (!Array.isArray(contest.contestantIds)) contest.contestantIds = [];
-  if (!contest.contestantIds.includes(contestantId)) {
-    contest.contestantIds.push(contestantId);
-    await col.updateOne(
-      { id: contestId },
-      { $set: { contestantIds: contest.contestantIds, updatedAt: new Date() } }
-    );
+  if (!contestId || !contestantId) {
+    return res.status(400).json({ success: false, message: 'Missing contestId' });
   }
 
-  return res.status(200).json({ success: true, contestantIds: contest.contestantIds });
+  const col = db.collection('contests');
+  const result = await col.updateOne(
+    { id: contestId },
+    { $addToSet: { contestantIds: contestantId }, $set: { updatedAt: new Date() } }
+  );
+  if (result.matchedCount === 0) {
+    return res.status(404).json({ success: false, message: 'Contest not found' });
+  }
+  const contest = await col.findOne({ id: contestId });
+  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
+}
+
+async function handleRemoveContestant(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contestId = String(body.contestId || '').trim();
+  const contestantId = String(body.contestantId || '').trim();
+  if (!contestId || !contestantId) {
+    return res.status(400).json({ success: false, message: 'Missing contestant' });
+  }
+
+  const col = db.collection('contests');
+  const result = await col.updateOne(
+    { id: contestId },
+    { $pull: { contestantIds: contestantId }, $set: { updatedAt: new Date() } }
+  );
+  if (result.matchedCount === 0) {
+    return res.status(404).json({ success: false, message: 'Contest not found' });
+  }
+  const contest = await col.findOne({ id: contestId });
+  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -279,14 +292,7 @@ async function handleJoinContest(req, res, db, user, body) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-
-  // CORS
-  const origin = req.headers.origin;
-  res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  if (origin) res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  applyCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   // Auth
@@ -298,7 +304,7 @@ export default async function handler(req, res) {
   // DB
   let db;
   try {
-    db = await getDb();
+    db = await connectToDatabase();
   } catch (err) {
     console.error('[territory] DB connect failed:', err.message);
     return res.status(500).json({ success: false, message: 'Database unavailable' });
@@ -320,6 +326,7 @@ export default async function handler(req, res) {
       case 'save-problems': return await handleSaveProblems(req, res, db, user, body);
       case 'save-contests': return await handleSaveContests(req, res, db, user, body);
       case 'join-contest':  return await handleJoinContest(req, res, db, user, body);
+      case 'remove-contestant': return await handleRemoveContestant(req, res, db, user, body);
       default:
         return res.status(400).json({ success: false, message: 'Unknown action' });
     }
