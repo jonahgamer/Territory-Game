@@ -1407,7 +1407,12 @@ function setRichText(element, source) {
   for (const script of scripts) script.remove();
   element.append(template.content);
   renderMath(element);
-  for (const script of scripts) element.append(liveScript(script));
+  const runScripts = () => {
+    if (!element.isConnected) return;
+    for (const script of scripts) element.append(liveScript(script));
+  };
+  if (element.isConnected) runScripts();
+  else queueMicrotask(runScripts);
 }
 
 function problemSnippet(problem) {
@@ -1456,14 +1461,13 @@ function renderProblemEditor() {
 function renderProblemPreview() {
   if (!problemEditorForm) return;
 
-  let previewEl = document.querySelector("#problem-preview");
+  let previewEl = problemEditorForm.querySelector(":scope > .problem-preview");
   if (!previewEl) {
     previewEl = document.createElement("div");
-    previewEl.id = "problem-preview";
     previewEl.className = "problem-preview";
     problemEditorForm.appendChild(previewEl);
   }
-  previewEl.innerHTML = "";
+  previewEl.replaceChildren();
 
   const promptHtml = (problemPrompt.value || "").trim();
   const answerHtml = (problemAnswer.value || "").trim();
@@ -1476,6 +1480,7 @@ function renderProblemPreview() {
 
   const box = document.createElement("div");
   box.className = "problem-preview-box";
+  previewEl.appendChild(box);
 
   if (promptHtml) {
     const title = document.createElement("div");
@@ -1483,8 +1488,8 @@ function renderProblemPreview() {
     title.textContent = "Prompt — preview";
     const content = document.createElement("div");
     content.className = "problem-preview-content";
-    setRichText(content, promptHtml);
     box.append(title, content);
+    setRichText(content, promptHtml);
   }
 
   if (answerHtml) {
@@ -1493,11 +1498,9 @@ function renderProblemPreview() {
     title.textContent = "Answer — preview";
     const content = document.createElement("div");
     content.className = "problem-preview-content";
-    setRichText(content, answerHtml);
     box.append(title, content);
+    setRichText(content, answerHtml);
   }
-
-  previewEl.appendChild(box);
 }
 
 // ═══════════════════════════════════════════════════════════════════
