@@ -73,6 +73,7 @@ const problemBackButton = document.querySelector("#problem-back-button");
 const deleteOpenProblemButton = document.querySelector("#delete-open-problem");
 const problemEditorTitle = document.querySelector("#problem-editor-title");
 const problemEditorForm = document.querySelector("#problem-editor-form");
+const problemIndexField = document.querySelector("#problem-index-field");
 const problemIndexInput = document.querySelector("#problem-index-input");
 const problemIndexNote = document.querySelector("#problem-index-note");
 const problemIndexError = document.querySelector("#problem-index-error");
@@ -985,14 +986,12 @@ function renderProblemEditor() {
   problemBackButton.textContent = problemReturn === "map" ? "Back to map" : "Back to problems";
   deleteOpenProblemButton.setAttribute("aria-label", `Delete ${tag}`);
   const fromMap = problemReturn === "map";
+  problemIndexField.hidden = fromMap;
+  problemIndexNote.hidden = fromMap;
+  problemTypeChoices.hidden = fromMap;
   problemIndexInput.value = String(problem.index);
-  problemIndexInput.disabled = fromMap;
-  problemIndexNote.textContent = fromMap
-    ? "The index and type stay as they are on the map."
-    : "The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.";
   problemIndexError.hidden = true;
   for (const button of problemTypeChoices.querySelectorAll("[data-problem-type]")) {
-    button.disabled = fromMap;
     button.setAttribute("aria-pressed", String(button.dataset.problemType === problem.type));
   }
   problemPrompt.value = problem.prompt;
