@@ -615,6 +615,8 @@ button[type="submit"],
   margin-top: 28px;
   overflow: auto;
   max-width: 100%;
+  max-height: min(70dvh, 720px);
+  overscroll-behavior: contain;
 }
 
 .editor-grid {
@@ -636,7 +638,16 @@ button[type="submit"],
   font-size: 16px;
   line-height: 1;
   cursor: crosshair;
+  touch-action: manipulation;
+}
+
+#editor-grid:not(.is-moving) .grid-cell {
   touch-action: none;
+}
+
+#editor-grid.is-moving .grid-cell {
+  cursor: grab;
+  touch-action: pan-x pan-y;
 }
 
 .cell-owner {
@@ -1172,35 +1183,72 @@ button[type="submit"],
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .mobile-bar {
     display: flex;
     align-items: center;
+    grid-column: 1;
+    grid-row: 1;
     position: sticky;
     top: 0;
     z-index: 20;
-    padding: 10px 12px;
-    padding-top: max(10px, env(safe-area-inset-top));
+    min-height: 44px;
+    padding: 0 8px;
+    padding-top: env(safe-area-inset-top);
     background: rgba(4, 10, 18, 0.96);
     border-bottom: 1px solid var(--line);
   }
 
-  .sidebar {
+  .menu-button {
+    margin: 6px 0;
+  }
+
+  .account {
     position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 0 8px;
+    padding-top: env(safe-area-inset-top);
+    min-height: calc(44px + env(safe-area-inset-top));
+  }
+
+  .account button {
+    margin: 0;
+  }
+
+  .account p,
+  #account-role {
+    margin: 0;
+    padding: 0;
+  }
+
+  .sidebar,
+  .sidebar-backdrop {
+    position: fixed;
+    margin: 0;
+  }
+
+  .sidebar {
     z-index: 30;
     top: 0;
     left: 0;
+    left: -105%;
     width: min(280px, 86vw);
     height: 100vh;
     height: 100dvh;
-    transform: translateX(-105%);
-    transition: transform 0.2s ease;
+    transition: left 0.2s ease;
     overflow: auto;
   }
 
   body.menu-open .sidebar {
-    transform: none;
+    left: 0;
   }
 
   .sidebar-backdrop {
@@ -1213,7 +1261,9 @@ button[type="submit"],
   }
 
   main {
-    padding: 24px 16px 40px;
+    grid-column: 1;
+    grid-row: 2;
+    padding: 12px 16px 40px;
     padding-bottom: max(40px, env(safe-area-inset-bottom));
   }
 
@@ -1243,5 +1293,14 @@ button[type="submit"],
   .student-problem,
   .problem-preview-box {
     padding: 16px;
+  }
+
+  .editor-tools {
+    position: sticky;
+    top: calc(44px + env(safe-area-inset-top));
+    z-index: 4;
+    margin-top: 12px;
+    padding: 8px 0;
+    background: rgba(6, 9, 16, 0.94);
   }
 }
