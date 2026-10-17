@@ -1,0 +1,118 @@
+<!-- /ui2/editproblem.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Puzzle Territory · Problems</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a href="/ui2/index.html" class="brand mobile-logo">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span> Menu
+      </button>
+    </header>
+
+    <aside class="sidebar">
+      <a href="/ui2/index.html" class="brand">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections">
+        <ul>
+          <li><a href="/ui2/editmap.html" class="nav-link">Maps</a></li>
+          <li><a href="/ui2/editproblem.html" class="nav-link active">Problems</a></li>
+          <li><a href="#" class="nav-link disabled" aria-disabled="true">Contests</a></li>
+          <li><a href="/ui2/editusers.html#tutorial" class="nav-link">Tutorial</a></li>
+          <li class="section-label">Credits</li>
+          <li><a href="/ui2/editusers.html" class="nav-link">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+
+    <main>
+      <section id="problems-view">
+        <p class="eyebrow">Problems</p>
+        <h1>Problems</h1>
+        <p class="lead">Choose Math, OI, Science, or Puzzle to see those problems. The map shows the tag followed by the index: MO, OI, SCI, or PUZ. Click a problem to edit it.</p>
+        <div class="kind-choices" id="problem-section-choices">
+          <button type="button" data-section="math" aria-pressed="false">Math</button>
+          <button type="button" data-section="oi" aria-pressed="false">OI</button>
+          <button type="button" data-section="science" aria-pressed="false">Science</button>
+          <button type="button" data-section="puzzle" aria-pressed="false">Puzzle</button>
+        </div>
+        <div id="problem-section" class="problem-section" hidden>
+          <div class="problem-group-head">
+            <h2 id="problem-section-title"></h2>
+            <div class="problem-group-actions">
+              <button id="problem-select-toggle" type="button" aria-pressed="false" hidden>Select</button>
+              <button id="add-problem" class="add-problem" type="button">Add problem</button>
+            </div>
+          </div>
+          <p id="problem-empty" class="problem-group-empty" hidden></p>
+          <div id="problem-pages" class="kind-choices problem-pages" hidden></div>
+          <div id="problem-bulk" class="problem-bulk" hidden>
+            <label class="problem-check"><input id="problem-select-page" type="checkbox" /> This page</label>
+            <label class="problem-check"><input id="problem-select-all" type="checkbox" /> All</label>
+            <p id="problem-selected-count" class="field-note">None selected</p>
+            <div class="kind-choices" id="problem-bulk-difficulty">
+              <button type="button" data-bulk-difficulty="easy">Easy</button>
+              <button type="button" data-bulk-difficulty="normal">Normal</button>
+              <button type="button" data-bulk-difficulty="hard">Hard</button>
+              <button type="button" data-bulk-difficulty="insane">Insane</button>
+            </div>
+            <button id="problem-bulk-delete" class="delete-map" type="button">Delete selected</button>
+          </div>
+          <ul id="problem-list" class="problem-list" hidden></ul>
+        </div>
+      </section>
+
+      <section id="problem-editor-view" hidden>
+        <div class="editor-toolbar">
+          <button class="back-button" id="problem-back-button" type="button">Back to problems</button>
+          <button class="delete-map" id="delete-open-problem" type="button">Delete</button>
+        </div>
+        <p class="eyebrow">Problems</p>
+        <h1 id="problem-editor-title"></h1>
+        <form id="problem-editor-form" class="problem-editor">
+          <label id="problem-index-field">Index <input id="problem-index-input" type="number" min="1" max="999" /></label>
+          <p id="problem-index-note" class="field-note">The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+          <p id="problem-index-error" class="form-error" hidden></p>
+          <div class="kind-choices" id="problem-type-choices">
+            <button type="button" data-problem-type="math">Math</button>
+            <button type="button" data-problem-type="oi">OI</button>
+            <button type="button" data-problem-type="science">Science</button>
+            <button type="button" data-problem-type="puzzle">Puzzle</button>
+          </div>
+          <div class="kind-choices" id="problem-difficulty-choices">
+            <button type="button" data-problem-difficulty="easy">Easy</button>
+            <button type="button" data-problem-difficulty="normal">Normal</button>
+            <button type="button" data-problem-difficulty="hard">Hard</button>
+            <button type="button" data-problem-difficulty="insane">Insane</button>
+          </div>
+          <p class="field-note">Students see this difficulty as the cell color. On this map, difficulty is the colored border.</p>
+          <label>Problem <textarea id="problem-prompt" rows="12"></textarea></label>
+          <label>Answer <textarea id="problem-answer" rows="2"></textarea></label>
+          <label>Logic <textarea id="problem-logic" rows="8" spellcheck="false"></textarea></label>
+          <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. HTML in the problem is shown on the contest page, and a script there can fill the answer box. The answer is the exact text a student types. Logic is optional JavaScript. It can read answer and expected, then set result.score from 0 to 100 and result.comment. A score of 100 is correct. Leave logic empty to compare the answer as text.</p>
+          <p id="problem-save-error" class="form-error" hidden></p>
+          <button id="save-problem-button" class="save-changes" type="button">Save problem</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>

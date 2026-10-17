@@ -295,6 +295,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           </div>
           <p class="eyebrow">Competition</p>
           <h1 id="contest-title"></h1>
+          <p id="contest-countdown" class="countdown" hidden></p>
           <form id="contest-form" class="problem-editor">
             <label>
               Name
@@ -327,19 +328,15 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
           <h2>Teams</h2>
-          <p class="field-note">Each team is two students on two devices. They share one spawn point, one territory, and one score. Use at least as many spawn points as teams.</p>
+          <p class="field-note">A team has 1 to 5 students. They share one spawn point, one territory, and one score. During spawning they each pick a cell, and the team keeps that cell only when every member has picked the same one. Use at least as many spawn points as teams.</p>
           <form id="team-form" class="create-map">
             <label>
               Team name
               <input id="team-name" class="contest-name" type="text" maxlength="60" required />
             </label>
             <label>
-              Student 1
-              <input id="team-member-a" class="contest-name" type="text" maxlength="80" required />
-            </label>
-            <label>
-              Student 2
-              <input id="team-member-b" class="contest-name" type="text" maxlength="80" required />
+              Students
+              <textarea id="team-members" rows="5" maxlength="400" placeholder="One username per line"></textarea>
             </label>
             <button type="submit">Add team</button>
             <p id="team-form-error" class="form-error" hidden></p>
@@ -357,7 +354,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
         <section id="student-view" hidden>
           <p class="eyebrow">Student</p>
           <h1>Contests</h1>
-          <p class="lead">Open your team's contest. Both students share the spawn point, the territory, and the score.</p>
+          <p class="lead">Open your team's contest. Everyone on the team shares the spawn point, the territory, and the score.</p>
           <p id="student-error" class="form-error" hidden></p>
           <p id="student-empty">No contests yet.</p>
           <ul id="student-contest-list" class="problem-list" hidden></ul>
@@ -369,7 +366,13 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           </div>
           <p class="eyebrow">Contest</p>
           <h1 id="student-play-title"></h1>
+          <p id="student-countdown" class="countdown" hidden></p>
           <p id="student-play-meta" class="lead"></p>
+          <section id="spawn-agreement" class="spawn-agreement" hidden>
+            <h2>Spawn agreement</h2>
+            <ul id="spawn-votes"></ul>
+            <p id="spawn-agreement-note" class="field-note"></p>
+          </section>
           <p id="student-spawn-note" class="field-note" hidden></p>
           <p id="student-joined" class="field-note" hidden></p>
           <h2 id="student-leaderboard-heading" hidden>Leaderboard</h2>
