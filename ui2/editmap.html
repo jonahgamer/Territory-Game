@@ -1,4 +1,4 @@
-<!-- editmap.html -->
+<!-- /ui2/editmap.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,28 +8,28 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
 </head>
 <body>
   <div class="app">
     <header class="mobile-bar">
-      <a href="index.html" class="brand mobile-logo">Puzzle Territory</a>
+      <a href="/ui2/index.html" class="brand mobile-logo">Puzzle Territory</a>
       <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
         <span class="menu-bars" aria-hidden="true"></span> Menu
       </button>
     </header>
 
     <aside class="sidebar">
-      <a href="index.html" class="brand">Puzzle Territory</a>
+      <a href="/ui2/index.html" class="brand">Puzzle Territory</a>
       <nav id="site-nav" aria-label="Sections">
         <ul>
-          <li><a href="editmap.html" class="nav-link active">Maps</a></li>
-          <li><a href="editproblem.html" class="nav-link">Problems</a></li>
+          <li><a href="/ui2/editmap.html" class="nav-link active">Maps</a></li>
+          <li><a href="/ui2/editproblem.html" class="nav-link">Problems</a></li>
           <li><a href="#" class="nav-link disabled" aria-disabled="true">Contests</a></li>
           <li><a href="#" class="nav-link disabled" aria-disabled="true">Tutorial</a></li>
           <li class="section-label">Credits</li>
-          <li><a href="editusers.html" class="nav-link">Settings</a></li>
+          <li><a href="/ui2/editusers.html" class="nav-link">Settings</a></li>
         </ul>
       </nav>
       <div class="account">
@@ -108,10 +108,13 @@
     </main>
   </div>
 
+  <script src="/script.js"></script>
   <script>
     document.getElementById('menu-button')?.addEventListener('click', () => {
-      document.querySelector('.sidebar').classList.toggle('open');
-      document.querySelector('.sidebar-backdrop').hidden = !document.querySelector('.sidebar').classList.contains('open');
+      const sidebar = document.querySelector('.sidebar');
+      const backdrop = document.querySelector('.sidebar-backdrop');
+      sidebar.classList.toggle('open');
+      backdrop.hidden = !sidebar.classList.contains('open');
       const expanded = document.getElementById('menu-button').getAttribute('aria-expanded') === 'true';
       document.getElementById('menu-button').setAttribute('aria-expanded', String(!expanded));
     });
@@ -120,7 +123,6 @@
       document.querySelector('.sidebar-backdrop').hidden = true;
       document.getElementById('menu-button').setAttribute('aria-expanded', 'false');
     });
-    // (editor logic omitted — hook here or include shared script)
   </script>
 </body>
 </html>
