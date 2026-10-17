@@ -74,6 +74,7 @@ const deleteOpenProblemButton = document.querySelector("#delete-open-problem");
 const problemEditorTitle = document.querySelector("#problem-editor-title");
 const problemEditorForm = document.querySelector("#problem-editor-form");
 const problemIndexInput = document.querySelector("#problem-index-input");
+const problemIndexNote = document.querySelector("#problem-index-note");
 const problemIndexError = document.querySelector("#problem-index-error");
 const problemTypeChoices = document.querySelector("#problem-type-choices");
 const problemPrompt = document.querySelector("#problem-prompt");
@@ -233,7 +234,10 @@ placeTypeChoices.addEventListener("click", onPlaceTypeClick);
 problemBackButton.addEventListener("click", closeProblemEditor);
 deleteOpenProblemButton.addEventListener("click", () => deleteProblem(editingProblemNo, editingProblemType));
 problemEditorForm.addEventListener("submit", (event) => event.preventDefault());
-problemIndexInput.addEventListener("change", commitProblemIndex);
+problemIndexInput.addEventListener("change", () => {
+  if (problemReturn === "map") return;
+  commitProblemIndex();
+});
 problemIndexInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -242,7 +246,7 @@ problemIndexInput.addEventListener("keydown", (event) => {
 });
 problemTypeChoices.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-type]");
-  if (!button || editingProblemNo === null) return;
+  if (!button || editingProblemNo === null || problemReturn === "map") return;
   setProblemType(editingProblemNo, button.dataset.problemType);
 });
 problemPrompt.addEventListener("input", () => {
@@ -980,9 +984,15 @@ function renderProblemEditor() {
   problemEditorTitle.textContent = tag;
   problemBackButton.textContent = problemReturn === "map" ? "Back to map" : "Back to problems";
   deleteOpenProblemButton.setAttribute("aria-label", `Delete ${tag}`);
+  const fromMap = problemReturn === "map";
   problemIndexInput.value = String(problem.index);
+  problemIndexInput.disabled = fromMap;
+  problemIndexNote.textContent = fromMap
+    ? "The index and type stay as they are on the map."
+    : "The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.";
   problemIndexError.hidden = true;
   for (const button of problemTypeChoices.querySelectorAll("[data-problem-type]")) {
+    button.disabled = fromMap;
     button.setAttribute("aria-pressed", String(button.dataset.problemType === problem.type));
   }
   problemPrompt.value = problem.prompt;
@@ -1311,7 +1321,7 @@ function finishContestScheduleEdit() {
     return;
   }
   commitContestSchedule();
-  contestStartField.value = formatContestTime(contest.startAt);
+  contestStartField.value = formatContestPicker(contest.startAt);
 }
 
 async function onContestantListClick(event) {
@@ -1823,7 +1833,7 @@ function readSchedule(startValue, durationValue, spawnValue, readyValue) {
   const durationMinutes = readWholeMinutes(durationValue);
   const spawnMinutes = readWholeMinutes(spawnValue);
   const readyMinutes = readWholeMinutes(readyValue);
-  if (startAt === null) return { error: "Start time must look like 2026-10-16 21:30:00." };
+  if (startAt === null) return { error: "Choose a start date and time." };
   if (durationMinutes === null || spawnMinutes === null || readyMinutes === null) {
     return { error: "Use whole minutes from 0 to 10080. Duration must be at least 1." };
   }
@@ -1835,14 +1845,14 @@ function readSchedule(startValue, durationValue, spawnValue, readyValue) {
 }
 
 function parseContestTime(value) {
-  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2})[:-](\d{2})[:-](\d{2})$/);
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return null;
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
   const hour = Number(match[4]);
   const minute = Number(match[5]);
-  const second = Number(match[6]);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
   const date = new Date(year, month - 1, day, hour, minute, second);
   if (
     date.getFullYear() !== year
@@ -1855,6 +1865,12 @@ function parseContestTime(value) {
   return date.getTime();
 }
 
+function formatContestPicker(ms) {
+  const date = new Date(ms);
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function formatContestTime(ms) {
   const date = new Date(ms);
   const pad = (value) => String(value).padStart(2, "0");
@@ -1862,7 +1878,7 @@ function formatContestTime(ms) {
 }
 
 function fillContestSchedule(contest) {
-  contestStartField.value = Number.isInteger(contest.startAt) ? formatContestTime(contest.startAt) : "";
+  contestStartField.value = Number.isInteger(contest.startAt) ? formatContestPicker(contest.startAt) : "";
   contestDurationField.value = Number.isInteger(contest.durationMinutes) ? String(contest.durationMinutes) : "";
   contestSpawnField.value = Number.isInteger(contest.spawnMinutes) ? String(contest.spawnMinutes) : "";
   contestReadyField.value = Number.isInteger(contest.readyMinutes) ? String(contest.readyMinutes) : "";

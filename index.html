@@ -97,7 +97,7 @@
               Index
               <input id="problem-index-input" type="number" min="1" max="999" />
             </label>
-            <p class="field-note">The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+            <p id="problem-index-note" class="field-note">The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
             <p id="problem-index-error" class="form-error" hidden></p>
             <div class="kind-choices" id="problem-type-choices">
               <button type="button" data-problem-type="math">Math</button>
@@ -134,7 +134,7 @@
               <legend>Schedule</legend>
               <label>
                 Start time
-                <input id="contest-start" class="contest-time" name="start" type="text" placeholder="YYYY-MM-DD HH:MM:SS" required />
+                <input id="contest-start" class="contest-time" name="start" type="datetime-local" step="1" required />
               </label>
               <label>
                 Duration (minutes)
@@ -178,7 +178,7 @@
               <legend>Schedule</legend>
               <label>
                 Start time
-                <input id="contest-start-input" class="contest-time" type="text" placeholder="YYYY-MM-DD HH:MM:SS" />
+                <input id="contest-start-input" class="contest-time" type="datetime-local" step="1" />
               </label>
               <label>
                 Duration (minutes)

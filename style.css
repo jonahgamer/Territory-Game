@@ -260,7 +260,9 @@ h2 {
 .create-map input.contest-name,
 .problem-editor input.contest-name,
 .create-map input.contest-time,
-.problem-editor input.contest-time,
+.problem-editor input.contest-time {
+  width: 18rem;
+}
 #login-username,
 #login-password {
   width: 16rem;
@@ -653,6 +655,22 @@ button[type="submit"],
   background: var(--cyan);
   border-color: var(--cyan);
   color: #041018;
+}
+
+.problem-editor .kind-choices button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.problem-editor .kind-choices button[aria-pressed="true"]:disabled {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #041018;
+}
+
+#problem-index-input:disabled {
+  opacity: 0.85;
+  cursor: default;
 }
 
 #problem-no-field {
