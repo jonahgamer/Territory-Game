@@ -452,6 +452,14 @@ function persistContests() {
   _persistContestsDebounced();
 }
 
+async function saveContestsNow() {
+  if (!bootstrapped || !isAdmin()) return;
+  if (contests.some((contest) => !contestSchedule(contest))) {
+    throw new Error("Finish the contest schedule before adding a team.");
+  }
+  await apiCall("save-contests", { contests });
+}
+
 function markMapDirty() {
   mapDirty = true;
   if (saveMapButton) saveMapButton.disabled = false;
@@ -1924,8 +1932,12 @@ function contestantId() {
   return session?.user?.username || "";
 }
 
+function sameContestant(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
 function teamForUser(contest, username = contestantId()) {
-  return (contest?.teams || []).find((team) => team.members.includes(username)) || null;
+  return (contest?.teams || []).find((team) => (team.members || []).some((member) => sameContestant(member, username))) || null;
 }
 
 function teamColor(contest, teamId) {
@@ -2412,6 +2424,7 @@ async function addTeam(event) {
   }
   teamFormError.hidden = true;
   try {
+    await saveContestsNow();
     const data = await apiCall("save-team", { contestId: contest.id, name, memberA, memberB });
     applyContestPlayState(contest, data);
     teamNameInput.value = "";
@@ -2831,8 +2844,38 @@ function tickContestClock() {
     }
   }
   if (onList) {
+    refreshStudentRoster();
     const signature = contests.filter((contest) => teamForUser(contest)).map((contest) => contestPhase(contest)).join("|");
     if (signature !== shownListPhases) renderStudent();
+  }
+}
+
+let rosterSyncing = false;
+
+function studentRosterKey() {
+  return contests
+    .filter((contest) => teamForUser(contest))
+    .map((contest) => `${contest.id}:${contest.name}:${teamForUser(contest)?.name}:${contestPhase(contest)}`)
+    .join("|");
+}
+
+async function refreshStudentRoster() {
+  if (!bootstrapped || !isContestant() || rosterSyncing) return;
+  const now = Date.now();
+  if (now - contestSyncAt < contestSyncGap()) return;
+  contestSyncAt = now;
+  rosterSyncing = true;
+  try {
+    const before = studentRosterKey();
+    const data = await apiCall("bootstrap");
+    noteServerTime(data.serverNow);
+    if (Array.isArray(data.maps)) maps = data.maps;
+    if (Array.isArray(data.contests)) contests = data.contests.map(loadedContest);
+    if (studentView && !studentView.hidden && studentRosterKey() !== before) renderStudent();
+  } catch (error) {
+    console.error("[roster]", error);
+  } finally {
+    rosterSyncing = false;
   }
 }
 

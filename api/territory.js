@@ -197,10 +197,14 @@ function cleanClaims(value) {
   return claims;
 }
 
+function sameName(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
 function teamForUser(contest, username) {
   const name = cleanId(username);
   if (!name) return null;
-  return cleanTeams(contest?.teams).find((team) => team.members.includes(name)) || null;
+  return cleanTeams(contest?.teams).find((team) => team.members.some((member) => sameName(member, name))) || null;
 }
 
 function spawnCellIndexes(map) {
@@ -522,31 +526,31 @@ async function handleSaveContests(req, res, db, user, body) {
       for (const contest of parsed.items) {
         const stored = previous.get(contest.id);
         const sameMap = stored && stored.mapId === contest.mapId;
-        const teams = stored ? cleanTeams(stored.teams) : [];
-        const contestantIds = teams.flatMap((team) => team.members);
-        const spawnChoices = sameMap ? cleanTeamCells(stored.spawnChoices) : [];
-        const spawns = sameMap ? cleanTeamCells(stored.spawns) : [];
-        const claims = sameMap ? cleanClaims(stored.claims) : [];
-        const spawnResolved = sameMap ? stored.spawnResolved === true : false;
+        const update = {
+          name: contest.name,
+          mapId: contest.mapId,
+          startAt: contest.startAt,
+          durationMinutes: contest.durationMinutes,
+          spawnMinutes: contest.spawnMinutes,
+          readyMinutes: contest.readyMinutes,
+          updatedAt: new Date(),
+        };
+        if (!stored) {
+          update.teams = [];
+          update.contestantIds = [];
+          update.spawnChoices = [];
+          update.spawns = [];
+          update.claims = [];
+          update.spawnResolved = false;
+        } else if (!sameMap) {
+          update.spawnChoices = [];
+          update.spawns = [];
+          update.claims = [];
+          update.spawnResolved = false;
+        }
         await col.updateOne(
           { id: contest.id },
-          {
-            $set: {
-              name: contest.name,
-              mapId: contest.mapId,
-              contestantIds,
-              teams,
-              startAt: contest.startAt,
-              durationMinutes: contest.durationMinutes,
-              spawnMinutes: contest.spawnMinutes,
-              readyMinutes: contest.readyMinutes,
-              spawnChoices,
-              spawns,
-              claims,
-              spawnResolved,
-              updatedAt: new Date(),
-            },
-          },
+          { $set: update },
           { upsert: true, session }
         );
       }
@@ -626,15 +630,41 @@ async function maybeResolveSpawns(db, contest, map, now) {
   return db.collection('contests').findOne({ id: contest.id });
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function findStudent(db, raw) {
+  const name = String(raw || '').trim();
+  if (!name || name.length > MAX_CONTESTANT_ID_LEN) {
+    return { error: 'Enter two different student usernames.' };
+  }
+  const users = db.collection('users');
+  const exact = new RegExp(`^${escapeRegExp(name)}$`, 'i');
+  let record = await users.findOne({ username: exact });
+  if (!record) {
+    const named = await users.find({ displayName: exact }).limit(2).toArray();
+    if (named.length > 1) return { error: `More than one student is named ${name}. Use the username.` };
+    record = named[0] || null;
+  }
+  if (!record || accountIsProtected(record)) return { error: `No student account named ${name}.` };
+  if (record.banned === true) return { error: `${record.username} is suspended.` };
+  return { username: String(record.username) };
+}
+
 async function handleSaveTeam(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const contestId = cleanId(body.contestId) || String(body.contestId || '').trim();
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const memberA = cleanId(body.memberA);
-  const memberB = cleanId(body.memberB);
-  if (!contestId || !name || name.length > MAX_NAME_LEN || !memberA || !memberB) {
+  if (!contestId || !name || name.length > MAX_NAME_LEN) {
     return res.status(400).json({ success: false, message: 'Enter a team name and two student usernames.' });
   }
+  const studentA = await findStudent(db, body.memberA);
+  const studentB = await findStudent(db, body.memberB);
+  if (studentA.error) return res.status(400).json({ success: false, message: studentA.error });
+  if (studentB.error) return res.status(400).json({ success: false, message: studentB.error });
+  const memberA = studentA.username;
+  const memberB = studentB.username;
   if (memberA.toLowerCase() === memberB.toLowerCase()) {
     return res.status(400).json({ success: false, message: 'A team needs two different students.' });
   }
