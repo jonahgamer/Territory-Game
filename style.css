@@ -457,6 +457,36 @@ button[type="submit"],
   background: #c084fc;
 }
 
+.preview-cell.problem.easy { box-shadow: inset 0 0 0 2px #3ddc6a; }
+.preview-cell.problem.normal { box-shadow: inset 0 0 0 2px #ffe14a; }
+.preview-cell.problem.hard { box-shadow: inset 0 0 0 2px #ff3b4e; }
+.preview-cell.problem.insane { box-shadow: inset 0 0 0 2px #c084fc; }
+
+.grid-cell.problem.easy { box-shadow: inset 0 0 0 3px #3ddc6a, inset 0 0 0 6px #060910; }
+.grid-cell.problem.normal { box-shadow: inset 0 0 0 3px #ffe14a, inset 0 0 0 6px #060910; }
+.grid-cell.problem.hard { box-shadow: inset 0 0 0 3px #ff3b4e, inset 0 0 0 6px #060910; }
+.grid-cell.problem.insane { box-shadow: inset 0 0 0 3px #c084fc, inset 0 0 0 6px #060910; }
+
+.swatch.difficulty {
+  background: #121820;
+  box-shadow: inset 0 0 0 3px var(--diff, #3ddc6a);
+}
+
+.swatch.difficulty.easy { --diff: #3ddc6a; }
+.swatch.difficulty.normal { --diff: #ffe14a; }
+.swatch.difficulty.hard { --diff: #ff3b4e; }
+.swatch.difficulty.insane { --diff: #c084fc; }
+
+.swatch.fill.easy { background: #3ddc6a; box-shadow: none; }
+.swatch.fill.normal { background: #ffe14a; box-shadow: none; }
+.swatch.fill.hard { background: #ff3b4e; box-shadow: none; }
+.swatch.fill.insane { background: #c084fc; box-shadow: none; }
+
+.swatch.owned-sample {
+  background: #101820;
+  box-shadow: inset 0 0 0 3px #3ee0ff;
+}
+
 .preview-cell.spawnpoint,
 .grid-cell.spawnpoint,
 .swatch.spawnpoint {
@@ -546,6 +576,7 @@ button[type="submit"],
 }
 
 .grid-cell {
+  position: relative;
   width: 48px;
   height: 48px;
   padding: 0 2px;
@@ -560,6 +591,17 @@ button[type="submit"],
   touch-action: none;
 }
 
+.cell-owner {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 1px 2px;
+  background: #060910;
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
 .grid-cell.problem {
   font-size: 14px;
   letter-spacing: -0.04em;
@@ -572,6 +614,89 @@ button[type="submit"],
 .grid-cell.student-cell.problem,
 .grid-cell.student-cell.spawnpoint:not(:disabled) {
   cursor: pointer;
+}
+
+.grid-cell.student-cell.spawnpoint {
+  background: #121820;
+  color: #f4feff;
+  box-shadow: inset 0 0 0 2px #f4feff;
+}
+
+.grid-cell.student-cell.problem.easy {
+  background: #3ddc6a;
+  color: #06210f;
+  box-shadow: none;
+}
+
+.grid-cell.student-cell.problem.normal {
+  background: #ffe14a;
+  color: #1a1400;
+  box-shadow: none;
+}
+
+.grid-cell.student-cell.problem.hard {
+  background: #ff3b4e;
+  color: #2a060a;
+  box-shadow: none;
+}
+
+.grid-cell.student-cell.problem.insane {
+  background: #c084fc;
+  color: #1a0624;
+  box-shadow: none;
+}
+
+.grid-cell.student-cell.problem.owned,
+.grid-cell.student-cell.spawnpoint.owned {
+  background: #101820;
+  color: var(--team, #3ee0ff);
+  box-shadow: inset 0 0 0 3px var(--team, #3ee0ff);
+  font-size: 13px;
+}
+
+.grid-cell.student-cell.mine {
+  outline: 2px solid #f7feff;
+  outline-offset: -7px;
+}
+
+#contest-grid .grid-cell:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.leaderboard {
+  margin: 12px 0 0;
+  padding-left: 1.4rem;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+
+.student-problem form {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.student-problem label {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.student-problem input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .contest-schedule {

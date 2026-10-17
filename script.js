@@ -16,6 +16,10 @@ const PROBLEM_TYPES = [
   { id: "science", name: "Science", tag: "SCI" },
   { id: "puzzle", name: "Puzzle", tag: "PUZ" },
 ];
+const DIFFICULTIES = ["easy", "normal", "hard", "insane"];
+const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+const DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
+const TEAM_COLORS = ["#3ee0ff", "#ff9a1a", "#4d7cff", "#ff4d8d", "#f2f5f8", "#d4a574"];
 
 const API_BASE = "/api/territory";
 
@@ -78,6 +82,7 @@ const problemIndexInput = document.querySelector("#problem-index-input");
 const problemIndexNote = document.querySelector("#problem-index-note");
 const problemIndexError = document.querySelector("#problem-index-error");
 const problemTypeChoices = document.querySelector("#problem-type-choices");
+const problemDifficultyChoices = document.querySelector("#problem-difficulty-choices");
 const problemPrompt = document.querySelector("#problem-prompt");
 const problemAnswer = document.querySelector("#problem-answer");
 const createContestForm = document.querySelector("#create-contest-form");
@@ -103,11 +108,16 @@ const contestDurationField = document.querySelector("#contest-duration-input");
 const contestSpawnField = document.querySelector("#contest-spawn-input");
 const contestReadyField = document.querySelector("#contest-ready-input");
 const contestScheduleError = document.querySelector("#contest-schedule-error");
-const contestSummary = document.querySelector("#contest-summary");
+const teamForm = document.querySelector("#team-form");
+const teamNameInput = document.querySelector("#team-name");
+const teamMemberA = document.querySelector("#team-member-a");
+const teamMemberB = document.querySelector("#team-member-b");
+const teamFormError = document.querySelector("#team-form-error");
 const contestantEmpty = document.querySelector("#contestant-empty");
 const contestantList = document.querySelector("#contestant-list");
-const joinContestButton = document.querySelector("#join-contest");
-const joinedNote = document.querySelector("#joined-note");
+const contestLeaderboard = document.querySelector("#contest-leaderboard");
+const contestLeaderboardEmpty = document.querySelector("#contest-leaderboard-empty");
+const contestGrid = document.querySelector("#contest-grid");
 const studentView = document.querySelector("#student-view");
 const studentError = document.querySelector("#student-error");
 const studentEmpty = document.querySelector("#student-empty");
@@ -117,13 +127,17 @@ const studentBack = document.querySelector("#student-back");
 const studentPlayTitle = document.querySelector("#student-play-title");
 const studentPlayMeta = document.querySelector("#student-play-meta");
 const studentSpawnNote = document.querySelector("#student-spawn-note");
-const studentJoin = document.querySelector("#student-join");
 const studentJoined = document.querySelector("#student-joined");
+const studentLeaderboardHeading = document.querySelector("#student-leaderboard-heading");
+const studentLeaderboard = document.querySelector("#student-leaderboard");
 const studentBoard = document.querySelector("#student-board");
 const studentGrid = document.querySelector("#student-grid");
 const studentProblem = document.querySelector("#student-problem");
 const studentProblemTag = document.querySelector("#student-problem-tag");
 const studentProblemPrompt = document.querySelector("#student-problem-prompt");
+const studentAnswerForm = document.querySelector("#student-answer-form");
+const studentAnswer = document.querySelector("#student-answer");
+const studentAnswerError = document.querySelector("#student-answer-error");
 
 // ═══════════════════════════════════════════════════════════════════
 // In-memory state (populated by bootstrap)
@@ -223,12 +237,12 @@ contestStartField.addEventListener("change", finishContestScheduleEdit);
 contestDurationField.addEventListener("change", finishContestScheduleEdit);
 contestSpawnField.addEventListener("change", finishContestScheduleEdit);
 contestReadyField.addEventListener("change", finishContestScheduleEdit);
+teamForm.addEventListener("submit", addTeam);
 contestantList.addEventListener("click", onContestantListClick);
 studentContestList.addEventListener("click", onStudentListClick);
 studentBack.addEventListener("click", showStudent);
-studentJoin.addEventListener("click", () => joinContest(openContestId));
 studentGrid.addEventListener("click", onStudentGridClick);
-joinContestButton.addEventListener("click", () => joinContest(openContestId));
+studentAnswerForm.addEventListener("submit", submitStudentAnswer);
 problemSectionChoices.addEventListener("click", onProblemSectionClick);
 problemSection.addEventListener("click", onProblemListClick);
 placeTypeChoices.addEventListener("click", onPlaceTypeClick);
@@ -249,6 +263,11 @@ problemTypeChoices.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-type]");
   if (!button || editingProblemNo === null || problemReturn === "map") return;
   setProblemType(editingProblemNo, button.dataset.problemType);
+});
+problemDifficultyChoices.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-problem-difficulty]");
+  if (!button || editingProblemNo === null) return;
+  setProblemDifficulty(button.dataset.problemDifficulty);
 });
 problemPrompt.addEventListener("input", () => {
   updateProblemField("prompt", problemPrompt.value);
@@ -869,6 +888,14 @@ function setProblemType(index, type) {
   else renderProblemEditor();
 }
 
+function setProblemDifficulty(difficulty) {
+  const problem = findProblem(editingProblemNo, editingProblemType);
+  if (!problem || !DIFFICULTIES.includes(difficulty) || problem.difficulty === difficulty) return;
+  problem.difficulty = difficulty;
+  persistProblems();
+  renderProblemEditor();
+}
+
 function updateProblemField(field, value) {
   const problem = findProblem(editingProblemNo, editingProblemType);
   if (!problem || (field !== "prompt" && field !== "answer")) return;
@@ -951,7 +978,7 @@ function createProblemEntity(problem) {
   openButton.dataset.openType = problem.type;
   openButton.setAttribute("aria-label", `Edit ${tag}`);
   index.className = "problem-index";
-  index.textContent = tag;
+  index.textContent = `${tag} · ${DIFFICULTY_NAME[problemDifficulty(problem)]}`;
   snippet.className = "problem-snippet";
   snippet.textContent = problemSnippet(problem);
   openButton.append(index, snippet);
@@ -993,6 +1020,10 @@ function renderProblemEditor() {
   problemIndexError.hidden = true;
   for (const button of problemTypeChoices.querySelectorAll("[data-problem-type]")) {
     button.setAttribute("aria-pressed", String(button.dataset.problemType === problem.type));
+  }
+  const difficulty = problemDifficulty(problem);
+  for (const button of problemDifficultyChoices.querySelectorAll("[data-problem-difficulty]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.problemDifficulty === difficulty));
   }
   problemPrompt.value = problem.prompt;
   problemAnswer.value = problem.answer;
@@ -1070,13 +1101,24 @@ function findProblem(index, type) {
 }
 
 function blankProblem(index) {
-  return { index, type: "math", prompt: "", answer: "" };
+  return { index, type: "math", prompt: "", answer: "", difficulty: "normal" };
+}
+
+function problemDifficulty(problem) {
+  return DIFFICULTIES.includes(problem?.difficulty) ? problem.difficulty : "normal";
 }
 
 function cellClassName(cell, ...extra) {
   const parts = [...extra, cell.kind];
-  if (cell.kind === "problem") parts.push(typeInfo(cell.type) ? cell.type : "math");
+  if (cell.kind === "problem") {
+    if (!extra.includes("student-cell")) parts.push(typeInfo(cell.type) ? cell.type : "math");
+    parts.push(cellDifficulty(cell));
+  }
   return parts.join(" ");
+}
+
+function cellDifficulty(cell) {
+  return problemDifficulty(findProblem(cell.problemNo, cell.type));
 }
 
 function cellText(cell) {
@@ -1130,6 +1172,236 @@ function contestantId() {
   return session?.user?.username || "";
 }
 
+function teamForUser(contest, username = contestantId()) {
+  return (contest?.teams || []).find((team) => team.members.includes(username)) || null;
+}
+
+function teamColor(contest, teamId) {
+  const index = (contest.teams || []).findIndex((team) => team.id === teamId);
+  return TEAM_COLORS[(index < 0 ? 0 : index) % TEAM_COLORS.length];
+}
+
+function teamShort(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return String(name || "").trim().slice(0, 3).toUpperCase();
+}
+
+function cellPlace(map, index) {
+  return `row ${Math.floor(index / map.cols) + 1}, column ${(index % map.cols) + 1}`;
+}
+
+function normalizeTeams(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((team) => team && typeof team.id === "string" && typeof team.name === "string" && Array.isArray(team.members) && team.members.length === 2)
+    .map((team) => ({ id: team.id, name: team.name, members: [String(team.members[0]), String(team.members[1])] }));
+}
+
+function normalizeTeamCells(value) {
+  if (!Array.isArray(value)) return [];
+  const items = [];
+  for (const item of value) {
+    if (!item || typeof item.teamId !== "string" || !Number.isInteger(item.cell) || item.cell < 0) continue;
+    const existing = items.findIndex((entry) => entry.teamId === item.teamId);
+    if (existing >= 0) items.splice(existing, 1);
+    items.push({ teamId: item.teamId, cell: item.cell });
+  }
+  return items;
+}
+
+function normalizeClaims(value) {
+  if (!Array.isArray(value)) return [];
+  const claims = [];
+  const seen = new Set();
+  for (const claim of value) {
+    if (!claim || typeof claim.teamId !== "string" || !Number.isInteger(claim.cell) || seen.has(claim.cell)) continue;
+    seen.add(claim.cell);
+    claims.push({
+      cell: claim.cell,
+      teamId: claim.teamId,
+      solvedBy: typeof claim.solvedBy === "string" ? claim.solvedBy : "",
+      solvedAt: Number.isFinite(claim.solvedAt) ? claim.solvedAt : 0,
+    });
+  }
+  return claims;
+}
+
+function applyContestPlayState(contest, data) {
+  const next = data?.contest || {};
+  if (Array.isArray(next.teams)) {
+    contest.teams = normalizeTeams(next.teams);
+    contest.contestantIds = contest.teams.flatMap((team) => team.members);
+  }
+  if (typeof next.spawnResolved === "boolean") contest.spawnResolved = next.spawnResolved;
+  if (Array.isArray(next.spawnChoices)) contest.spawnChoices = normalizeTeamCells(next.spawnChoices);
+  if (Array.isArray(next.spawns)) contest.spawns = normalizeTeamCells(next.spawns);
+  if (Array.isArray(next.claims)) contest.claims = normalizeClaims(next.claims);
+  noteServerTime(data?.serverNow);
+}
+
+function contestFrozen(contest, map) {
+  if (!contest || !map) return contestPhase(contest) === "ended";
+  if (contestPhase(contest) === "ended") return true;
+  const problems = map.cells.map((cell, index) => (cell.kind === "problem" ? index : -1)).filter((index) => index >= 0);
+  if (problems.length === 0) return false;
+  const claimed = new Set((contest.claims || []).map((claim) => claim.cell));
+  return problems.every((index) => claimed.has(index));
+}
+
+function adjacentToTeam(map, contest, teamId, cell) {
+  if (!teamId || !map || !Number.isInteger(cell)) return false;
+  const owned = new Set();
+  if (contest.spawnResolved) {
+    for (const spawn of contest.spawns || []) {
+      if (spawn.teamId === teamId) owned.add(spawn.cell);
+    }
+  }
+  for (const claim of contest.claims || []) {
+    if (claim.teamId === teamId) owned.add(claim.cell);
+  }
+  const row = Math.floor(cell / map.cols);
+  const column = cell % map.cols;
+  const neighbors = [];
+  if (column > 0) neighbors.push(cell - 1);
+  if (column + 1 < map.cols) neighbors.push(cell + 1);
+  if (row > 0) neighbors.push(cell - map.cols);
+  if (row + 1 < map.rows) neighbors.push(cell + map.cols);
+  return neighbors.some((index) => owned.has(index));
+}
+
+function ownerAt(contest, index, cell) {
+  const claim = (contest.claims || []).find((item) => item.cell === index);
+  if (claim) return (contest.teams || []).find((team) => team.id === claim.teamId) || null;
+  if (cell?.kind !== "spawnpoint" || !contest.spawnResolved) return null;
+  const spawn = (contest.spawns || []).find((item) => item.cell === index);
+  return spawn ? (contest.teams || []).find((team) => team.id === spawn.teamId) || null : null;
+}
+
+function buildLeaderboard(contest) {
+  const map = maps.find((item) => item.id === contest.mapId);
+  return (contest.teams || []).map((team) => {
+    let score = 0;
+    let solved = 0;
+    for (const claim of contest.claims || []) {
+      if (claim.teamId !== team.id) continue;
+      const cell = map?.cells?.[claim.cell];
+      if (!cell || cell.kind !== "problem") continue;
+      score += DIFFICULTY_SCORE[cellDifficulty(cell)];
+      solved += 1;
+    }
+    return { teamId: team.id, name: team.name, score, solved };
+  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+
+function renderLeaderboard(list, empty, contest) {
+  const rows = buildLeaderboard(contest);
+  list.replaceChildren();
+  if (empty) {
+    empty.hidden = rows.length > 0;
+    list.hidden = rows.length === 0;
+  }
+  for (const row of rows) {
+    const item = document.createElement("li");
+    item.textContent = `${row.name} — ${row.score} point${row.score === 1 ? "" : "s"} · ${row.solved} solved`;
+    item.style.color = teamColor(contest, row.teamId);
+    list.append(item);
+  }
+}
+
+function paintPlayGrid(grid, contest, map, options) {
+  grid.style.gridTemplateColumns = `repeat(${map.cols}, ${CELL_SIZE}px)`;
+  grid.style.gridTemplateRows = `repeat(${map.rows}, ${CELL_SIZE}px)`;
+  grid.replaceChildren();
+  const choosing = options.student && options.phase === "spawn" && !contest.spawnResolved;
+  map.cells.forEach((cell, index) => {
+    const button = document.createElement("button");
+    const row = Math.floor(index / map.cols) + 1;
+    const column = (index % map.cols) + 1;
+    button.type = "button";
+    button.dataset.index = String(index);
+    const owner = ownerAt(contest, index, cell);
+    if (options.student) {
+      const reachable = options.phase === "live" && !options.frozen && cell.kind === "problem"
+        && !(contest.claims || []).some((claim) => claim.cell === index)
+        && adjacentToTeam(map, contest, options.team?.id, index);
+      button.className = cellClassName(cell, "grid-cell", "student-cell");
+      button.disabled = !((choosing && cell.kind === "spawnpoint") || reachable);
+      if (owner && contest.spawnResolved) {
+        button.classList.add("owned");
+        if (options.team && owner.id === options.team.id) button.classList.add("mine");
+        button.style.setProperty("--team", teamColor(contest, owner.id));
+        button.textContent = teamShort(owner.name);
+      } else {
+        const choice = choosing ? (contest.spawnChoices || []).find((item) => item.teamId === options.team?.id) : null;
+        if (choice && choice.cell === index) {
+          button.classList.add("mine");
+          button.style.setProperty("--team", teamColor(contest, options.team.id));
+        }
+        button.textContent = cellText(cell);
+      }
+      if (selectedStudentCell === index && reachable) button.setAttribute("aria-pressed", "true");
+    } else {
+      button.className = cellClassName(cell, "grid-cell");
+      button.disabled = true;
+      const label = document.createElement("span");
+      label.className = "cell-label";
+      label.textContent = cellText(cell);
+      button.append(label);
+      if (owner) {
+        const badge = document.createElement("span");
+        badge.className = "cell-owner";
+        badge.textContent = teamShort(owner.name);
+        badge.style.color = teamColor(contest, owner.id);
+        button.append(badge);
+      }
+    }
+    button.setAttribute("aria-label", studentCellLabel(contest, cell, row, column, index));
+    grid.append(button);
+  });
+}
+
+function renderAdminBoard(contest, map) {
+  if (!contestGrid) return;
+  if (!map) {
+    contestGrid.replaceChildren();
+    return;
+  }
+  paintPlayGrid(contestGrid, contest, map, { student: false });
+}
+
+let contestSyncAt = 0;
+let contestSyncKey = "";
+
+async function syncContest(contest) {
+  if (!bootstrapped || !contest) return;
+  const now = Date.now();
+  if (now - contestSyncAt < 1500) return;
+  contestSyncAt = now;
+  try {
+    const data = await apiCall("contest-state", { contestId: contest.id });
+    applyContestPlayState(contest, data);
+    const key = JSON.stringify({
+      teams: contest.teams,
+      choices: contest.spawnChoices,
+      spawns: contest.spawns,
+      resolved: contest.spawnResolved,
+      claims: contest.claims,
+    });
+    if (key === contestSyncKey) return;
+    contestSyncKey = key;
+    if (studentPlayView && !studentPlayView.hidden) renderStudentPlay();
+    else if (contestView && !contestView.hidden) {
+      const map = maps.find((item) => item.id === contest.mapId);
+      renderContestTeams(contest, map);
+      renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
+      renderAdminBoard(contest, map);
+    }
+  } catch {
+    // The next tick tries again.
+  }
+}
+
 function requireSession() {
   if (isSignedIn()) return true;
   location.replace("login.html");
@@ -1159,7 +1431,7 @@ function applyAccount() {
 function updateHomeLead() {
   const user = session?.user;
   homeLead.textContent = isContestant()
-    ? `Signed in as ${user.displayName || user.username}. Open Contests to join one, choose a spawn point, and read the problems when the contest begins.`
+    ? `Signed in as ${user.displayName || user.username}. Open Contests, choose a spawn point with your teammate, then solve problems next to your territory.`
     : "Welcome to Territory Game.";
 }
 
@@ -1239,7 +1511,11 @@ function createContest(event) {
     name,
     mapId,
     contestantIds: [],
+    teams: [],
+    spawnChoices: [],
     spawns: [],
+    claims: [],
+    spawnResolved: false,
     startAt: schedule.startAt,
     durationMinutes: schedule.durationMinutes,
     spawnMinutes: schedule.spawnMinutes,
@@ -1251,11 +1527,6 @@ function createContest(event) {
 }
 
 function onContestListClick(event) {
-  const joinButton = event.target.closest("[data-join-id]");
-  if (joinButton) {
-    joinContest(joinButton.dataset.joinId);
-    return;
-  }
   const openButton = event.target.closest("[data-open-contest]");
   if (openButton) showContest(openButton.dataset.openContest);
 }
@@ -1281,7 +1552,12 @@ function commitContestMap() {
   const contest = currentContest();
   if (!contest || isContestant()) return;
   if (!maps.some((map) => map.id === contestMapField.value)) return;
-  if (contest.mapId !== contestMapField.value) contest.spawns = [];
+  if (contest.mapId !== contestMapField.value) {
+    contest.spawns = [];
+    contest.spawnChoices = [];
+    contest.claims = [];
+    contest.spawnResolved = false;
+  }
   contest.mapId = contestMapField.value;
   updateContestSpawnNote(contestMapField, contestMapEditNote);
   renderContest();
@@ -1329,44 +1605,62 @@ function finishContestScheduleEdit() {
   contestStartField.value = formatContestPicker(contest.startAt);
 }
 
-async function onContestantListClick(event) {
-  const button = event.target.closest("[data-remove-contestant]");
-  if (!button || isContestant()) return;
+async function addTeam(event) {
+  event.preventDefault();
   const contest = currentContest();
-  if (!contest) return;
-  const removed = button.dataset.removeContestant;
-  const previous = contest.contestantIds.slice();
-  const previousSpawns = contest.spawns.slice();
-  contest.contestantIds = previous.filter((id) => id !== removed);
-  contest.spawns = previousSpawns.filter((spawn) => spawn.contestantId !== removed);
-  renderContest();
+  if (!contest || isContestant()) return;
+  const name = readContestName(teamNameInput.value);
+  const memberA = teamMemberA.value.trim();
+  const memberB = teamMemberB.value.trim();
+  if (!name) {
+    teamFormError.hidden = false;
+    teamFormError.textContent = "Give the team a name.";
+    return;
+  }
+  if (!memberA || !memberB || memberA.toLowerCase() === memberB.toLowerCase()) {
+    teamFormError.hidden = false;
+    teamFormError.textContent = "Enter two different student usernames.";
+    return;
+  }
+  teamFormError.hidden = true;
   try {
-    await apiCall("remove-contestant", { contestId: contest.id, contestantId: removed });
-  } catch (error) {
-    contest.contestantIds = previous;
-    contest.spawns = previousSpawns;
+    const data = await apiCall("save-team", { contestId: contest.id, name, memberA, memberB });
+    applyContestPlayState(contest, data);
+    teamNameInput.value = "";
+    teamMemberA.value = "";
+    teamMemberB.value = "";
     renderContest();
-    alert(`Could not remove ${removed}: ${error.message}`);
+  } catch (error) {
+    teamFormError.hidden = false;
+    teamFormError.textContent = error.message;
   }
 }
 
-async function joinContest(contestId) {
-  if (!isContestant()) return;
-  const contest = contests.find((item) => item.id === contestId);
-  if (!contest || contest.contestantIds.includes(contestantId())) return;
-
-  // Optimistic local update
-  contest.contestantIds.push(contestantId());
-  if (openContestId === contestId) renderContest();
-  else renderCompetitions();
-
+async function onContestantListClick(event) {
+  const button = event.target.closest("[data-remove-team]");
+  if (!button || isContestant()) return;
+  const contest = currentContest();
+  if (!contest) return;
+  const teamId = button.dataset.removeTeam;
+  const previous = {
+    teams: contest.teams.slice(),
+    spawnChoices: contest.spawnChoices.slice(),
+    spawns: contest.spawns.slice(),
+    claims: contest.claims.slice(),
+  };
+  contest.teams = previous.teams.filter((team) => team.id !== teamId);
+  contest.spawnChoices = previous.spawnChoices.filter((choice) => choice.teamId !== teamId);
+  contest.spawns = previous.spawns.filter((spawn) => spawn.teamId !== teamId);
+  contest.claims = previous.claims.filter((claim) => claim.teamId !== teamId);
+  renderContest();
   try {
-    await apiCall("join-contest", { contestId });
-  } catch (e) {
-    contest.contestantIds = contest.contestantIds.filter((id) => id !== contestantId());
-    alert("Failed to join contest: " + e.message);
+    const data = await apiCall("remove-team", { contestId: contest.id, teamId });
+    applyContestPlayState(contest, data);
+  } catch (error) {
+    Object.assign(contest, previous);
+    alert(error.message);
   }
-  refreshOpenContest();
+  renderContest();
 }
 
 function refreshOpenContest() {
@@ -1380,8 +1674,8 @@ function renderCompetitions() {
   const contestant = isContestant();
   createContestForm.hidden = contestant;
   competitionsLead.textContent = contestant
-    ? `These are the contests you can join. Your contestant id is ${contestantId()}.`
-    : "Each contest uses one map. Spawning starts at the start time. Spawn time and the wait after it are part of the duration, and the contest is the time that remains.";
+    ? "Open the contest your team was added to."
+    : "Each contest uses one map. Teams of two students choose spawn points, then expand by solving adjacent problems.";
   if (!contestant) {
     fillMapSelect(contestMapSelect, contestMapSelect.value);
     updateContestSpawnNote(contestMapSelect, contestMapNote);
@@ -1397,7 +1691,8 @@ function renderCompetitions() {
     const name = document.createElement("span");
     const detail = document.createElement("span");
     const map = maps.find((item) => item.id === contest.mapId);
-    const people = contest.contestantIds.length > 0 ? contest.contestantIds.join(", ") : "No contestants";
+    const teamCount = (contest.teams || []).length;
+    const people = teamCount === 0 ? "No teams" : `${teamCount} team${teamCount === 1 ? "" : "s"}`;
 
     openButton.type = "button";
     openButton.className = "open-problem";
@@ -1409,23 +1704,6 @@ function renderCompetitions() {
     detail.textContent = `${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people}`;
     openButton.append(name, detail);
     item.append(openButton);
-
-    if (contestant) {
-      if (contest.contestantIds.includes(contestantId())) {
-        const joined = document.createElement("span");
-        joined.className = "joined-flag";
-        joined.textContent = "Joined";
-        item.append(joined);
-      } else {
-        const joinButton = document.createElement("button");
-        joinButton.type = "button";
-        joinButton.className = "join-contest";
-        joinButton.dataset.joinId = contest.id;
-        joinButton.textContent = "Join";
-        item.append(joinButton);
-      }
-    }
-
     contestList.append(item);
   }
 }
@@ -1434,51 +1712,42 @@ function renderContest() {
   const contest = currentContest();
   if (!contest) { showCompetitions(); return; }
 
-  const contestant = isContestant();
   const map = maps.find((item) => item.id === contest.mapId);
-  const joined = contest.contestantIds.includes(contestantId());
   contestTitle.textContent = contest.name;
-  contestForm.hidden = contestant;
-  contestSummary.hidden = !contestant;
-  deleteOpenContestButton.hidden = contestant;
-  joinContestButton.hidden = !contestant || joined;
-  joinedNote.hidden = !contestant || !joined;
-  joinedNote.textContent = `Joined as ${contestantId()}.`;
+  contestNameField.value = contest.name;
+  fillMapSelect(contestMapField, contest.mapId);
+  fillContestSchedule(contest);
+  updateContestSpawnNote(contestMapField, contestMapEditNote);
+  contestScheduleError.hidden = true;
+  deleteOpenContestButton.setAttribute("aria-label", `Delete contest ${contest.name}`);
+  teamFormError.hidden = true;
+  renderContestTeams(contest, map);
+  renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
+  renderAdminBoard(contest, map);
+  ensureContestClock();
+}
 
-  if (contestant) {
-    contestSummary.textContent = map
-      ? `This contest uses ${map.name} (${map.cols} × ${map.rows}).`
-      : "The map for this contest has been removed.";
-  } else {
-    contestNameField.value = contest.name;
-    fillMapSelect(contestMapField, contest.mapId);
-    fillContestSchedule(contest);
-    updateContestSpawnNote(contestMapField, contestMapEditNote);
-    contestScheduleError.hidden = true;
-    deleteOpenContestButton.setAttribute("aria-label", `Delete contest ${contest.name}`);
-  }
-
+function renderContestTeams(contest, map) {
+  const teams = contest.teams || [];
   contestantList.replaceChildren();
-  contestantEmpty.hidden = contest.contestantIds.length > 0;
-  contestantList.hidden = contest.contestantIds.length === 0;
-  for (const id of contest.contestantIds) {
+  contestantEmpty.hidden = teams.length > 0;
+  contestantList.hidden = teams.length === 0;
+  for (const team of teams) {
     const item = document.createElement("li");
     const name = document.createElement("span");
-    const spawn = document.createElement("span");
+    const detail = document.createElement("span");
     name.className = "contest-name-label";
-    name.textContent = id;
-    spawn.className = "problem-snippet";
-    spawn.textContent = spawnSummary(contest, map, id);
-    item.append(name, spawn);
-    if (!contestant) {
-      const removeButton = document.createElement("button");
-      removeButton.type = "button";
-      removeButton.className = "remove-contestant";
-      removeButton.dataset.removeContestant = id;
-      removeButton.textContent = "Remove";
-      removeButton.setAttribute("aria-label", `Remove ${id}`);
-      item.append(removeButton);
-    }
+    name.textContent = team.name;
+    detail.className = "problem-snippet";
+    detail.textContent = `${team.members.join(" · ")} · ${spawnSummary(contest, map, team.id)}`;
+    item.append(name, detail);
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "remove-contestant";
+    removeButton.dataset.removeTeam = team.id;
+    removeButton.textContent = "Remove";
+    removeButton.setAttribute("aria-label", `Remove ${team.name}`);
+    item.append(removeButton);
     contestantList.append(item);
   }
 }
@@ -1520,17 +1789,19 @@ function showStudentPlay(contestId) {
 function renderStudent() {
   studentError.hidden = loadError.hidden;
   studentError.textContent = loadError.textContent;
+  const mine = contests.filter((contest) => teamForUser(contest));
   studentContestList.replaceChildren();
-  studentEmpty.hidden = contests.length > 0;
-  studentContestList.hidden = contests.length === 0;
+  studentEmpty.hidden = mine.length > 0;
+  studentEmpty.textContent = "You are not on a team yet.";
+  studentContestList.hidden = mine.length === 0;
 
-  for (const contest of contests) {
+  for (const contest of mine) {
     const item = document.createElement("li");
     const openButton = document.createElement("button");
     const name = document.createElement("span");
     const detail = document.createElement("span");
     const map = maps.find((item) => item.id === contest.mapId);
-    const joined = contest.contestantIds.includes(contestantId());
+    const team = teamForUser(contest);
 
     openButton.type = "button";
     openButton.className = "open-problem";
@@ -1539,142 +1810,108 @@ function renderStudent() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.textContent = `${map ? mapOptionLabel(map) : "Map removed"} · ${phaseLabel(contest)}`;
+    detail.textContent = `${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · ${phaseLabel(contest)}`;
     openButton.append(name, detail);
     item.append(openButton);
-
-    if (joined) {
-      const flag = document.createElement("span");
-      flag.className = "joined-flag";
-      flag.textContent = "Joined";
-      item.append(flag);
-    } else {
-      const joinButton = document.createElement("button");
-      joinButton.type = "button";
-      joinButton.className = "join-contest";
-      joinButton.dataset.joinId = contest.id;
-      joinButton.textContent = "Join";
-      item.append(joinButton);
-    }
-  studentContestList.append(item);
+    studentContestList.append(item);
   }
-  shownListPhases = contests.map((contest) => contestPhase(contest)).join("|");
+  shownListPhases = mine.map((contest) => contestPhase(contest)).join("|");
   ensureContestClock();
 }
 
 function onStudentListClick(event) {
   const openButton = event.target.closest("[data-student-open]");
-  if (openButton) {
-    showStudentPlay(openButton.dataset.studentOpen);
-    return;
-  }
-  const joinButton = event.target.closest("[data-join-id]");
-  if (joinButton) joinContest(joinButton.dataset.joinId);
+  if (openButton) showStudentPlay(openButton.dataset.studentOpen);
 }
 
 function renderStudentPlay() {
   const contest = currentContest();
-  if (!contest) {
+  if (!contest || !teamForUser(contest)) {
     showStudent();
     return;
   }
 
   const map = maps.find((item) => item.id === contest.mapId);
-  const joined = contest.contestantIds.includes(contestantId());
+  const team = teamForUser(contest);
   const phase = contestPhase(contest);
-  shownPhase = phase;
+  const frozen = contestFrozen(contest, map);
+  shownPhase = `${phase}:${frozen}:${contest.spawnResolved}`;
   studentPlayTitle.textContent = contest.name;
-  studentJoin.hidden = joined;
-  studentJoined.hidden = !joined;
-  studentJoined.textContent = `Joined as ${contestantId()}.`;
-  writeStudentStatus(contest, phase, map, joined);
-  studentBoard.hidden = !joined || !map;
+  studentJoined.hidden = false;
+  studentJoined.textContent = `Team ${team.name}. You are ${contestantId()}.`;
+  writeStudentStatus(contest, phase, map, frozen);
+  renderLeaderboard(studentLeaderboard, null, contest);
+  const showScores = contest.spawnResolved || phase === "live" || phase === "ended" || frozen;
+  studentLeaderboard.hidden = !showScores;
+  studentLeaderboardHeading.hidden = !showScores;
+  studentLeaderboardHeading.textContent = frozen || phase === "ended" ? "Leaderboard" : "Scores";
+  studentBoard.hidden = !map;
   studentProblem.hidden = true;
 
-  if (!joined || !map) {
+  if (!map) {
     ensureContestClock();
     return;
   }
 
-  studentGrid.style.gridTemplateColumns = `repeat(${map.cols}, ${CELL_SIZE}px)`;
-  studentGrid.style.gridTemplateRows = `repeat(${map.rows}, ${CELL_SIZE}px)`;
-  studentGrid.replaceChildren();
-
-  map.cells.forEach((cell, index) => {
-    const button = document.createElement("button");
-    const row = Math.floor(index / map.cols) + 1;
-    const column = (index % map.cols) + 1;
-    const interactive = (cell.kind === "spawnpoint" && phase === "spawn")
-      || (cell.kind === "problem" && (phase === "live" || phase === "ended"));
-    button.type = "button";
-    button.className = cellClassName(cell, "grid-cell", "student-cell");
-    button.dataset.index = String(index);
-    button.disabled = !interactive;
-    button.textContent = cellText(cell);
-    button.setAttribute("aria-label", studentCellLabel(contest, cell, row, column, index, phase));
-    if (cell.kind === "problem" && selectedStudentCell === index && (phase === "live" || phase === "ended")) {
-      button.setAttribute("aria-pressed", "true");
-    }
-    if (cell.kind === "spawnpoint" && ownsSpawn(contest, index)) {
-      button.setAttribute("aria-pressed", "true");
-    }
-    studentGrid.append(button);
-  });
-
-  showStudentProblem(map, phase);
+  paintPlayGrid(studentGrid, contest, map, { student: true, phase, frozen, team });
+  showStudentProblem(contest, map, phase, frozen);
   ensureContestClock();
 }
 
-function writeStudentStatus(contest, phase, map, joined) {
+function writeStudentStatus(contest, phase, map, frozen) {
   const mapBit = map ? `${map.name} · ${map.cols} × ${map.rows}` : "The map for this contest has been removed.";
-  studentPlayMeta.textContent = joined
-    ? `${mapBit}. ${phaseSentence(contest, phase)}`
-    : `${mapBit}. ${contestTimingLine(contest)} Join to open the map.`;
-  if (!joined || !map) {
+  const team = teamForUser(contest);
+  const score = buildLeaderboard(contest).find((row) => row.teamId === team?.id);
+  const scoreBit = score ? ` ${team.name} has ${score.score} point${score.score === 1 ? "" : "s"}.` : "";
+  studentPlayMeta.textContent = `${mapBit}. ${phaseSentence(contest, phase, frozen)}${scoreBit}`;
+  if (!map) {
     studentSpawnNote.hidden = true;
     return;
   }
   studentSpawnNote.hidden = false;
-  const mine = (contest.spawns || []).find((spawn) => spawn.contestantId === contestantId());
-  const mineCell = mine && map.cells[mine.cell];
-  if (mineCell && mineCell.kind === "spawnpoint") {
-    const row = Math.floor(mine.cell / map.cols) + 1;
-    const column = (mine.cell % map.cols) + 1;
-    studentSpawnNote.textContent = `Your spawn point is row ${row}, column ${column}.`;
+  const finalSpawn = contest.spawnResolved
+    ? (contest.spawns || []).find((spawn) => spawn.teamId === team?.id)
+    : null;
+  if (finalSpawn && map.cells[finalSpawn.cell]?.kind === "spawnpoint") {
+    studentSpawnNote.textContent = `Your team starts at ${cellPlace(map, finalSpawn.cell)}.`;
     return;
   }
-  if (phase === "spawn") {
+  if (phase === "spawn" && !contest.spawnResolved) {
+    const choice = (contest.spawnChoices || []).find((item) => item.teamId === team?.id);
     const count = map.cells.filter((cell) => cell.kind === "spawnpoint").length;
-    studentSpawnNote.textContent = count > 0
-      ? "Click a green spawn point."
-      : "This map has no spawn points.";
+    studentSpawnNote.textContent = choice
+      ? `Your team chose ${cellPlace(map, choice.cell)}. Either student can change it until every team has chosen.`
+      : count > 0
+        ? "Click a spawn point. Either student on your team can choose, and the latest choice is kept."
+        : "This map has no spawn points.";
     return;
   }
   if (phase === "before") {
-    studentSpawnNote.textContent = "You can look at the map. Spawning has not started.";
+    studentSpawnNote.textContent = "The map is visible. Spawning has not started.";
     return;
   }
-  studentSpawnNote.textContent = mine
-    ? "Your spawn point is no longer on the map."
-    : "You do not have a spawn point.";
+  studentSpawnNote.textContent = "Your team does not have a spawn point.";
 }
 
-function showStudentProblem(map, phase) {
-  if (phase !== "live" && phase !== "ended") {
-    studentProblem.hidden = true;
-    return;
-  }
+function showStudentProblem(contest, map, phase, frozen) {
+  const team = teamForUser(contest);
   const cell = selectedStudentCell === null ? null : map.cells[selectedStudentCell];
-  if (!cell || cell.kind !== "problem") {
+  const claim = (contest.claims || []).find((item) => item.cell === selectedStudentCell);
+  const playable = phase === "live" && !frozen && cell?.kind === "problem" && !claim
+    && adjacentToTeam(map, contest, team?.id, selectedStudentCell);
+  if (!playable) {
     studentProblem.hidden = true;
+    studentAnswerForm.hidden = true;
     return;
   }
   const problem = findProblem(cell.problemNo, cell.type);
   studentProblem.hidden = false;
-  studentProblemTag.textContent = problemTag(cell.problemNo, cell.type);
+  studentProblemTag.textContent = `${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[cellDifficulty(cell)]} · ${DIFFICULTY_SCORE[cellDifficulty(cell)]} point${DIFFICULTY_SCORE[cellDifficulty(cell)] === 1 ? "" : "s"}`;
   studentProblemPrompt.textContent = problem && problem.prompt.trim()
     ? problem.prompt
     : "This problem has no text yet.";
+  studentAnswerForm.hidden = false;
+  studentAnswerError.hidden = true;
 }
 
 function onStudentGridClick(event) {
@@ -1682,48 +1919,72 @@ function onStudentGridClick(event) {
   if (!button || button.disabled) return;
   const contest = currentContest();
   const map = contest && maps.find((item) => item.id === contest.mapId);
-  if (!map || !contest.contestantIds.includes(contestantId())) return;
+  const team = contest && teamForUser(contest);
+  if (!map || !team) return;
   const index = Number(button.dataset.index);
   const cell = map.cells[index];
   const phase = contestPhase(contest);
-  if (cell?.kind === "spawnpoint" && phase === "spawn") {
+  if (cell?.kind === "spawnpoint" && phase === "spawn" && !contest.spawnResolved) {
     chooseSpawn(contest, index);
     return;
   }
-  if (cell?.kind === "problem" && (phase === "live" || phase === "ended")) {
+  if (cell?.kind === "problem" && phase === "live" && !contestFrozen(contest, map)) {
     selectedStudentCell = index;
+    studentAnswer.value = "";
     renderStudentPlay();
   }
 }
 
 async function chooseSpawn(contest, cell) {
-  const previous = (contest.spawns || []).slice();
-  contest.spawns = previous.filter((spawn) => spawn.contestantId !== contestantId());
-  contest.spawns.push({ contestantId: contestantId(), cell });
+  const team = teamForUser(contest);
+  if (!team) return;
+  const previous = (contest.spawnChoices || []).slice();
+  contest.spawnChoices = previous.filter((choice) => choice.teamId !== team.id);
+  contest.spawnChoices.push({ teamId: team.id, cell });
   renderStudentPlay();
   try {
     const data = await apiCall("choose-spawn", { contestId: contest.id, cell });
-    if (Array.isArray(data.spawns)) contest.spawns = normalizeSpawns(data.spawns);
-    noteServerTime(data.serverNow);
+    applyContestPlayState(contest, data);
   } catch (error) {
-    contest.spawns = previous;
+    contest.spawnChoices = previous;
     alert(error.message);
   }
   renderStudentPlay();
 }
 
-function ownsSpawn(contest, index) {
-  return (contest.spawns || []).some((spawn) => spawn.contestantId === contestantId() && spawn.cell === index);
+async function submitStudentAnswer(event) {
+  event.preventDefault();
+  const contest = currentContest();
+  const map = contest && maps.find((item) => item.id === contest.mapId);
+  if (!contest || !map || selectedStudentCell === null) return;
+  const submitButton = studentAnswerForm.querySelector("button");
+  submitButton.disabled = true;
+  let failure = "";
+  try {
+    const data = await apiCall("solve", {
+      contestId: contest.id,
+      cell: selectedStudentCell,
+      answer: studentAnswer.value,
+    });
+    applyContestPlayState(contest, data);
+    studentAnswer.value = "";
+    selectedStudentCell = null;
+  } catch (error) {
+    failure = error.message;
+  }
+  submitButton.disabled = false;
+  renderStudentPlay();
+  if (failure) {
+    studentAnswerError.hidden = false;
+    studentAnswerError.textContent = failure;
+  }
 }
 
-function studentCellLabel(contest, cell, row, column, index, phase) {
-  if (cell.kind !== "spawnpoint") return cellLabel(cell, row, column);
-  const names = (contest.spawns || [])
-    .filter((spawn) => spawn.cell === index)
-    .filter((spawn) => phase !== "spawn" && phase !== "before" && phase !== "unscheduled" || spawn.contestantId === contestantId())
-    .map((spawn) => spawn.contestantId === contestantId() ? "you" : spawn.contestantId);
-  if (names.length === 0) return `Row ${row}, column ${column}, spawn point`;
-  return `Row ${row}, column ${column}, spawn point, ${names.join(", ")}`;
+function studentCellLabel(contest, cell, row, column, index) {
+  const team = ownerAt(contest, index, cell);
+  const place = `Row ${row}, column ${column}`;
+  if (team) return `${place}, ${team.name}`;
+  return cellLabel(cell, row, column);
 }
 
 function ensureContestClock() {
@@ -1734,22 +1995,25 @@ function ensureContestClock() {
 function tickContestClock() {
   const onList = studentView && !studentView.hidden;
   const onPlay = studentPlayView && !studentPlayView.hidden;
-  if (!onList && !onPlay) {
+  const onAdmin = contestView && !contestView.hidden && isAdmin();
+  if (!onList && !onPlay && !onAdmin) {
     clearInterval(contestClock);
     contestClock = null;
     return;
   }
-  if (onPlay) {
+  if (onPlay || onAdmin) {
     const contest = currentContest();
-    const phase = contestPhase(contest);
-    if (phase !== shownPhase) renderStudentPlay();
-    else if (contest) {
-      const map = maps.find((item) => item.id === contest.mapId);
-      writeStudentStatus(contest, phase, map, contest.contestantIds.includes(contestantId()));
+    if (contest) syncContest(contest);
+    if (onPlay) {
+      const phase = contestPhase(contest);
+      const map = contest && maps.find((item) => item.id === contest.mapId);
+      const signature = contest ? `${phase}:${contestFrozen(contest, map)}:${contest.spawnResolved}` : "";
+      if (signature !== shownPhase) renderStudentPlay();
+      else if (contest) writeStudentStatus(contest, phase, map, contestFrozen(contest, map));
     }
   }
   if (onList) {
-    const signature = contests.map((contest) => contestPhase(contest)).join("|");
+    const signature = contests.filter((contest) => teamForUser(contest)).map((contest) => contestPhase(contest)).join("|");
     if (signature !== shownListPhases) renderStudent();
   }
 }
@@ -1806,17 +2070,22 @@ function phaseLabel(contest) {
   return "Ended";
 }
 
-function phaseSentence(contest, phase) {
+function phaseSentence(contest, phase, frozen = false) {
   const schedule = contestSchedule(contest);
   if (!schedule) return "The schedule is not set yet.";
+  if (frozen && phase !== "ended") return "Every problem is solved. The board is frozen.";
   if (phase === "before") {
     if (schedule.spawn === 0) return `The contest begins ${formatContestTime(schedule.liveAt)}.`;
     return `Spawning starts ${formatContestTime(schedule.startAt)} and lasts ${schedule.spawn} min. The contest begins ${formatContestTime(schedule.liveAt)}.`;
   }
-  if (phase === "spawn") return `Choose a spawn point before ${formatContestTime(schedule.spawnEnd)}.`;
-  if (phase === "ready") return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}.`;
-  if (phase === "live") return `The contest is running until ${formatContestTime(schedule.endAt)}. Click a problem to read it.`;
-  return `The contest ended ${formatContestTime(schedule.endAt)}.`;
+  if (phase === "spawn") {
+    return contest.spawnResolved
+      ? `Spawn points are assigned. The wait begins ${formatContestTime(schedule.spawnEnd)}.`
+      : `Choose a spawn point before ${formatContestTime(schedule.spawnEnd)}.`;
+  }
+  if (phase === "ready") return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
+  if (phase === "live") return `Solve a problem next to your territory before ${formatContestTime(schedule.endAt)}. Easy is 1, normal 2, hard 3, and insane 4.`;
+  return `The contest ended ${formatContestTime(schedule.endAt)}. The board is frozen.`;
 }
 
 function contestTimingLine(contest) {
@@ -1902,39 +2171,37 @@ function updateContestSpawnNote(select, note) {
     : `${map.name} has ${count} spawn point${count === 1 ? "" : "s"}.`;
 }
 
-function spawnSummary(contest, map, id) {
-  const spawn = (contest.spawns || []).find((item) => item.contestantId === id);
-  if (!spawn) return "No spawn point";
-  if (!map || spawn.cell < 0 || spawn.cell >= map.cells.length || map.cells[spawn.cell].kind !== "spawnpoint") {
+function spawnSummary(contest, map, teamId) {
+  const choice = !contest.spawnResolved
+    ? (contest.spawnChoices || []).find((item) => item.teamId === teamId)
+    : null;
+  const spawn = contest.spawnResolved
+    ? (contest.spawns || []).find((item) => item.teamId === teamId)
+    : null;
+  const cell = spawn?.cell ?? choice?.cell;
+  if (!Number.isInteger(cell)) return contest.spawnResolved ? "No spawn point" : "Has not chosen";
+  if (!map || cell < 0 || cell >= map.cells.length || map.cells[cell].kind !== "spawnpoint") {
     return "Spawn point no longer on the map";
   }
-  const row = Math.floor(spawn.cell / map.cols) + 1;
-  const column = (spawn.cell % map.cols) + 1;
-  return `Spawn row ${row}, column ${column}`;
-}
-
-function normalizeSpawns(value) {
-  if (!Array.isArray(value)) return [];
-  const spawns = [];
-  for (const spawn of value) {
-    if (!spawn || typeof spawn.contestantId !== "string" || !Number.isInteger(spawn.cell) || spawn.cell < 0) continue;
-    if (spawns.some((item) => item.contestantId === spawn.contestantId)) continue;
-    spawns.push({ contestantId: spawn.contestantId, cell: spawn.cell });
-  }
-  return spawns;
+  return `${contest.spawnResolved ? "Starts" : "Chose"} ${cellPlace(map, cell)}`;
 }
 
 function loadedContest(raw) {
+  const teams = normalizeTeams(raw.teams);
   return {
     id: raw.id,
     name: raw.name,
     mapId: raw.mapId,
-    contestantIds: Array.isArray(raw.contestantIds) ? raw.contestantIds : [],
+    contestantIds: teams.flatMap((team) => team.members),
+    teams,
     startAt: Number.isInteger(raw.startAt) ? raw.startAt : null,
     durationMinutes: Number.isInteger(raw.durationMinutes) ? raw.durationMinutes : null,
     spawnMinutes: Number.isInteger(raw.spawnMinutes) ? raw.spawnMinutes : null,
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
-    spawns: normalizeSpawns(raw.spawns),
+    spawnChoices: normalizeTeamCells(raw.spawnChoices),
+    spawns: normalizeTeamCells(raw.spawns),
+    claims: normalizeClaims(raw.claims),
+    spawnResolved: raw.spawnResolved === true,
   };
 }
 
@@ -2066,7 +2333,14 @@ async function bootstrap() {
   try {
     const data = await apiCall("bootstrap");
     maps = Array.isArray(data.maps) ? data.maps : [];
-    problems = Array.isArray(data.problems) ? data.problems : [];
+    problems = Array.isArray(data.problems)
+      ? data.problems.map((problem) => ({
+        ...problem,
+        difficulty: problemDifficulty(problem),
+        prompt: problem.prompt || "",
+        answer: problem.answer || "",
+      }))
+      : [];
     contests = Array.isArray(data.contests) ? data.contests.map(loadedContest) : [];
     bootstrapped = true;
     loadError.hidden = true;
