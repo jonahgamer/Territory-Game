@@ -7,7 +7,7 @@
 //   POST /api/territory  { action: 'save-maps',     maps }
 //   POST /api/territory  { action: 'save-problems', problems }
 //   POST /api/territory  { action: 'save-contests', contests }
-//   POST /api/territory  { action: 'save-team', contestId, name, memberA, memberB }
+//   POST /api/territory  { action: 'save-team', contestId, name, members }
 //   POST /api/territory  { action: 'remove-team', contestId, teamId }
 //   POST /api/territory  { action: 'choose-spawn', contestId, cell }
 //   POST /api/territory  { action: 'solve', contestId, cell, answer }
@@ -153,12 +153,15 @@ function cleanTeams(value) {
     if (!team || typeof team !== 'object') continue;
     const id = cleanId(team.id);
     const name = typeof team.name === 'string' ? team.name.trim() : '';
-    const members = Array.isArray(team.members) ? team.members.map(cleanId).filter(Boolean) : [];
-    if (!id || !name || name.length > MAX_NAME_LEN || members.length !== 2) continue;
-    if (members[0].toLowerCase() === members[1].toLowerCase()) continue;
+    const members = [];
+    for (const member of Array.isArray(team.members) ? team.members.map(cleanId).filter(Boolean) : []) {
+      if (members.some((item) => sameName(item, member))) continue;
+      members.push(member);
+    }
+    if (!id || !name || name.length > MAX_NAME_LEN || members.length < 1 || members.length > 5) continue;
     if (seen.has(id)) continue;
     seen.add(id);
-    teams.push({ id, name, members: [members[0], members[1]] });
+    teams.push({ id, name, members });
   }
   return teams;
 }
@@ -175,6 +178,33 @@ function cleanTeamCells(value) {
     items.push({ teamId, cell: item.cell });
   }
   return items;
+}
+
+function cleanSpawnVotes(value) {
+  if (!Array.isArray(value)) return [];
+  const votes = [];
+  for (const vote of value) {
+    if (!vote || typeof vote !== 'object') continue;
+    const teamId = cleanId(vote.teamId);
+    const username = cleanId(vote.username);
+    if (!teamId || !username || !Number.isInteger(vote.cell) || vote.cell < 0) continue;
+    const existing = votes.findIndex((item) => item.teamId === teamId && sameName(item.username, username));
+    if (existing >= 0) votes.splice(existing, 1);
+    votes.push({ teamId, username, cell: vote.cell });
+  }
+  return votes;
+}
+
+function agreedSpawnChoices(teams, votes) {
+  const choices = [];
+  for (const team of teams) {
+    const mine = votes.filter((vote) => vote.teamId === team.id && team.members.some((member) => sameName(member, vote.username)));
+    if (mine.length !== team.members.length) continue;
+    const cell = mine[0].cell;
+    if (!mine.every((vote) => vote.cell === cell)) continue;
+    choices.push({ teamId: team.id, cell });
+  }
+  return choices;
 }
 
 function cleanClaims(value) {
@@ -328,6 +358,8 @@ function contestPayload(contest, map, problems, user) {
   const team = teamForUser(contest, user?.username);
   const resolved = contest?.spawnResolved === true;
   const choices = cleanTeamCells(contest?.spawnChoices);
+  const votes = cleanSpawnVotes(contest?.spawnVotes);
+  const visibleVotes = admin || resolved ? votes : votes.filter((vote) => team && vote.teamId === team.id);
   return {
     success: true,
     serverNow: Date.now(),
@@ -336,6 +368,7 @@ function contestPayload(contest, map, problems, user) {
       teams: cleanTeams(contest?.teams),
       spawnResolved: resolved,
       spawnChoices: admin || resolved ? choices : choices.filter((choice) => team && choice.teamId === team.id),
+      spawnVotes: visibleVotes,
       spawns: admin || resolved ? cleanTeamCells(contest?.spawns) : [],
       claims: cleanClaims(contest?.claims),
       leaderboard: buildLeaderboard(contest, map, problems || []),
@@ -474,6 +507,7 @@ async function handleBootstrap(req, res, db, user) {
       teams,
       spawnResolved: play.spawnResolved,
       spawnChoices: play.spawnChoices,
+      spawnVotes: play.spawnVotes,
       spawns: play.spawns,
       claims: play.claims,
     };
@@ -539,11 +573,13 @@ async function handleSaveContests(req, res, db, user, body) {
           update.teams = [];
           update.contestantIds = [];
           update.spawnChoices = [];
+          update.spawnVotes = [];
           update.spawns = [];
           update.claims = [];
           update.spawnResolved = false;
         } else if (!sameMap) {
           update.spawnChoices = [];
+          update.spawnVotes = [];
           update.spawns = [];
           update.claims = [];
           update.spawnResolved = false;
@@ -637,7 +673,7 @@ function escapeRegExp(value) {
 async function findStudent(db, raw) {
   const name = String(raw || '').trim();
   if (!name || name.length > MAX_CONTESTANT_ID_LEN) {
-    return { error: 'Enter two different student usernames.' };
+    return { error: 'Enter a student username.' };
   }
   const users = db.collection('users');
   const exact = new RegExp(`^${escapeRegExp(name)}$`, 'i');
@@ -656,17 +692,20 @@ async function handleSaveTeam(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const contestId = cleanId(body.contestId) || String(body.contestId || '').trim();
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!contestId || !name || name.length > MAX_NAME_LEN) {
-    return res.status(400).json({ success: false, message: 'Enter a team name and two student usernames.' });
+  const rawMembers = Array.isArray(body.members)
+    ? body.members
+    : [body.memberA, body.memberB].filter((item) => typeof item === 'string' && item.trim());
+  if (!contestId || !name || name.length > MAX_NAME_LEN || rawMembers.length < 1 || rawMembers.length > 5) {
+    return res.status(400).json({ success: false, message: 'Enter a team name and 1 to 5 students.' });
   }
-  const studentA = await findStudent(db, body.memberA);
-  const studentB = await findStudent(db, body.memberB);
-  if (studentA.error) return res.status(400).json({ success: false, message: studentA.error });
-  if (studentB.error) return res.status(400).json({ success: false, message: studentB.error });
-  const memberA = studentA.username;
-  const memberB = studentB.username;
-  if (memberA.toLowerCase() === memberB.toLowerCase()) {
-    return res.status(400).json({ success: false, message: 'A team needs two different students.' });
+  const members = [];
+  for (const raw of rawMembers) {
+    const student = await findStudent(db, raw);
+    if (student.error) return res.status(400).json({ success: false, message: student.error });
+    if (members.some((member) => sameName(member, student.username))) {
+      return res.status(400).json({ success: false, message: 'A student can only be listed once on a team.' });
+    }
+    members.push(student.username);
   }
 
   const col = db.collection('contests');
@@ -676,17 +715,29 @@ async function handleSaveTeam(req, res, db, user, body) {
   const teamId = cleanId(body.teamId) || crypto.randomUUID();
   for (const team of teams) {
     if (team.id === teamId) continue;
-    if (team.members.some((member) => member.toLowerCase() === memberA.toLowerCase() || member.toLowerCase() === memberB.toLowerCase())) {
+    if (team.members.some((member) => members.some((next) => sameName(member, next)))) {
       return res.status(400).json({ success: false, message: 'One of those students is already on a team in this contest.' });
     }
   }
-  const next = { id: teamId, name, members: [memberA, memberB] };
+  const next = { id: teamId, name, members };
   const index = teams.findIndex((team) => team.id === teamId);
   if (index >= 0) teams[index] = next;
   else teams.push(next);
+  const spawnVotes = cleanSpawnVotes(contest.spawnVotes).filter((vote) => {
+    const owner = teams.find((team) => team.id === vote.teamId);
+    return owner && owner.members.some((member) => sameName(member, vote.username));
+  });
   await col.updateOne(
     { id: contestId },
-    { $set: { teams, contestantIds: teams.flatMap((team) => team.members), updatedAt: new Date() } }
+    {
+      $set: {
+        teams,
+        contestantIds: teams.flatMap((team) => team.members),
+        spawnVotes,
+        spawnChoices: agreedSpawnChoices(teams, spawnVotes),
+        updatedAt: new Date(),
+      },
+    }
   );
   const updated = await col.findOne({ id: contestId });
   const map = await loadContestMap(db, updated);
@@ -710,6 +761,7 @@ async function handleRemoveTeam(req, res, db, user, body) {
         teams,
         contestantIds: teams.flatMap((team) => team.members),
         spawnChoices: cleanTeamCells(contest.spawnChoices).filter((choice) => choice.teamId !== teamId),
+        spawnVotes: cleanSpawnVotes(contest.spawnVotes).filter((vote) => vote.teamId !== teamId),
         spawns: cleanTeamCells(contest.spawns).filter((spawn) => spawn.teamId !== teamId),
         claims: cleanClaims(contest.claims).filter((claim) => claim.teamId !== teamId),
         updatedAt: new Date(),
@@ -751,24 +803,19 @@ async function handleChooseSpawn(req, res, db, user, body) {
     return res.status(400).json({ success: false, message: 'That cell is not a spawn point.', serverNow: now });
   }
 
-  await col.updateOne({ id: contestId, spawnResolved: { $ne: true } }, [
+  const teams = cleanTeams(contest.teams);
+  const spawnVotes = cleanSpawnVotes(contest.spawnVotes).filter((vote) => !(vote.teamId === team.id && sameName(vote.username, username)));
+  spawnVotes.push({ teamId: team.id, username, cell });
+  await col.updateOne(
+    { id: contestId, spawnResolved: { $ne: true } },
     {
       $set: {
-        spawnChoices: {
-          $concatArrays: [
-            {
-              $filter: {
-                input: { $ifNull: ['$spawnChoices', []] },
-                cond: { $ne: ['$$this.teamId', team.id] },
-              },
-            },
-            [{ teamId: team.id, cell }],
-          ],
-        },
+        spawnVotes,
+        spawnChoices: agreedSpawnChoices(teams, spawnVotes),
         updatedAt: new Date(),
       },
-    },
-  ]);
+    }
+  );
   const stored = await col.findOne({ id: contestId });
   const updated = await maybeResolveSpawns(db, stored, map, Date.now());
   const problems = await db.collection('problems').find({}).toArray();

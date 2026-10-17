@@ -20,7 +20,7 @@ Returns the signed-in user, maps, problems, and contests.
 
 Students receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive the answer and the optional `logic` script as well. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds.
 
-A contest has `startAt` (milliseconds since 1970), `durationMinutes`, `spawnMinutes`, and `readyMinutes`. Spawning starts at `startAt` and lasts `spawnMinutes`. The wait after that lasts `readyMinutes`. Both are part of `durationMinutes`. `teams` lists `{ id, name, members }` with exactly two usernames. `spawnChoices` lists a team's preferred spawn cell. When every team has chosen, or when spawn time ends, the server assigns one spawn point per team and sets `spawnResolved`. If several teams chose the same cell, one random team keeps it and the others move to free spawn points. Teams that have not chosen are placed on free spawn points too. `spawns` then lists `{ teamId, cell }`. `claims` lists solved cells `{ cell, teamId, solvedBy, solvedAt }`. Before spawn points are assigned, a student only receives their own team's choice.
+A contest has `startAt` (milliseconds since 1970), `durationMinutes`, `spawnMinutes`, and `readyMinutes`. Spawning starts at `startAt` and lasts `spawnMinutes`. The wait after that lasts `readyMinutes`. Both are part of `durationMinutes`. `teams` lists `{ id, name, members }` with 1 to 5 usernames. `spawnVotes` lists each student's pick `{ teamId, username, cell }`. `spawnChoices` lists a cell only after every member of that team has picked it. When every team has agreed, or when spawn time ends, the server assigns one spawn point per team and sets `spawnResolved`. If several teams agreed on the same cell, one random team keeps it and the others move to free spawn points. Teams that have not agreed are placed on free spawn points too. `spawns` then lists `{ teamId, cell }`. `claims` lists solved cells `{ cell, teamId, solvedBy, solvedAt }`. Before spawn points are assigned, a student only receives their own team's votes and choice.
 
 ### `POST { "action": "save-maps", "maps": [...] }`
 
@@ -34,9 +34,9 @@ Admin only. Same rule: an invalid problem rejects the whole save.
 
 Admin only. Updates contest names, maps, and schedules, and deletes contests that are no longer in the list. Teams, spawn choices, assigned spawns, and solved cells already stored are kept. Changing the map clears those cell assignments. Spawn time and the wait must add up to less than the duration.
 
-### `POST { "action": "save-team", "contestId": "...", "name": "...", "memberA": "...", "memberB": "..." }`
+### `POST { "action": "save-team", "contestId": "...", "name": "...", "members": ["..."] }`
 
-Admin only. Creates a team of two different student usernames. A student can be on only one team in that contest.
+Admin only. Creates a team of 1 to 5 different student usernames. A student can be on only one team in that contest.
 
 ### `POST { "action": "remove-team", "contestId": "...", "teamId": "..." }`
 
@@ -44,7 +44,7 @@ Admin only. Removes the team, its spawn choice, its assigned spawn, and the cell
 
 ### `POST { "action": "choose-spawn", "contestId": "...", "cell": 0 }`
 
-A student on a team, only while spawning is open and spawn points are not assigned yet. `cell` is a spawn-point cell. Either teammate can change the team's choice. When every team has chosen, spawn points are assigned immediately.
+A student on a team, only while spawning is open and spawn points are not assigned yet. `cell` is a spawn-point cell. The pick is that student's vote. The team choice is stored when every member has voted for the same cell. A student can change their vote until then. When every team has agreed, spawn points are assigned immediately.
 
 ### `POST { "action": "solve", "contestId": "...", "cell": 0, "answer": "..." }`
 
