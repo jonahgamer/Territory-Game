@@ -320,16 +320,19 @@
               <div id="student-grid" class="editor-grid"></div>
             </div>
             <article id="student-problem" class="student-problem" hidden>
-              <h2 id="student-problem-tag"></h2>
-              <div id="student-problem-prompt"></div>
-              <form id="student-answer-form" hidden>
-                <label>
-                  Answer
-                  <input id="student-answer" type="text" maxlength="5000" />
-                </label>
-                <button type="submit">Submit</button>
-                <p id="student-answer-error" class="form-error" hidden></p>
-              </form>
+              <div class="student-problem-card" role="dialog" aria-modal="true" aria-labelledby="student-problem-tag">
+                <button id="student-problem-close" class="student-problem-close" type="button">Close</button>
+                <h2 id="student-problem-tag"></h2>
+                <div id="student-problem-prompt"></div>
+                <form id="student-answer-form" hidden>
+                  <label>
+                    Answer
+                    <input id="student-answer" type="text" maxlength="5000" />
+                  </label>
+                  <button type="submit">Submit</button>
+                  <p id="student-answer-error" class="form-error" hidden></p>
+                </form>
+              </div>
             </article>
           </div>
         </section>

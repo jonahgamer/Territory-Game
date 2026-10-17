@@ -810,10 +810,35 @@ button[type="submit"],
 }
 
 .student-problem {
-  max-width: 40rem;
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.student-problem-card {
+  width: min(100%, 40rem);
+  max-height: min(90dvh, 800px);
+  overflow: auto;
   padding: 20px 22px;
   border: 1px solid var(--line);
-  background: rgba(8, 18, 32, 0.72);
+  background: rgba(8, 18, 32, 0.96);
+  box-shadow: 0 0 48px rgba(62, 224, 255, 0.12);
+}
+
+.student-problem-close {
+  float: right;
+  margin: 0 0 8px 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .student-problem h2 {
@@ -1298,7 +1323,8 @@ button[type="submit"],
   }
 
   .student-problem,
-  .problem-preview-box {
+  .problem-preview-box,
+  .student-problem-card {
     padding: 16px;
   }
 
