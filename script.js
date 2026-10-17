@@ -82,6 +82,13 @@ const problemSectionTitle = document.querySelector("#problem-section-title");
 const addProblemButton = document.querySelector("#add-problem");
 const problemEmpty = document.querySelector("#problem-empty");
 const problemPages = document.querySelector("#problem-pages");
+const problemSelectToggle = document.querySelector("#problem-select-toggle");
+const problemBulk = document.querySelector("#problem-bulk");
+const problemSelectPage = document.querySelector("#problem-select-page");
+const problemSelectAll = document.querySelector("#problem-select-all");
+const problemSelectedCount = document.querySelector("#problem-selected-count");
+const problemBulkDifficulty = document.querySelector("#problem-bulk-difficulty");
+const problemBulkDelete = document.querySelector("#problem-bulk-delete");
 const problemList = document.querySelector("#problem-list");
 const problemBackButton = document.querySelector("#problem-back-button");
 const deleteOpenProblemButton = document.querySelector("#delete-open-problem");
@@ -171,6 +178,8 @@ let problemReturn = "list";
 let activeProblemType = null;
 let problemRangeStart = 1;
 const PROBLEM_PAGE_SIZE = 20;
+const selectedProblemKeys = new Set();
+let problemSelectMode = false;
 let placeType = "math";
 let serverOffsetMs = 0;
 let contestClock = null;
@@ -260,6 +269,12 @@ studentGrid.addEventListener("click", onStudentGridClick);
 studentAnswerForm.addEventListener("submit", submitStudentAnswer);
 problemSectionChoices.addEventListener("click", onProblemSectionClick);
 problemSection.addEventListener("click", onProblemListClick);
+problemSection.addEventListener("change", onProblemSelectionChange);
+problemSelectToggle.addEventListener("click", toggleProblemSelectMode);
+problemSelectPage.addEventListener("change", selectProblemPage);
+problemSelectAll.addEventListener("change", selectAllProblems);
+problemBulkDifficulty.addEventListener("click", onBulkDifficultyClick);
+problemBulkDelete.addEventListener("click", deleteSelectedProblems);
 placeTypeChoices.addEventListener("click", onPlaceTypeClick);
 problemBackButton.addEventListener("click", closeProblemEditor);
 deleteOpenProblemButton.addEventListener("click", () => deleteProblem(editingProblemNo, editingProblemType));
@@ -890,6 +905,14 @@ function onProblemSectionClick(event) {
   if (!button || !typeInfo(button.dataset.section)) return;
   activeProblemType = button.dataset.section;
   problemRangeStart = 1;
+  problemSelectMode = false;
+  selectedProblemKeys.clear();
+  renderProblems();
+}
+
+function toggleProblemSelectMode() {
+  problemSelectMode = !problemSelectMode;
+  if (!problemSelectMode) selectedProblemKeys.clear();
   renderProblems();
 }
 
@@ -1165,11 +1188,121 @@ function renderProblems() {
     problemPages.append(button);
   }
   problemPages.hidden = ranges.length < 2;
+  if (items.length === 0) {
+    problemSelectMode = false;
+    selectedProblemKeys.clear();
+  }
+  problemSelectToggle.hidden = items.length === 0;
+  problemSelectToggle.setAttribute("aria-pressed", String(problemSelectMode));
+  problemSelectToggle.textContent = problemSelectMode ? "Done" : "Select";
+  problemBulk.hidden = !problemSelectMode || items.length === 0;
   problemList.replaceChildren();
   for (const problem of visible) problemList.append(createProblemEntity(problem));
   problemEmpty.hidden = items.length > 0;
   problemEmpty.textContent = `No ${type.name} problems yet.`;
   problemList.hidden = visible.length === 0;
+  pruneProblemSelection();
+  syncProblemSelection();
+}
+
+function problemKey(type, index) {
+  return `${type}:${index}`;
+}
+
+function problemsOfActiveType() {
+  if (!activeProblemType) return [];
+  return problems.filter((problem) => problem.type === activeProblemType);
+}
+
+function selectedProblems() {
+  return problemsOfActiveType().filter((problem) => selectedProblemKeys.has(problemKey(problem.type, problem.index)));
+}
+
+function pruneProblemSelection() {
+  const live = new Set(problems.map((problem) => problemKey(problem.type, problem.index)));
+  for (const key of selectedProblemKeys) {
+    if (!live.has(key)) selectedProblemKeys.delete(key);
+  }
+}
+
+function syncProblemSelection() {
+  const boxes = [...problemList.querySelectorAll("[data-select-problem]")];
+  const selectedOnPage = boxes.filter((box) => box.checked).length;
+  const chosen = selectedProblems();
+  const all = problemsOfActiveType();
+  problemSelectPage.checked = boxes.length > 0 && selectedOnPage === boxes.length;
+  problemSelectPage.indeterminate = selectedOnPage > 0 && selectedOnPage < boxes.length;
+  problemSelectAll.checked = all.length > 0 && chosen.length === all.length;
+  problemSelectAll.indeterminate = chosen.length > 0 && chosen.length < all.length;
+  problemSelectedCount.textContent = chosen.length === 0 ? "None selected" : `${chosen.length} selected`;
+  const idle = chosen.length === 0;
+  problemBulkDelete.disabled = idle;
+  for (const button of problemBulkDifficulty.querySelectorAll("button")) button.disabled = idle;
+}
+
+function onProblemSelectionChange(event) {
+  const box = event.target.closest("[data-select-problem]");
+  if (!box) return;
+  const key = problemKey(box.dataset.selectType, Number(box.dataset.selectProblem));
+  if (box.checked) selectedProblemKeys.add(key);
+  else selectedProblemKeys.delete(key);
+  syncProblemSelection();
+}
+
+function selectProblemPage() {
+  for (const box of problemList.querySelectorAll("[data-select-problem]")) {
+    box.checked = problemSelectPage.checked;
+    const key = problemKey(box.dataset.selectType, Number(box.dataset.selectProblem));
+    if (box.checked) selectedProblemKeys.add(key);
+    else selectedProblemKeys.delete(key);
+  }
+  syncProblemSelection();
+}
+
+function selectAllProblems() {
+  for (const problem of problemsOfActiveType()) {
+    const key = problemKey(problem.type, problem.index);
+    if (problemSelectAll.checked) selectedProblemKeys.add(key);
+    else selectedProblemKeys.delete(key);
+  }
+  for (const box of problemList.querySelectorAll("[data-select-problem]")) {
+    box.checked = problemSelectAll.checked;
+  }
+  syncProblemSelection();
+}
+
+function onBulkDifficultyClick(event) {
+  const button = event.target.closest("[data-bulk-difficulty]");
+  if (!button || button.disabled) return;
+  const difficulty = button.dataset.bulkDifficulty;
+  const chosen = selectedProblems();
+  if (!DIFFICULTIES.includes(difficulty) || chosen.length === 0) return;
+  for (const problem of chosen) problem.difficulty = difficulty;
+  persistProblems();
+  renderProblems();
+}
+
+function deleteSelectedProblems() {
+  const chosen = selectedProblems();
+  if (chosen.length === 0) return;
+  const label = chosen.length === 1
+    ? problemTag(chosen[0].index, chosen[0].type)
+    : `${chosen.length} ${typeInfo(activeProblemType).name} problems`;
+  const pronoun = chosen.length === 1 ? "It" : "They";
+  if (!window.confirm(`Delete ${label}? ${pronoun} will also be cleared from every map.`)) return;
+  const keys = new Set(chosen.map((problem) => problemKey(problem.type, problem.index)));
+  problems = problems.filter((problem) => !keys.has(problemKey(problem.type, problem.index)));
+  for (const map of maps) {
+    map.cells.forEach((cell, cellIndex) => {
+      if (cell.kind === "problem" && keys.has(problemKey(cell.type, cell.problemNo))) {
+        map.cells[cellIndex] = { kind: "empty" };
+      }
+    });
+  }
+  for (const key of keys) selectedProblemKeys.delete(key);
+  persistProblems();
+  persistMaps();
+  renderProblems();
 }
 
 function problemRangeStartFor(index) {
@@ -1183,6 +1316,8 @@ function problemRangeLabel(start) {
 
 function createProblemEntity(problem) {
   const item = document.createElement("li");
+  const check = document.createElement("label");
+  const checkbox = document.createElement("input");
   const openButton = document.createElement("button");
   const index = document.createElement("span");
   const snippet = document.createElement("span");
@@ -1190,6 +1325,15 @@ function createProblemEntity(problem) {
   const tag = problemTag(problem.index, problem.type);
 
   item.dataset.problemIndex = String(problem.index);
+  if (problemSelectMode) {
+    check.className = "problem-check";
+    checkbox.type = "checkbox";
+    checkbox.dataset.selectProblem = String(problem.index);
+    checkbox.dataset.selectType = problem.type;
+    checkbox.checked = selectedProblemKeys.has(problemKey(problem.type, problem.index));
+    checkbox.setAttribute("aria-label", `Select ${tag}`);
+    check.append(checkbox);
+  }
   openButton.type = "button";
   openButton.className = "open-problem";
   openButton.dataset.openProblem = String(problem.index);
@@ -1209,6 +1353,7 @@ function createProblemEntity(problem) {
   deleteButton.textContent = "Delete";
   deleteButton.setAttribute("aria-label", `Delete ${tag}`);
 
+  if (problemSelectMode) item.append(check);
   item.append(openButton, deleteButton);
   return item;
 }

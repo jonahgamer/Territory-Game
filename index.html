@@ -105,10 +105,31 @@
           <div id="problem-section" class="problem-section" hidden>
             <div class="problem-group-head">
               <h2 id="problem-section-title"></h2>
-              <button id="add-problem" class="add-problem" type="button">Add problem</button>
+              <div class="problem-group-actions">
+                <button id="problem-select-toggle" type="button" aria-pressed="false" hidden>Select</button>
+                <button id="add-problem" class="add-problem" type="button">Add problem</button>
+              </div>
             </div>
             <p id="problem-empty" class="problem-group-empty" hidden></p>
             <div id="problem-pages" class="kind-choices problem-pages" hidden></div>
+            <div id="problem-bulk" class="problem-bulk" hidden>
+              <label class="problem-check">
+                <input id="problem-select-page" type="checkbox" />
+                This page
+              </label>
+              <label class="problem-check">
+                <input id="problem-select-all" type="checkbox" />
+                All
+              </label>
+              <p id="problem-selected-count" class="field-note">None selected</p>
+              <div class="kind-choices" id="problem-bulk-difficulty">
+                <button type="button" data-bulk-difficulty="easy">Easy</button>
+                <button type="button" data-bulk-difficulty="normal">Normal</button>
+                <button type="button" data-bulk-difficulty="hard">Hard</button>
+                <button type="button" data-bulk-difficulty="insane">Insane</button>
+              </div>
+              <button id="problem-bulk-delete" class="delete-map" type="button">Delete selected</button>
+            </div>
             <ul id="problem-list" class="problem-list" hidden></ul>
           </div>
         </section>
