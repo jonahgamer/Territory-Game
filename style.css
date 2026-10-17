@@ -657,22 +657,6 @@ button[type="submit"],
   color: #041018;
 }
 
-.problem-editor .kind-choices button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.problem-editor .kind-choices button[aria-pressed="true"]:disabled {
-  background: var(--cyan);
-  border-color: var(--cyan);
-  color: #041018;
-}
-
-#problem-index-input:disabled {
-  opacity: 0.85;
-  cursor: default;
-}
-
 #problem-no-field {
   display: grid;
   gap: 6px;
