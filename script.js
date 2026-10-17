@@ -1377,6 +1377,19 @@ function renderMath(element) {
 function setRichText(element, source) {
   element.innerHTML = source;
   renderMath(element);
+  activateInlineScripts(element);
+}
+
+// innerHTML 插入的 <script> 不会执行；重新创建一个同名节点替换掉即可触发
+function activateInlineScripts(root) {
+  for (const old of [...root.querySelectorAll("script")]) {
+    const fresh = document.createElement("script");
+    for (const { name, value } of old.attributes) {
+      fresh.setAttribute(name, value);
+    }
+    fresh.textContent = old.textContent;
+    old.replaceWith(fresh);
+  }
 }
 
 function problemSnippet(problem) {
