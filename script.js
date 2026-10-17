@@ -24,6 +24,8 @@ const TEAM_COLORS = ["#3ee0ff", "#ff9a1a", "#4d7cff", "#ff4d8d", "#f2f5f8", "#d4
 const API_BASE = "/api/territory";
 
 const homeButton = document.querySelector("#home-button");
+const menuButton = document.querySelector("#menu-button");
+const sidebarBackdrop = document.querySelector(".sidebar-backdrop");
 const mapsButton = document.querySelector("#maps-button");
 const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
@@ -234,6 +236,14 @@ const _persistContestsDebounced = debounce(
 // ═══════════════════════════════════════════════════════════════════
 
 homeButton.addEventListener("click", showHome);
+menuButton.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
+sidebarBackdrop.addEventListener("click", () => setMenuOpen(false));
+document.querySelector(".sidebar").addEventListener("click", (event) => {
+  if (event.target.closest("button")) setMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setMenuOpen(false);
+});
 mapsButton.addEventListener("click", showMaps);
 problemsButton.addEventListener("click", showProblems);
 competitionsButton.addEventListener("click", showCompetitions);
@@ -586,6 +596,15 @@ function hideViews() {
   studentPlayView.hidden = true;
   editorView.hidden = true;
   settingsView.hidden = true;
+}
+
+function setMenuOpen(open) {
+  const wasOpen = document.body.classList.contains("menu-open");
+  document.body.classList.toggle("menu-open", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  sidebarBackdrop.hidden = !open;
+  if (wasOpen && !open) menuButton.focus();
 }
 
 function setCurrentSection(button) {
@@ -1796,11 +1815,33 @@ function renderAdminBoard(contest, map) {
 
 let contestSyncAt = 0;
 let contestSyncKey = "";
+let lastMouseMoveAt = Date.now();
+const CONTEST_SYNC_ACTIVE_MS = 1500;
+const CONTEST_SYNC_IDLE_MS = 15000;
+const CONTEST_SYNC_HIDDEN_MS = 60000;
+const MOUSE_IDLE_MS = 5000;
+
+function contestSyncGap() {
+  if (document.hidden) return CONTEST_SYNC_HIDDEN_MS;
+  if (Date.now() - lastMouseMoveAt >= MOUSE_IDLE_MS) return CONTEST_SYNC_IDLE_MS;
+  return CONTEST_SYNC_ACTIVE_MS;
+}
+
+function noteMouseMove() {
+  const wasIdle = Date.now() - lastMouseMoveAt >= MOUSE_IDLE_MS;
+  lastMouseMoveAt = Date.now();
+  if (wasIdle) contestSyncAt = 0;
+}
+
+document.addEventListener("mousemove", noteMouseMove, { passive: true });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) contestSyncAt = 0;
+});
 
 async function syncContest(contest) {
   if (!bootstrapped || !contest) return;
   const now = Date.now();
-  if (now - contestSyncAt < 1500) return;
+  if (now - contestSyncAt < contestSyncGap()) return;
   contestSyncAt = now;
   try {
     const data = await apiCall("contest-state", { contestId: contest.id });
