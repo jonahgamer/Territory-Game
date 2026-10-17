@@ -27,7 +27,7 @@
           <li><a href="/ui2/editmap.html" class="nav-link active">Maps</a></li>
           <li><a href="/ui2/editproblem.html" class="nav-link">Problems</a></li>
           <li><a href="#" class="nav-link disabled" aria-disabled="true">Contests</a></li>
-          <li><a href="#" class="nav-link disabled" aria-disabled="true">Tutorial</a></li>
+          <li><a href="/ui2/editusers.html#tutorial" class="nav-link">Tutorial</a></li>
           <li class="section-label">Credits</li>
           <li><a href="/ui2/editusers.html" class="nav-link">Settings</a></li>
         </ul>
@@ -109,20 +109,5 @@
   </div>
 
   <script src="/script.js"></script>
-  <script>
-    document.getElementById('menu-button')?.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      const backdrop = document.querySelector('.sidebar-backdrop');
-      sidebar.classList.toggle('open');
-      backdrop.hidden = !sidebar.classList.contains('open');
-      const expanded = document.getElementById('menu-button').getAttribute('aria-expanded') === 'true';
-      document.getElementById('menu-button').setAttribute('aria-expanded', String(!expanded));
-    });
-    document.querySelector('.sidebar-backdrop')?.addEventListener('click', () => {
-      document.querySelector('.sidebar').classList.remove('open');
-      document.querySelector('.sidebar-backdrop').hidden = true;
-      document.getElementById('menu-button').setAttribute('aria-expanded', 'false');
-    });
-  </script>
 </body>
 </html>
