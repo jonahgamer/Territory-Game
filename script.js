@@ -1805,7 +1805,6 @@ function applyAccount() {
   problemsButton.hidden = contestant;
   creditsLabel.hidden = contestant;
   settingsButton.hidden = contestant;
-  competitionsButton.textContent = contestant ? "Contests" : "Competition";
   accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
   accountPfp.hidden = !pfp;
