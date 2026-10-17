@@ -81,6 +81,7 @@ const problemSection = document.querySelector("#problem-section");
 const problemSectionTitle = document.querySelector("#problem-section-title");
 const addProblemButton = document.querySelector("#add-problem");
 const problemEmpty = document.querySelector("#problem-empty");
+const problemPages = document.querySelector("#problem-pages");
 const problemList = document.querySelector("#problem-list");
 const problemBackButton = document.querySelector("#problem-back-button");
 const deleteOpenProblemButton = document.querySelector("#delete-open-problem");
@@ -168,6 +169,8 @@ let editingProblemNo = null;
 let editingProblemType = null;
 let problemReturn = "list";
 let activeProblemType = null;
+let problemRangeStart = 1;
+const PROBLEM_PAGE_SIZE = 20;
 let placeType = "math";
 let serverOffsetMs = 0;
 let contestClock = null;
@@ -494,7 +497,10 @@ async function onAccountListClick(event) {
   const deleteButton = event.target.closest("[data-account-delete]");
   if (!deleteButton) return;
   const username = deleteButton.dataset.accountDelete;
-  if (!window.confirm(`Delete the student account ${username}?`)) return;
+  if (!confirmTwice(
+    `Delete the student account ${username}?`,
+    `Delete ${username} now? This student will no longer be able to sign in.`
+  )) return;
   accountListError.hidden = true;
   try {
     await apiCall("delete-account", { username });
@@ -579,8 +585,16 @@ function setCurrentSection(button) {
 // Map CRUD
 // ═══════════════════════════════════════════════════════════════════
 
+function confirmTwice(first, second) {
+  return window.confirm(first) && window.confirm(second);
+}
+
 function deleteOpenMap() {
-  maps = maps.filter((map) => map.id !== openMapId);
+  const map = currentMap();
+  if (!map) return;
+  const name = map.name || "this map";
+  if (!confirmTwice(`Delete the map ${name}?`, `Delete ${name} now? The map and every cell on it will be removed.`)) return;
+  maps = maps.filter((item) => item.id !== openMapId);
   persistMaps();
   showMaps();
 }
@@ -875,6 +889,7 @@ function onProblemSectionClick(event) {
   const button = event.target.closest("[data-section]");
   if (!button || !typeInfo(button.dataset.section)) return;
   activeProblemType = button.dataset.section;
+  problemRangeStart = 1;
   renderProblems();
 }
 
@@ -892,6 +907,13 @@ function addProblem(type) {
 function onProblemListClick(event) {
   if (event.target.closest("#add-problem")) {
     if (activeProblemType) addProblem(activeProblemType);
+    return;
+  }
+
+  const rangeButton = event.target.closest("[data-problem-range]");
+  if (rangeButton) {
+    problemRangeStart = Number(rangeButton.dataset.problemRange);
+    renderProblems();
     return;
   }
 
@@ -928,7 +950,10 @@ function closeProblemEditor() {
     return;
   }
   const problem = findProblem(editingProblemNo, editingProblemType);
-  if (problem) activeProblemType = problem.type;
+  if (problem) {
+    activeProblemType = problem.type;
+    problemRangeStart = problemRangeStartFor(problem.index);
+  }
   showProblems();
 }
 
@@ -963,14 +988,10 @@ function reindexProblem(oldIndex, newIndex) {
     const movingNext = problemTag(newIndex, moving.type);
     const otherNext = problemTag(oldIndex, other.type);
     const typeName = typeInfo(moving.type).name;
-    const first = window.confirm(
-      `${otherTag} already belongs to another ${typeName} problem. Swap it with ${movingTag}?`
+    const swap = window.confirm(
+      `${otherTag} already belongs to another ${typeName} problem. Swap these indexes? ${movingTag} becomes ${movingNext}, and ${otherTag} becomes ${otherNext}.`
     );
-    if (!first) return false;
-    const second = window.confirm(
-      `Swap these indexes? ${movingTag} becomes ${movingNext}, and ${otherTag} becomes ${otherNext}.`
-    );
-    if (!second) return false;
+    if (!swap) return false;
     other.index = oldIndex;
     moving.index = newIndex;
     swapProblemNumbersOnMaps(oldIndex, newIndex, moving.type);
@@ -1077,6 +1098,8 @@ function updateProblemField(field, value) {
 }
 
 function deleteProblem(index, type) {
+  const tag = problemTag(index, type);
+  if (!window.confirm(`Delete ${tag}? It will also be cleared from every map.`)) return;
   const wasOpen = editingProblemNo === index && editingProblemType === type;
   problems = problems.filter((problem) => !(problem.index === index && problem.type === type));
   for (const map of maps) {
@@ -1122,6 +1145,9 @@ function renderProblems() {
   }
 
   const items = problems.filter((problem) => problem.type === type.id);
+  const ranges = [...new Set(items.map((problem) => problemRangeStartFor(problem.index)))].sort((a, b) => a - b);
+  if (!ranges.includes(problemRangeStart)) problemRangeStart = ranges[0] || 1;
+  const visible = items.filter((problem) => problemRangeStartFor(problem.index) === problemRangeStart);
   problemSection.hidden = false;
   problemSectionTitle.textContent = type.name;
   const tag = document.createElement("span");
@@ -1129,11 +1155,30 @@ function renderProblems() {
   tag.textContent = type.tag;
   problemSectionTitle.append(tag);
   addProblemButton.setAttribute("aria-label", `Add ${type.name} problem`);
+  problemPages.replaceChildren();
+  for (const start of ranges) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.problemRange = String(start);
+    button.textContent = problemRangeLabel(start);
+    button.setAttribute("aria-pressed", String(start === problemRangeStart));
+    problemPages.append(button);
+  }
+  problemPages.hidden = ranges.length < 2;
   problemList.replaceChildren();
-  for (const problem of items) problemList.append(createProblemEntity(problem));
+  for (const problem of visible) problemList.append(createProblemEntity(problem));
   problemEmpty.hidden = items.length > 0;
   problemEmpty.textContent = `No ${type.name} problems yet.`;
-  problemList.hidden = items.length === 0;
+  problemList.hidden = visible.length === 0;
+}
+
+function problemRangeStartFor(index) {
+  const safe = Math.min(MAX_PROBLEM_NO, Math.max(MIN_PROBLEM_NO, index));
+  return Math.floor((safe - 1) / PROBLEM_PAGE_SIZE) * PROBLEM_PAGE_SIZE + 1;
+}
+
+function problemRangeLabel(start) {
+  return `${start}–${Math.min(start + PROBLEM_PAGE_SIZE - 1, MAX_PROBLEM_NO)}`;
 }
 
 function createProblemEntity(problem) {
@@ -1728,7 +1773,14 @@ function onContestListClick(event) {
 
 function deleteOpenContest() {
   if (isContestant()) return;
-  contests = contests.filter((contest) => contest.id !== openContestId);
+  const contest = currentContest();
+  if (!contest) return;
+  const name = contest.name || "this contest";
+  if (!confirmTwice(
+    `Delete the contest ${name}?`,
+    `Delete ${name} now? Teams, scores, and the schedule will be removed.`
+  )) return;
+  contests = contests.filter((item) => item.id !== openContestId);
   persistContests();
   showCompetitions();
 }
@@ -1837,6 +1889,12 @@ async function onContestantListClick(event) {
   const contest = currentContest();
   if (!contest) return;
   const teamId = button.dataset.removeTeam;
+  const team = contest.teams.find((item) => item.id === teamId);
+  const teamName = team ? team.name : "this team";
+  if (!confirmTwice(
+    `Remove the team ${teamName}?`,
+    `Remove ${teamName} now? Their spawn point and solved cells will be cleared.`
+  )) return;
   const previous = {
     teams: contest.teams.slice(),
     spawnChoices: contest.spawnChoices.slice(),
