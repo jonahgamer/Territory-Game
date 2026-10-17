@@ -26,6 +26,7 @@
             <li><button id="maps-button" type="button">Maps</button></li>
             <li><button id="problems-button" type="button">Problems</button></li>
             <li><button id="competitions-button" type="button">Contests</button></li>
+            <li><button id="tutorial-button" type="button">Tutorial</button></li>
             <li class="section-label" id="credits-label">Credits</li>
             <li><button id="settings-button" type="button">Settings</button></li>
           </ul>
@@ -64,6 +65,65 @@
           <p id="account-list-error" class="form-error" hidden></p>
           <p id="account-empty">No accounts yet.</p>
           <ul id="account-list" class="problem-list" hidden></ul>
+        </section>
+
+        <section id="tutorial-view" class="tutorial" hidden>
+          <p class="eyebrow">Admin</p>
+          <h1>Tutorial</h1>
+          <p class="lead">Logic is the optional grader on a problem. Leave it empty and the student's text is compared with the saved answer, ignoring capital letters and spaces around it. Paste one of the scripts below into Logic when the answer needs a custom check.</p>
+          <h2>What the script can use</h2>
+          <ul>
+            <li><code>answer</code> is the text the student submitted.</li>
+            <li><code>expected</code> is the answer saved on the problem.</li>
+            <li>Set <code>result.score</code> from 0 to 100. A score of 100 accepts the answer and the team claims the cell.</li>
+            <li>Set <code>result.comment</code> to the message the student sees when the answer is not accepted.</li>
+          </ul>
+          <p>You can also return <code>true</code>, <code>false</code>, a number, or <code>{ score, comment }</code>. The cell still scores by difficulty: Easy 1, Normal 2, Hard 3, Insane 4. The script has math, JSON, strings, numbers, and arrays. It cannot read files or use the network, and it stops after one second. Students never see the script or the saved answer. A problem still needs both a question and an answer before it can be saved.</p>
+          <h2>Exact text</h2>
+          <pre>const given = answer.trim().toLowerCase();
+const want = expected.trim().toLowerCase();
+if (given === want) {
+  result.score = 100;
+} else {
+  result.score = 0;
+  result.comment = "That answer is not right.";
+}</pre>
+          <h2>Several accepted answers</h2>
+          <p>Put one accepted answer on each line of the Answer field.</p>
+          <pre>const given = answer.trim().toLowerCase();
+const accepted = expected
+  .split(/\r?\n/)
+  .map((line) => line.trim().toLowerCase())
+  .filter(Boolean);
+if (accepted.includes(given)) {
+  result.score = 100;
+} else {
+  result.score = 0;
+  result.comment = "Try another form of the answer.";
+}</pre>
+          <h2>A number, with a little room</h2>
+          <p>Put the target in Answer, such as 3.14. This accepts anything within 0.01.</p>
+          <pre>const given = Number(answer);
+const want = Number(expected);
+if (!Number.isFinite(given)) {
+  result.score = 0;
+  result.comment = "Enter a number.";
+} else if (Math.abs(given - want) &lt;= 0.01) {
+  result.score = 100;
+} else {
+  result.score = 0;
+  result.comment = "Not close enough.";
+}</pre>
+          <h2>A list of values</h2>
+          <p>Ask the student to separate values with |. Save the solution the same way, such as 8|1|6|3|5|7|4|9|2.</p>
+          <pre>const given = answer.split("|").map((part) => part.trim());
+const want = expected.split("|").map((part) => part.trim());
+if (given.length === want.length && given.every((part, i) => part === want[i])) {
+  result.score = 100;
+} else {
+  result.score = 0;
+  result.comment = "Check the values and try again.";
+}</pre>
         </section>
 
         <section id="home-view">

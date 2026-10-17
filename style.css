@@ -233,6 +233,45 @@ h2 {
   text-transform: uppercase;
 }
 
+.tutorial {
+  max-width: 42rem;
+}
+
+.tutorial h2 {
+  margin-top: 32px;
+}
+
+.tutorial p,
+.tutorial li {
+  max-width: 40rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tutorial ul {
+  margin: 8px 0 16px;
+  padding-left: 1.2rem;
+}
+
+.tutorial li {
+  margin: 6px 0;
+}
+
+.tutorial code {
+  color: var(--cyan);
+}
+
+.tutorial pre {
+  margin: 0 0 8px;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: 14px/1.5 var(--font-ui);
+  white-space: pre-wrap;
+}
+
 .lead {
   margin: 0;
   max-width: 36rem;
