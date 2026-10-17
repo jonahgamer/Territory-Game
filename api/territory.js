@@ -23,6 +23,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
+import { runProblemLogic } from './logic.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -52,6 +53,7 @@ const MAX_MAP_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
 const MAX_PROBLEM_NO = 999;
 const MAX_PROBLEM_TEXT = 5000;
+const MAX_PROBLEM_LOGIC = 10000;
 const MAX_NAME_LEN = 60;
 const MAX_CONTESTANT_ID_LEN = 80;
 const MAX_CONTEST_MINUTES = 10080;
@@ -124,11 +126,14 @@ function normalizeProblem(v) {
   if (!PROBLEM_TYPES.includes(v.type)) return null;
   if (typeof v.prompt !== 'string' || v.prompt.length > MAX_PROBLEM_TEXT) return null;
   if (typeof v.answer !== 'string' || v.answer.length > MAX_PROBLEM_TEXT) return null;
+  const logic = typeof v.logic === 'string' ? v.logic : '';
+  if (logic.length > MAX_PROBLEM_LOGIC) return null;
   return {
     index: v.index,
     type: v.type,
     prompt: v.prompt,
     answer: v.answer,
+    logic,
     difficulty: DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal',
   };
 }
@@ -443,7 +448,10 @@ async function handleBootstrap(req, res, db, user) {
       prompt: p.prompt,
       difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
     };
-    if (admin) problem.answer = p.answer;
+    if (admin) {
+      problem.answer = p.answer;
+      problem.logic = typeof p.logic === 'string' ? p.logic : '';
+    }
     return problem;
   });
   const cleanContests = contests.map(c => {
@@ -777,7 +785,17 @@ async function handleSolve(req, res, db, user, body) {
 
   const mapCell = map.cells[cell];
   const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
-  if (!problem || !answersMatch(problem.answer, body.answer)) {
+  const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
+  if (logic) {
+    const judged = runProblemLogic(logic, problem.answer, body.answer);
+    if (judged.systemError || !judged.correct) {
+      return res.status(400).json({
+        success: false,
+        message: judged.comment || (judged.systemError ? 'The checker could not run.' : 'That answer is not right.'),
+        serverNow: now,
+      });
+    }
+  } else if (!problem || !answersMatch(problem.answer, body.answer)) {
     const message = problem && String(problem.answer || '').trim()
       ? 'That answer is not right.'
       : 'This problem has no answer yet.';

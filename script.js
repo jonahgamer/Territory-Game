@@ -173,6 +173,7 @@ const problemTypeChoices = document.querySelector("#problem-type-choices");
 const problemDifficultyChoices = document.querySelector("#problem-difficulty-choices");
 const problemPrompt = document.querySelector("#problem-prompt");
 const problemAnswer = document.querySelector("#problem-answer");
+const problemLogic = document.querySelector("#problem-logic");
 const createContestForm = document.querySelector("#create-contest-form");
 const contestNameInput = document.querySelector("#contest-name");
 const contestMapSelect = document.querySelector("#contest-map");
@@ -405,6 +406,9 @@ problemAnswer.addEventListener("input", () => {
   updateProblemField("answer", problemAnswer.value);
   requestAnimationFrame(renderProblemPreview);
 });
+problemLogic.addEventListener("input", () => {
+  updateProblemField("logic", problemLogic.value);
+});
 backButton.addEventListener("click", showMaps);
 saveMapButton.addEventListener("click", saveOpenMap);
 saveProblemButton.addEventListener("click", saveOpenProblem);
@@ -483,7 +487,7 @@ function problemHasUnsavedEdits() {
   if (!problemDraft) return false;
   if (problemDirty) return true;
   if (!problemDraft.isNew) return false;
-  return Boolean(problemPrompt.value.trim() || problemAnswer.value.trim());
+  return Boolean(problemPrompt.value.trim() || problemAnswer.value.trim() || problemLogic.value.trim());
 }
 
 function discardUnsavedProblem() {
@@ -501,8 +505,10 @@ function saveOpenProblem() {
   if (!problemDraft) return;
   const prompt = problemPrompt.value;
   const answer = problemAnswer.value;
+  const logic = problemLogic.value;
   problemDraft.prompt = prompt;
   problemDraft.answer = answer;
+  problemDraft.logic = logic;
   if (!prompt.trim() || !answer.trim()) {
     problemSaveError.hidden = false;
     problemSaveError.textContent = "Add both a question and an answer before saving.";
@@ -516,6 +522,7 @@ function saveOpenProblem() {
       type: problemDraft.type,
       prompt,
       answer,
+      logic,
       difficulty: problemDraft.difficulty,
     };
     problems.push(problem);
@@ -523,6 +530,7 @@ function saveOpenProblem() {
   } else {
     problem.prompt = prompt;
     problem.answer = answer;
+    problem.logic = logic;
     problem.difficulty = problemDraft.difficulty;
   }
   problemDraft.isNew = false;
@@ -1212,10 +1220,11 @@ function showProblemEditor(index, type, fromMap) {
       type: existing.type,
       prompt: existing.prompt,
       answer: existing.answer,
+      logic: existing.logic || "",
       difficulty: problemDifficulty(existing),
       isNew: false,
     }
-    : { index, type: problemType, prompt: "", answer: "", difficulty: "normal", isNew: true };
+    : { index, type: problemType, prompt: "", answer: "", logic: "", difficulty: "normal", isNew: true };
   problemDirty = false;
   stopPaint();
   if (!fromMap) openMapId = null;
@@ -1411,7 +1420,7 @@ function setProblemDifficulty(difficulty) {
 }
 
 function updateProblemField(field, value) {
-  if (!problemDraft || (field !== "prompt" && field !== "answer")) return;
+  if (!problemDraft || (field !== "prompt" && field !== "answer" && field !== "logic")) return;
   problemDraft[field] = value;
   problemDirty = true;
   if (problemSaveError) problemSaveError.hidden = true;
@@ -1725,7 +1734,8 @@ function problemSnippet(problem) {
   div.innerHTML = raw;
   div.querySelectorAll("script, style").forEach((node) => node.remove());
   const text = (div.textContent || "").replace(/\s+/g, " ").trim();
-  return text || "(empty)";
+  if (!text) return "(empty)";
+  return text.length > 36 ? `${text.slice(0, 36).trimEnd()}…` : text;
 }
 
 function renderProblemEditor() {
@@ -1751,6 +1761,7 @@ function renderProblemEditor() {
   }
   problemPrompt.value = problem.prompt;
   problemAnswer.value = problem.answer;
+  problemLogic.value = problem.logic || "";
 
   // Render HTML preview
   requestAnimationFrame(renderProblemPreview);
@@ -1823,7 +1834,7 @@ function findProblem(index, type) {
 }
 
 function blankProblem(index) {
-  return { index, type: "math", prompt: "", answer: "", difficulty: "normal" };
+  return { index, type: "math", prompt: "", answer: "", logic: "", difficulty: "normal" };
 }
 
 function problemDifficulty(problem) {
@@ -3126,6 +3137,7 @@ async function bootstrap() {
         difficulty: problemDifficulty(problem),
         prompt: problem.prompt || "",
         answer: problem.answer || "",
+        logic: problem.logic || "",
       }))
       : [];
     contests = Array.isArray(data.contests) ? data.contests.map(loadedContest) : [];

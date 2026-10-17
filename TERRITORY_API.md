@@ -18,7 +18,7 @@ Every request needs `Authorization: Bearer <token>`.
 
 Returns the signed-in user, maps, problems, and contests.
 
-Students receive each problem's prompt, type, and difficulty, and do not receive the answer. Admins receive the answer as well. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds.
+Students receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive the answer and the optional `logic` script as well. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds.
 
 A contest has `startAt` (milliseconds since 1970), `durationMinutes`, `spawnMinutes`, and `readyMinutes`. Spawning starts at `startAt` and lasts `spawnMinutes`. The wait after that lasts `readyMinutes`. Both are part of `durationMinutes`. `teams` lists `{ id, name, members }` with exactly two usernames. `spawnChoices` lists a team's preferred spawn cell. When every team has chosen, or when spawn time ends, the server assigns one spawn point per team and sets `spawnResolved`. If several teams chose the same cell, one random team keeps it and the others move to free spawn points. Teams that have not chosen are placed on free spawn points too. `spawns` then lists `{ teamId, cell }`. `claims` lists solved cells `{ cell, teamId, solvedBy, solvedAt }`. Before spawn points are assigned, a student only receives their own team's choice.
 
@@ -48,7 +48,7 @@ A student on a team, only while spawning is open and spawn points are not assign
 
 ### `POST { "action": "solve", "contestId": "...", "cell": 0, "answer": "..." }`
 
-A student on a team, only while the contest is running, the cell is an unsolved problem, and it touches the team's spawn or a cell the team has solved. The answer must match, ignoring capital letters and surrounding spaces. Easy scores 1, normal 2, hard 3, and insane 4. The first correct team keeps the cell.
+A student on a team, only while the contest is running, the cell is an unsolved problem, and it touches the team's spawn or a cell the team has solved. If the problem has logic, that JavaScript runs in a short-lived sandbox with `answer` and `expected`. It can return true or false, a score, or `{ score, comment }`, or set `result.score` and `result.comment`. A score of 100 accepts the answer, and the comment is shown when it does not. Otherwise the answer must match, ignoring capital letters and surrounding spaces. Easy scores 1, normal 2, hard 3, and insane 4. The first correct team keeps the cell.
 
 ### `POST { "action": "contest-state", "contestId": "..." }`
 
