@@ -47,7 +47,7 @@ const accountRole = document.querySelector("#account-role");
 const accountPfp = document.querySelector("#account-pfp");
 const accountButton = document.querySelector("#account-button");
 const homeView = document.querySelector("#home-view");
-const homeLead = homeView.querySelector(".lead");
+const homeLead = homeView?.querySelector(".lead") || null;
 const loadError = document.querySelector("#load-error");
 const mapsView = document.querySelector("#maps-view");
 const problemsView = document.querySelector("#problems-view");
@@ -106,12 +106,12 @@ function ensurePinch(grid) {
   let startDistance = 0;
   let startSize = CELL_SIZE;
   const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-  scroll.addEventListener("touchstart", (event) => {
+  scroll?.addEventListener("touchstart", (event) => {
     if (event.touches.length !== 2) return;
     startDistance = distance(event.touches);
     startSize = mapCellSize.get(grid) || CELL_SIZE;
   }, { passive: true });
-  scroll.addEventListener("touchmove", (event) => {
+  scroll?.addEventListener("touchmove", (event) => {
     if (event.touches.length !== 2 || !startDistance) return;
     event.preventDefault();
     const cols = Number(grid.dataset.cols) || 1;
@@ -125,7 +125,7 @@ function ensurePinch(grid) {
     grid.style.gridTemplateColumns = `repeat(${cols}, ${px})`;
     grid.style.gridTemplateRows = `repeat(${rows}, ${px})`;
   }, { passive: false });
-  scroll.addEventListener("touchend", (event) => {
+  scroll?.addEventListener("touchend", (event) => {
     if (event.touches.length < 2) startDistance = 0;
   });
 }
@@ -316,22 +316,22 @@ const _persistContestsDebounced = debounce(
 // Event wiring
 // ═══════════════════════════════════════════════════════════════════
 
-homeButton.addEventListener("click", showHome);
-mobileHome.addEventListener("click", showHome);
-menuButton.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
-sidebarBackdrop.addEventListener("click", () => setMenuOpen(false));
-document.querySelector(".sidebar").addEventListener("click", (event) => {
+homeButton?.addEventListener("click", showHome);
+mobileHome?.addEventListener("click", showHome);
+menuButton?.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
+sidebarBackdrop?.addEventListener("click", () => setMenuOpen(false));
+document.querySelector(".sidebar")?.addEventListener("click", (event) => {
   if (!event.target.closest("button, input, a, textarea")) setMenuOpen(false);
-  else if (event.target.closest("button")) setMenuOpen(false);
+  else if (event.target.closest("button, a")) setMenuOpen(false);
 });
-document.querySelector("main").addEventListener("click", () => {
+document.querySelector("main")?.addEventListener("click", () => {
   if (document.body.classList.contains("menu-open")) setMenuOpen(false);
 });
-studentProblem.addEventListener("click", (event) => {
+studentProblem?.addEventListener("click", (event) => {
   if (!event.target.closest(".student-problem-card")) closeStudentProblem();
 });
-studentProblemClose.addEventListener("click", closeStudentProblem);
-document.addEventListener("keydown", (event) => {
+studentProblemClose?.addEventListener("click", closeStudentProblem);
+document?.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!studentProblem.hidden) {
     closeStudentProblem();
@@ -339,100 +339,100 @@ document.addEventListener("keydown", (event) => {
   }
   setMenuOpen(false);
 });
-mapsButton.addEventListener("click", showMaps);
-problemsButton.addEventListener("click", showProblems);
-competitionsButton.addEventListener("click", showCompetitions);
-tutorialButton.addEventListener("click", showTutorial);
-settingsButton.addEventListener("click", showSettings);
-accountForm.addEventListener("submit", createAccount);
-accountList.addEventListener("click", onAccountListClick);
-accountButton.addEventListener("click", logOut);
-createContestForm.addEventListener("submit", createContest);
-contestList.addEventListener("click", onContestListClick);
-contestBackButton.addEventListener("click", showCompetitions);
-deleteOpenContestButton.addEventListener("click", deleteOpenContest);
-contestForm.addEventListener("submit", (event) => event.preventDefault());
-contestNameField.addEventListener("input", commitContestName);
-contestNameField.addEventListener("change", () => {
+mapsButton?.addEventListener("click", showMaps);
+problemsButton?.addEventListener("click", showProblems);
+competitionsButton?.addEventListener("click", showCompetitions);
+tutorialButton?.addEventListener("click", showTutorial);
+settingsButton?.addEventListener("click", showSettings);
+accountForm?.addEventListener("submit", createAccount);
+accountList?.addEventListener("click", onAccountListClick);
+accountButton?.addEventListener("click", logOut);
+createContestForm?.addEventListener("submit", createContest);
+contestList?.addEventListener("click", onContestListClick);
+contestBackButton?.addEventListener("click", showCompetitions);
+deleteOpenContestButton?.addEventListener("click", deleteOpenContest);
+contestForm?.addEventListener("submit", (event) => event.preventDefault());
+contestNameField?.addEventListener("input", commitContestName);
+contestNameField?.addEventListener("change", () => {
   const contest = currentContest();
   if (contest && !readContestName(contestNameField.value)) contestNameField.value = contest.name;
 });
-contestMapField.addEventListener("change", commitContestMap);
-contestMapSelect.addEventListener("change", () => updateContestSpawnNote(contestMapSelect, contestMapNote));
-contestStartField.addEventListener("input", commitContestSchedule);
-contestDurationField.addEventListener("input", commitContestSchedule);
-contestSpawnField.addEventListener("input", commitContestSchedule);
-contestReadyField.addEventListener("input", commitContestSchedule);
-contestStartField.addEventListener("change", finishContestScheduleEdit);
-contestDurationField.addEventListener("change", finishContestScheduleEdit);
-contestSpawnField.addEventListener("change", finishContestScheduleEdit);
-contestReadyField.addEventListener("change", finishContestScheduleEdit);
-teamForm.addEventListener("submit", addTeam);
-contestantList.addEventListener("click", onContestantListClick);
-studentContestList.addEventListener("click", onStudentListClick);
-studentBack.addEventListener("click", showStudent);
-studentGrid.addEventListener("click", onStudentGridClick);
-studentAnswerForm.addEventListener("submit", submitStudentAnswer);
-problemSectionChoices.addEventListener("click", onProblemSectionClick);
-problemSection.addEventListener("click", onProblemListClick);
-problemSection.addEventListener("change", onProblemSelectionChange);
-problemSelectToggle.addEventListener("click", toggleProblemSelectMode);
-problemSelectPage.addEventListener("change", selectProblemPage);
-problemSelectAll.addEventListener("change", selectAllProblems);
-problemBulkDifficulty.addEventListener("click", onBulkDifficultyClick);
-problemBulkDelete.addEventListener("click", deleteSelectedProblems);
-placeTypeChoices.addEventListener("click", onPlaceTypeClick);
-problemBackButton.addEventListener("click", closeProblemEditor);
-deleteOpenProblemButton.addEventListener("click", deleteOpenProblem);
-problemEditorForm.addEventListener("submit", (event) => event.preventDefault());
-problemIndexInput.addEventListener("change", () => {
+contestMapField?.addEventListener("change", commitContestMap);
+contestMapSelect?.addEventListener("change", () => updateContestSpawnNote(contestMapSelect, contestMapNote));
+contestStartField?.addEventListener("input", commitContestSchedule);
+contestDurationField?.addEventListener("input", commitContestSchedule);
+contestSpawnField?.addEventListener("input", commitContestSchedule);
+contestReadyField?.addEventListener("input", commitContestSchedule);
+contestStartField?.addEventListener("change", finishContestScheduleEdit);
+contestDurationField?.addEventListener("change", finishContestScheduleEdit);
+contestSpawnField?.addEventListener("change", finishContestScheduleEdit);
+contestReadyField?.addEventListener("change", finishContestScheduleEdit);
+teamForm?.addEventListener("submit", addTeam);
+contestantList?.addEventListener("click", onContestantListClick);
+studentContestList?.addEventListener("click", onStudentListClick);
+studentBack?.addEventListener("click", showStudent);
+studentGrid?.addEventListener("click", onStudentGridClick);
+studentAnswerForm?.addEventListener("submit", submitStudentAnswer);
+problemSectionChoices?.addEventListener("click", onProblemSectionClick);
+problemSection?.addEventListener("click", onProblemListClick);
+problemSection?.addEventListener("change", onProblemSelectionChange);
+problemSelectToggle?.addEventListener("click", toggleProblemSelectMode);
+problemSelectPage?.addEventListener("change", selectProblemPage);
+problemSelectAll?.addEventListener("change", selectAllProblems);
+problemBulkDifficulty?.addEventListener("click", onBulkDifficultyClick);
+problemBulkDelete?.addEventListener("click", deleteSelectedProblems);
+placeTypeChoices?.addEventListener("click", onPlaceTypeClick);
+problemBackButton?.addEventListener("click", closeProblemEditor);
+deleteOpenProblemButton?.addEventListener("click", deleteOpenProblem);
+problemEditorForm?.addEventListener("submit", (event) => event.preventDefault());
+problemIndexInput?.addEventListener("change", () => {
   if (problemReturn === "map") return;
   commitProblemIndex();
 });
-problemIndexInput.addEventListener("keydown", (event) => {
+problemIndexInput?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     problemIndexInput.blur();
   }
 });
-problemTypeChoices.addEventListener("click", (event) => {
+problemTypeChoices?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-type]");
   if (!button || editingProblemNo === null || problemReturn === "map") return;
   setProblemType(editingProblemNo, button.dataset.problemType);
 });
-problemDifficultyChoices.addEventListener("click", (event) => {
+problemDifficultyChoices?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-difficulty]");
   if (!button || editingProblemNo === null) return;
   setProblemDifficulty(button.dataset.problemDifficulty);
 });
-problemPrompt.addEventListener("input", () => {
+problemPrompt?.addEventListener("input", () => {
   updateProblemField("prompt", problemPrompt.value);
   requestAnimationFrame(renderProblemPreview);
 });
-problemAnswer.addEventListener("input", () => {
+problemAnswer?.addEventListener("input", () => {
   updateProblemField("answer", problemAnswer.value);
   requestAnimationFrame(renderProblemPreview);
 });
-problemLogic.addEventListener("input", () => {
+problemLogic?.addEventListener("input", () => {
   updateProblemField("logic", problemLogic.value);
 });
-backButton.addEventListener("click", showMaps);
-saveMapButton.addEventListener("click", saveOpenMap);
-saveProblemButton.addEventListener("click", saveOpenProblem);
-deleteOpenMapButton.addEventListener("click", deleteOpenMap);
-createForm.addEventListener("submit", createMap);
-editorNameInput.addEventListener("input", commitMapName);
-editorNameInput.addEventListener("change", () => {
+backButton?.addEventListener("click", showMaps);
+saveMapButton?.addEventListener("click", saveOpenMap);
+saveProblemButton?.addEventListener("click", saveOpenProblem);
+deleteOpenMapButton?.addEventListener("click", deleteOpenMap);
+createForm?.addEventListener("submit", createMap);
+editorNameInput?.addEventListener("input", commitMapName);
+editorNameInput?.addEventListener("change", () => {
   const map = currentMap();
   if (map && !readMapName(editorNameInput.value)) editorNameInput.value = map.name;
 });
-mapList.addEventListener("click", onMapListClick);
-kindProblem.addEventListener("click", () => chooseTool("problem"));
-kindSpawnpoint.addEventListener("click", () => chooseTool("spawnpoint"));
-kindObstacle.addEventListener("click", () => chooseTool("obstacle"));
-kindEmpty.addEventListener("click", () => chooseTool("empty"));
-editorGrid.addEventListener("pointerdown", startPaint);
-problemNoInput.addEventListener("input", () => {
+mapList?.addEventListener("click", onMapListClick);
+kindProblem?.addEventListener("click", () => chooseTool("problem"));
+kindSpawnpoint?.addEventListener("click", () => chooseTool("spawnpoint"));
+kindObstacle?.addEventListener("click", () => chooseTool("obstacle"));
+kindEmpty?.addEventListener("click", () => chooseTool("empty"));
+editorGrid?.addEventListener("pointerdown", startPaint);
+problemNoInput?.addEventListener("input", () => {
   problemNoError.hidden = true;
 });
 
@@ -506,8 +506,8 @@ function problemHasUnsavedEdits() {
 }
 
 function discardUnsavedProblem() {
-  if (problemEditorView.hidden || !problemHasUnsavedEdits()) {
-    if (!problemEditorView.hidden) problemDraft = null;
+  if (!problemEditorView || problemEditorView.hidden || !problemHasUnsavedEdits()) {
+    if (problemEditorView && !problemEditorView.hidden) problemDraft = null;
     return true;
   }
   if (!window.confirm("Leave without saving this problem?")) return false;
@@ -691,7 +691,7 @@ function renderAccounts() {
       display.value = account.displayName;
       display.maxLength = 60;
       display.setAttribute("aria-label", `Display name for ${account.username}`);
-      display.addEventListener("change", () => updateAccount(account.username, { displayName: display.value }));
+      display?.addEventListener("change", () => updateAccount(account.username, { displayName: display.value }));
 
       const password = document.createElement("input");
       password.type = "password";
@@ -813,34 +813,26 @@ function showEditor(mapId, options = {}) {
 }
 
 function hideViews() {
-  homeView.hidden = true;
-  mapsView.hidden = true;
-  problemsView.hidden = true;
-  problemEditorView.hidden = true;
-  competitionsView.hidden = true;
-  contestView.hidden = true;
-  studentView.hidden = true;
-  studentPlayView.hidden = true;
-  editorView.hidden = true;
-  settingsView.hidden = true;
-  tutorialView.hidden = true;
+  for (const view of [homeView, mapsView, problemsView, problemEditorView, competitionsView, contestView, studentView, studentPlayView, editorView, settingsView, tutorialView]) {
+    if (view) view.hidden = true;
+  }
 }
 
 function setMenuOpen(open) {
   const wasOpen = document.body.classList.contains("menu-open");
   document.body.classList.toggle("menu-open", open);
-  menuButton.setAttribute("aria-expanded", String(open));
-  menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
-  sidebarBackdrop.hidden = !open;
-  if (wasOpen && !open) menuButton.focus();
+  if (menuButton) {
+    menuButton.setAttribute("aria-expanded", String(open));
+    menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    if (wasOpen && !open) menuButton.focus();
+  }
+  if (sidebarBackdrop) sidebarBackdrop.hidden = !open;
 }
 
 function setCurrentSection(button) {
-  mapsButton.removeAttribute("aria-current");
-  problemsButton.removeAttribute("aria-current");
-  competitionsButton.removeAttribute("aria-current");
-  tutorialButton.removeAttribute("aria-current");
-  settingsButton.removeAttribute("aria-current");
+  for (const item of [mapsButton, problemsButton, competitionsButton, tutorialButton, settingsButton]) {
+    item?.removeAttribute("aria-current");
+  }
   if (button) button.setAttribute("aria-current", "page");
 }
 
@@ -941,9 +933,9 @@ function startPaint(event) {
   strokeCount = 0;
   pendingProblemOpen = null;
   paintedThisStroke = new Set();
-  window.addEventListener("pointermove", continuePaint);
-  window.addEventListener("pointerup", stopPaint);
-  window.addEventListener("pointercancel", stopPaint);
+  window?.addEventListener("pointermove", continuePaint);
+  window?.addEventListener("pointerup", stopPaint);
+  window?.addEventListener("pointercancel", stopPaint);
   applyTool(index, "toggle");
 }
 
@@ -958,9 +950,9 @@ let touchPaint = null;
 
 function armTouchPaint(event, index) {
   touchPaint = { x: event.clientX, y: event.clientY, index, pointerId: event.pointerId, moved: false };
-  window.addEventListener("pointermove", moveTouchPaint);
-  window.addEventListener("pointerup", finishTouchPaint);
-  window.addEventListener("pointercancel", cancelTouchPaint);
+  window?.addEventListener("pointermove", moveTouchPaint);
+  window?.addEventListener("pointerup", finishTouchPaint);
+  window?.addEventListener("pointercancel", cancelTouchPaint);
 }
 
 function moveTouchPaint(event) {
@@ -2202,8 +2194,8 @@ function noteMouseMove() {
   if (wasIdle) contestSyncAt = 0;
 }
 
-document.addEventListener("mousemove", noteMouseMove, { passive: true });
-document.addEventListener("visibilitychange", () => {
+document?.addEventListener("mousemove", noteMouseMove, { passive: true });
+document?.addEventListener("visibilitychange", () => {
   if (!document.hidden) contestSyncAt = 0;
 });
 
@@ -2239,31 +2231,34 @@ async function syncContest(contest) {
 
 function requireSession() {
   if (isSignedIn()) return true;
-  location.replace("login.html");
+  location.replace("/login.html");
   return false;
 }
 
 function applyAccount() {
   if (!isSignedIn()) {
-    location.replace("login.html");
+    location.replace("/login.html");
     return;
   }
 
   const contestant = isContestant();
   const user = session.user;
-  mapsButton.hidden = contestant;
-  problemsButton.hidden = contestant;
-  creditsLabel.hidden = contestant;
-  tutorialButton.hidden = contestant;
-  settingsButton.hidden = contestant;
-  accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
+  if (mapsButton) mapsButton.hidden = contestant;
+  if (problemsButton) problemsButton.hidden = contestant;
+  if (creditsLabel) creditsLabel.hidden = contestant;
+  if (tutorialButton) tutorialButton.hidden = contestant;
+  if (settingsButton) settingsButton.hidden = contestant;
+  if (accountRole) accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
-  accountPfp.hidden = !pfp;
-  accountPfp.src = pfp;
+  if (accountPfp) {
+    accountPfp.hidden = !pfp;
+    accountPfp.src = pfp;
+  }
   updateHomeLead();
 }
 
 function updateHomeLead() {
+  if (!homeLead) return;
   const user = session?.user;
   homeLead.textContent = isContestant()
     ? `Signed in as ${user.displayName || user.username}. Open Contests, agree on a spawn point with your team, then solve problems next to your territory.`
@@ -2273,7 +2268,7 @@ function updateHomeLead() {
 function logOut() {
   session = null;
   persistSession();
-  location.replace("login.html");
+  location.replace("/login.html");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3317,7 +3312,7 @@ function safePfp(value) {
 
 async function bootstrap() {
   if (!isSignedIn()) {
-    location.replace("login.html");
+    location.replace("/login.html");
     return;
   }
 
@@ -3346,7 +3341,8 @@ async function bootstrap() {
 
     applyAccount();
     updateHomeLead();
-    if (isContestant()) showStudent();
+    if (isContestant() && studentView) showStudent();
+    else openSplitPage();
   } catch (e) {
     console.error("[bootstrap]", e);
     if (String(e.message).includes("Unauthorized")) {
@@ -3354,12 +3350,30 @@ async function bootstrap() {
       return;
     }
     bootstrapped = false;
-    loadError.hidden = false;
-    loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
+    if (loadError) {
+      loadError.hidden = false;
+      loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
+    }
     applyAccount();
     updateHomeLead();
-    if (isContestant()) showStudent();
+    if (isContestant() && studentView) showStudent();
+    else openSplitPage();
   }
+}
+
+function openSplitPage() {
+  if (mapsButton) return;
+  if (isContestant()) {
+    location.replace("/index.html");
+    return;
+  }
+  if (location.hash === "#tutorial" && tutorialView) {
+    showTutorial();
+    return;
+  }
+  if (mapsView) showMaps();
+  else if (problemsView) showProblems();
+  else if (settingsView) showSettings();
 }
 
 bootstrap();
