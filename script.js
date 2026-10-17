@@ -1374,72 +1374,25 @@ function renderMath(element) {
   });
 }
 
-let richFrameSerial = 0;
-let richFramesListening = false;
-
 function containsHtml(source) {
   return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
-function watchRichFrames() {
-  if (richFramesListening) return;
-  richFramesListening = true;
-  window.addEventListener("message", (event) => {
-    const data = event.data;
-    if (!data || data.type !== "rich-frame" || typeof data.id !== "string") return;
-    const frame = document.querySelector(`iframe.rich-frame[data-rich-id="${CSS.escape(data.id)}"]`);
-    if (!frame || event.source !== frame.contentWindow) return;
-    const height = Number(data.height);
-    if (!Number.isFinite(height) || height < 0 || height > 8000) return;
-    frame.style.height = `${Math.ceil(height) + 12}px`;
-  });
+function liveScript(old) {
+  const fresh = document.createElement("script");
+  for (const attr of old.attributes) {
+    if (attr.name === "src") continue;
+    fresh.setAttribute(attr.name, attr.value);
+  }
+  const src = old.getAttribute("src");
+  if (src) fresh.src = src;
+  else fresh.textContent = old.textContent;
+  return fresh;
 }
 
-function richDocument(source, id, fontSize) {
-  const parsed = new DOMParser().parseFromString(
-    /<html[\s>]/i.test(source)
-      ? source
-      : `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${source}</body></html>`,
-    "text/html"
-  );
-  renderMath(parsed.body);
-
-  const font = parsed.createElement("link");
-  font.rel = "stylesheet";
-  font.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap";
-  const katexCss = parsed.createElement("link");
-  katexCss.rel = "stylesheet";
-  katexCss.href = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
-  const css = parsed.createElement("style");
-  css.textContent = [
-    "html,body{margin:0;height:auto;overflow:hidden;background:#101b2c;color:#d7f6ff;",
-    `font:${fontSize}px/1.5 "Share Tech Mono",ui-monospace,monospace;}`,
-    "img,svg,video,canvas{max-width:100%;height:auto;}",
-    "p{margin:0 0 .6em;} p:last-child{margin-bottom:0;} a{color:#3ee0ff;} pre{white-space:pre-wrap;}",
-  ].join("");
-  parsed.head.prepend(font, katexCss, css);
-
-  const reporter = parsed.createElement("script");
-  reporter.textContent = `(() => {
-    const id = ${JSON.stringify(id)};
-    const send = () => {
-      let height = 0;
-      for (const el of document.body ? document.body.children : []) {
-        if (el.tagName === "SCRIPT") continue;
-        height = Math.max(height, el.offsetTop + el.offsetHeight);
-      }
-      parent.postMessage({ type: "rich-frame", id, height }, "*");
-    };
-    addEventListener("load", send);
-    if (document.body) new ResizeObserver(send).observe(document.body);
-    send();
-  })();`;
-  parsed.body.append(reporter);
-  return `<!DOCTYPE html>${parsed.documentElement.outerHTML}`;
-}
-
-function setRichText(element, source, options = {}) {
+function setRichText(element, source) {
   element.replaceChildren();
+  element.classList.remove("rich-html");
   const text = source || "";
   if (!text.trim()) return;
   if (!containsHtml(text)) {
@@ -1447,16 +1400,14 @@ function setRichText(element, source, options = {}) {
     renderMath(element);
     return;
   }
-  watchRichFrames();
-  const id = `rich-${++richFrameSerial}`;
-  const frame = document.createElement("iframe");
-  frame.className = "rich-frame";
-  frame.dataset.richId = id;
-  frame.setAttribute("sandbox", "allow-scripts allow-forms");
-  frame.setAttribute("referrerpolicy", "no-referrer");
-  frame.title = "Problem";
-  element.append(frame);
-  frame.srcdoc = richDocument(text, id, options.fontSize || 18);
+  element.classList.add("rich-html");
+  const template = document.createElement("template");
+  template.innerHTML = text;
+  const scripts = [...template.content.querySelectorAll("script")];
+  for (const script of scripts) script.remove();
+  element.append(template.content);
+  renderMath(element);
+  for (const script of scripts) element.append(liveScript(script));
 }
 
 function problemSnippet(problem) {
@@ -2391,10 +2342,15 @@ function showStudentProblem(contest, map, phase, frozen) {
   const difficultyName = DIFFICULTY_NAME[cellDifficulty(cell)];
   const points = DIFFICULTY_SCORE[cellDifficulty(cell)];
   studentProblemTag.textContent = `${difficultyName} · ${points} point${points === 1 ? "" : "s"}`;
-  if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt, { fontSize: 20 });
-  else studentProblemPrompt.textContent = "This problem has no text yet.";
   studentAnswerForm.hidden = false;
   studentAnswerError.hidden = true;
+  studentAnswer.style.cssText = "";
+  studentAnswer.readOnly = false;
+  if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt);
+  else {
+    studentProblemPrompt.classList.remove("rich-html");
+    studentProblemPrompt.textContent = "This problem has no text yet.";
+  }
 }
 
 function onStudentGridClick(event) {
