@@ -6,24 +6,64 @@
   display: none !important;
 }
 
+:root {
+  --void: #060910;
+  --ink: #d7f6ff;
+  --muted: #7f9eb0;
+  --line: rgba(62, 224, 255, 0.38);
+  --cyan: #3ee0ff;
+  --danger: #ff5d73;
+  --font-ui: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Orbitron", "Avenir Next", "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Georgia, "Times New Roman", serif;
-  color: #1c1915;
-  background: #efe6d6;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(1000px 520px at 8% -10%, rgba(62, 224, 255, 0.16), transparent 55%),
+    radial-gradient(800px 480px at 100% 0%, rgba(255, 77, 141, 0.1), transparent 48%),
+    linear-gradient(180deg, #0c1526 0%, var(--void) 42%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(62, 224, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62, 224, 255, 0.045) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at 40% 20%, #000 20%, transparent 78%);
+}
+
+.app,
+.login-screen {
+  position: relative;
+  z-index: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .app {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
   padding: 32px 20px;
-  background: #1c1915;
-  color: #f7f1e6;
+  background: rgba(4, 10, 18, 0.92);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
+  box-shadow: inset -20px 0 40px rgba(62, 224, 255, 0.03);
 }
 
 .brand {
@@ -33,10 +73,14 @@ body {
   padding: 0 12px;
   border: 0;
   background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 22px;
+  color: var(--cyan);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
   text-align: left;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
@@ -56,9 +100,14 @@ nav button,
   border: 0;
   background: transparent;
   color: inherit;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 15px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.04em;
   text-align: left;
+}
+
+.section-label {
+  color: var(--muted);
 }
 
 nav button {
@@ -66,23 +115,25 @@ nav button {
 }
 
 nav button[aria-current="page"] {
-  background: #f7f1e6;
-  color: #1c1915;
+  color: var(--cyan);
+  background: rgba(62, 224, 255, 0.08);
+  box-shadow: inset 3px 0 0 var(--cyan);
 }
 
 .account {
   margin-top: 28px;
   padding-top: 16px;
-  border-top: 1px solid rgba(247, 241, 230, 0.25);
+  border-top: 1px solid var(--line);
 }
 
 .account p {
   margin: 0 0 10px;
   padding: 0 12px;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--muted);
 }
 
 .account-pfp {
@@ -103,6 +154,12 @@ nav button[aria-current="page"] {
 
 .login-card {
   width: min(100%, 28rem);
+  padding: 36px 32px 28px;
+  border: 1px solid var(--line);
+  background: rgba(6, 14, 26, 0.82);
+  box-shadow:
+    0 0 48px rgba(62, 224, 255, 0.08),
+    inset 0 0 0 1px rgba(62, 224, 255, 0.06);
 }
 
 .login-card h1 {
@@ -117,11 +174,13 @@ nav button[aria-current="page"] {
 .account button {
   margin-left: 12px;
   padding: 8px 12px;
-  border: 1px solid #f7f1e6;
+  border: 1px solid var(--line);
   background: transparent;
-  color: inherit;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
@@ -132,29 +191,37 @@ main {
 
 .eyebrow {
   margin: 0 0 8px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 12px;
+  color: var(--cyan);
 }
 
 h1 {
   margin: 0 0 12px;
-  font-size: 48px;
-  font-weight: normal;
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 h2 {
   margin: 36px 0 12px;
-  font-size: 22px;
-  font-weight: normal;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .lead {
   margin: 0;
-  max-width: 32rem;
-  font-size: 20px;
-  line-height: 1.5;
+  max-width: 36rem;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .create-map {
@@ -169,8 +236,11 @@ h2 {
 .create-map label {
   display: grid;
   gap: 6px;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .create-map input,
@@ -178,11 +248,11 @@ h2 {
 .problem-editor select {
   width: 7rem;
   padding: 8px 10px;
-  border: 1px solid #c9b89a;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
   font: inherit;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .create-map select,
@@ -200,12 +270,21 @@ button[type="submit"],
 .delete-map,
 .add-problem,
 .join-contest {
-  padding: 8px 12px;
-  border: 0;
-  background: #1c1915;
-  color: #f7f1e6;
-  font: inherit;
+  padding: 8px 14px;
+  border: 1px solid var(--cyan);
+  background: rgba(62, 224, 255, 0.12);
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
+}
+
+.delete-map {
+  border-color: var(--danger);
+  background: rgba(255, 93, 115, 0.08);
+  color: var(--danger);
 }
 
 .join-contest {
@@ -219,8 +298,8 @@ button[type="submit"],
 
 .remove-contestant,
 .joined-flag {
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .remove-contestant {
@@ -241,7 +320,7 @@ button[type="submit"],
 .form-error {
   flex-basis: 100%;
   margin: 0;
-  color: #8a2e24;
+  color: var(--danger);
 }
 
 .map-list {
@@ -258,8 +337,9 @@ button[type="submit"],
   align-items: center;
   gap: 16px;
   padding: 12px 14px;
-  border: 1px solid #d8cbb6;
-  background: rgba(255, 252, 246, 0.92);
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+  box-shadow: 0 0 24px rgba(62, 224, 255, 0.04);
 }
 
 .open-map {
@@ -288,8 +368,9 @@ button[type="submit"],
 }
 
 .map-size {
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .map-name-field {
@@ -297,18 +378,23 @@ button[type="submit"],
   gap: 6px;
   margin-top: 16px;
   width: fit-content;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .map-name-field input {
   width: 16rem;
   padding: 8px 10px;
-  border: 1px solid #c9b89a;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
   font: inherit;
-  font-size: 18px;
+  font-size: 16px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .map-preview,
@@ -322,8 +408,8 @@ button[type="submit"],
   height: 112px;
   flex-shrink: 0;
   padding: 4px;
-  background: #efe6d6;
-  border: 1px solid #d8cbb6;
+  background: rgba(4, 12, 22, 0.9);
+  border: 1px solid var(--line);
 }
 
 .preview-cell,
@@ -335,21 +421,23 @@ button[type="submit"],
 
 .preview-cell,
 .swatch {
-  background: #fffdf8;
+  background: rgba(8, 18, 32, 0.95);
 }
 
 .preview-cell.problem,
 .grid-cell.problem,
 .swatch.problem {
-  background: #9c4228;
-  color: #fffdf8;
+  background: #ff4d8d;
+  color: #1a0610;
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.25);
 }
 
 .preview-cell.spawnpoint,
 .grid-cell.spawnpoint,
 .swatch.spawnpoint {
-  background: #1f6b4a;
-  color: #fffdf8;
+  background: #123f32;
+  color: #b8ffe4;
+  box-shadow: inset 0 0 0 1px #3dffb0, 0 0 10px rgba(61, 255, 176, 0.25);
 }
 
 .grid-cell.spawnpoint {
@@ -360,20 +448,21 @@ button[type="submit"],
 .preview-cell.obstacle,
 .grid-cell.obstacle,
 .swatch.obstacle {
-  background: #1c1915;
+  background: #10141c;
+  box-shadow: inset 0 0 0 1px rgba(255, 93, 115, 0.45);
 }
 
 .preview-cell.empty,
 .swatch.empty {
-  background: #fffdf8;
-  box-shadow: inset 0 0 0 1px #d8cbb6;
+  background: rgba(8, 18, 32, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(62, 224, 255, 0.28);
 }
 
 .preview-cell {
   display: grid;
   place-items: center;
   overflow: hidden;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 7px;
   line-height: 1;
 }
@@ -404,7 +493,7 @@ button[type="submit"],
   margin: 20px 0 0;
   padding: 0;
   list-style: none;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
 }
 
@@ -436,10 +525,10 @@ button[type="submit"],
   height: 48px;
   padding: 0 2px;
   border: 0;
-  background: #fffdf8;
-  box-shadow: inset 0 0 0 1px #d8cbb6;
-  color: inherit;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background: rgba(6, 14, 26, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(62, 224, 255, 0.28);
+  color: var(--cyan);
+  font-family: var(--font-ui);
   font-size: 16px;
   line-height: 1;
   cursor: crosshair;
@@ -477,15 +566,17 @@ button[type="submit"],
 .contest-schedule legend {
   flex-basis: 100%;
   padding: 0;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--cyan);
 }
 
 .grid-cell.student-cell[aria-pressed="true"] {
-  outline: 3px solid #f7f1e6;
-  outline-offset: -5px;
+  outline: 2px solid var(--cyan);
+  outline-offset: -4px;
+  box-shadow: 0 0 12px rgba(62, 224, 255, 0.7), inset 0 0 0 1px var(--cyan);
 }
 
 .student-board {
@@ -496,6 +587,9 @@ button[type="submit"],
 
 .student-problem {
   max-width: 40rem;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
 }
 
 .student-problem h2 {
@@ -538,40 +632,50 @@ button[type="submit"],
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .kind-choices button {
   padding: 8px 12px;
-  border: 1px solid #1c1915;
+  border: 1px solid var(--line);
   background: transparent;
-  color: inherit;
-  font: inherit;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .kind-choices button[aria-pressed="true"] {
-  background: #1c1915;
-  color: #f7f1e6;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #041018;
 }
 
 #problem-no-field {
   display: grid;
   gap: 6px;
   width: fit-content;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 #problem-no {
   width: 7rem;
   padding: 8px 10px;
-  border: 1px solid #c9b89a;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
   font: inherit;
-  font-size: 18px;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .add-problem {
@@ -601,9 +705,10 @@ button[type="submit"],
 
 .problem-tag {
   margin-left: 8px;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   letter-spacing: 0.08em;
+  color: var(--cyan);
 }
 
 .problem-group-empty {
@@ -624,8 +729,8 @@ button[type="submit"],
   align-items: center;
   gap: 12px 16px;
   padding: 12px 14px;
-  border: 1px solid #d8cbb6;
-  background: rgba(255, 252, 246, 0.92);
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
 }
 
 .open-problem {
@@ -656,6 +761,7 @@ button[type="submit"],
 .problem-snippet {
   min-width: 0;
   overflow: hidden;
+  color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -670,19 +776,24 @@ button[type="submit"],
 .problem-editor label {
   display: grid;
   gap: 6px;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .problem-editor input,
 .problem-editor textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #c9b89a;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
   font: inherit;
   font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .problem-editor input {
@@ -697,9 +808,10 @@ button[type="submit"],
 .field-note {
   margin: 0;
   max-width: 36rem;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.4;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 @media (max-width: 700px) {
@@ -712,6 +824,6 @@ button[type="submit"],
   }
 
   h1 {
-    font-size: 36px;
+    font-size: 30px;
   }
 }
