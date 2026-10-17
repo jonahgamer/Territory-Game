@@ -306,6 +306,23 @@ button[type="submit"],
   color: var(--danger);
 }
 
+.save-changes {
+  padding: 8px 14px;
+  border: 1px solid var(--cyan);
+  background: rgba(62, 224, 255, 0.12);
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.save-changes:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .join-contest {
   margin-top: 16px;
 }
@@ -627,8 +644,8 @@ button[type="submit"],
 
 .grid-cell {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: var(--cell, 48px);
+  height: var(--cell, 48px);
   padding: 0 2px;
   border: 0;
   background: rgba(6, 14, 26, 0.95);
@@ -641,20 +658,61 @@ button[type="submit"],
   touch-action: manipulation;
 }
 
-#editor-grid:not(.is-moving) .grid-cell {
+#editor-grid .grid-cell {
   touch-action: none;
 }
 
-#editor-grid.is-moving .grid-cell {
-  cursor: grab;
-  touch-action: pan-x pan-y;
+@media (pointer: coarse) {
+  #editor-grid .grid-cell,
+  #student-grid .grid-cell,
+  #contest-grid .grid-cell {
+    touch-action: pan-x pan-y;
+  }
 }
 
-@media (pointer: fine) {
-  #kind-move,
-  .move-hint {
-    display: none;
-  }
+.grid-cell.student-cell.territory-dot {
+  display: grid;
+  place-items: center;
+}
+
+.grid-cell.student-cell.territory-dot::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--team, #3ee0ff);
+}
+
+.answer-page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.answer-page form {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.answer-page label {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.answer-page input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
 }
 
 .cell-owner {
@@ -1127,6 +1185,10 @@ button[type="submit"],
   resize: vertical;
 }
 
+#problem-prompt {
+  min-height: 16rem;
+}
+
 .problem-preview-box {
   display: grid;
   gap: 16px;
@@ -1221,11 +1283,12 @@ button[type="submit"],
   .mobile-bar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     grid-column: 1;
     grid-row: 1;
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: 40;
     min-height: 44px;
     padding: 0 8px;
     padding-top: env(safe-area-inset-top);
@@ -1233,32 +1296,24 @@ button[type="submit"],
     border-bottom: 1px solid var(--line);
   }
 
-  .menu-button {
-    margin: 6px 0;
-  }
-
-  .account {
-    position: fixed;
-    top: 0;
-    right: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    padding: 0 8px;
-    padding-top: env(safe-area-inset-top);
-    min-height: calc(44px + env(safe-area-inset-top));
-  }
-
-  .account button {
-    margin: 0;
-  }
-
-  .account p,
-  #account-role {
+  .mobile-logo {
+    display: block;
+    width: auto;
     margin: 0;
     padding: 0;
+    font-size: 14px;
+  }
+
+  .sidebar .brand {
+    display: none;
+  }
+
+  .menu-button {
+    margin: 6px 0 6px auto;
+  }
+
+  .sidebar {
+    padding-top: calc(56px + env(safe-area-inset-top));
   }
 
   .sidebar,
@@ -1281,6 +1336,10 @@ button[type="submit"],
 
   body.menu-open .sidebar {
     left: 0;
+  }
+
+  body.menu-open .sidebar-backdrop {
+    display: block;
   }
 
   .sidebar-backdrop {
