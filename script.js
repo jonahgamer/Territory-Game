@@ -1374,22 +1374,89 @@ function renderMath(element) {
   });
 }
 
-function setRichText(element, source) {
-  element.innerHTML = source;
-  renderMath(element);
-  activateInlineScripts(element);
+let richFrameSerial = 0;
+let richFramesListening = false;
+
+function containsHtml(source) {
+  return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
-// innerHTML 插入的 <script> 不会执行；重新创建一个同名节点替换掉即可触发
-function activateInlineScripts(root) {
-  for (const old of [...root.querySelectorAll("script")]) {
-    const fresh = document.createElement("script");
-    for (const { name, value } of old.attributes) {
-      fresh.setAttribute(name, value);
-    }
-    fresh.textContent = old.textContent;
-    old.replaceWith(fresh);
+function watchRichFrames() {
+  if (richFramesListening) return;
+  richFramesListening = true;
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.type !== "rich-frame" || typeof data.id !== "string") return;
+    const frame = document.querySelector(`iframe.rich-frame[data-rich-id="${CSS.escape(data.id)}"]`);
+    if (!frame || event.source !== frame.contentWindow) return;
+    const height = Number(data.height);
+    if (!Number.isFinite(height) || height < 0 || height > 8000) return;
+    frame.style.height = `${Math.ceil(height) + 12}px`;
+  });
+}
+
+function richDocument(source, id, fontSize) {
+  const parsed = new DOMParser().parseFromString(
+    /<html[\s>]/i.test(source)
+      ? source
+      : `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${source}</body></html>`,
+    "text/html"
+  );
+  renderMath(parsed.body);
+
+  const font = parsed.createElement("link");
+  font.rel = "stylesheet";
+  font.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap";
+  const katexCss = parsed.createElement("link");
+  katexCss.rel = "stylesheet";
+  katexCss.href = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+  const css = parsed.createElement("style");
+  css.textContent = [
+    "html,body{margin:0;height:auto;overflow:hidden;background:#101b2c;color:#d7f6ff;",
+    `font:${fontSize}px/1.5 "Share Tech Mono",ui-monospace,monospace;}`,
+    "img,svg,video,canvas{max-width:100%;height:auto;}",
+    "p{margin:0 0 .6em;} p:last-child{margin-bottom:0;} a{color:#3ee0ff;} pre{white-space:pre-wrap;}",
+  ].join("");
+  parsed.head.prepend(font, katexCss, css);
+
+  const reporter = parsed.createElement("script");
+  reporter.textContent = `(() => {
+    const id = ${JSON.stringify(id)};
+    const send = () => {
+      let height = 0;
+      for (const el of document.body ? document.body.children : []) {
+        if (el.tagName === "SCRIPT") continue;
+        height = Math.max(height, el.offsetTop + el.offsetHeight);
+      }
+      parent.postMessage({ type: "rich-frame", id, height }, "*");
+    };
+    addEventListener("load", send);
+    if (document.body) new ResizeObserver(send).observe(document.body);
+    send();
+  })();`;
+  parsed.body.append(reporter);
+  return `<!DOCTYPE html>${parsed.documentElement.outerHTML}`;
+}
+
+function setRichText(element, source, options = {}) {
+  element.replaceChildren();
+  const text = source || "";
+  if (!text.trim()) return;
+  if (!containsHtml(text)) {
+    element.textContent = text;
+    renderMath(element);
+    return;
   }
+  watchRichFrames();
+  const id = `rich-${++richFrameSerial}`;
+  const frame = document.createElement("iframe");
+  frame.className = "rich-frame";
+  frame.dataset.richId = id;
+  frame.setAttribute("sandbox", "allow-scripts allow-forms");
+  frame.setAttribute("referrerpolicy", "no-referrer");
+  frame.title = "Problem";
+  element.append(frame);
+  frame.srcdoc = richDocument(text, id, options.fontSize || 18);
 }
 
 function problemSnippet(problem) {
@@ -1398,6 +1465,7 @@ function problemSnippet(problem) {
   // Strip tags for list display
   const div = document.createElement("div");
   div.innerHTML = raw;
+  div.querySelectorAll("script, style").forEach((node) => node.remove());
   const text = (div.textContent || "").replace(/\s+/g, " ").trim();
   return text || "(empty)";
 }
@@ -1725,7 +1793,11 @@ function paintPlayGrid(grid, contest, map, options) {
         && adjacentToTeam(map, contest, options.team?.id, index);
       button.className = cellClassName(cell, "grid-cell", "student-cell");
       button.disabled = !((choosing && cell.kind === "spawnpoint") || reachable);
-      if (owner && contest.spawnResolved) {
+      const solvedByOther = owner && cell.kind === "problem" && owner.id !== options.team?.id;
+      if (solvedByOther) {
+        button.classList.add("taken");
+        button.style.setProperty("--team", teamColor(contest, owner.id));
+      } else if (owner && contest.spawnResolved) {
         button.classList.add("owned");
         if (options.team && owner.id === options.team.id) button.classList.add("mine");
         button.style.setProperty("--team", teamColor(contest, owner.id));
@@ -1736,7 +1808,7 @@ function paintPlayGrid(grid, contest, map, options) {
           button.classList.add("mine");
           button.style.setProperty("--team", teamColor(contest, options.team.id));
         }
-        button.textContent = cellText(cell);
+        button.textContent = cell.kind === "problem" ? "" : cellText(cell);
       }
       if (selectedStudentCell === index && reachable) button.setAttribute("aria-pressed", "true");
     } else {
@@ -2316,8 +2388,10 @@ function showStudentProblem(contest, map, phase, frozen) {
   }
   const problem = findProblem(cell.problemNo, cell.type);
   studentProblem.hidden = false;
-  studentProblemTag.textContent = `${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[cellDifficulty(cell)]} · ${DIFFICULTY_SCORE[cellDifficulty(cell)]} point${DIFFICULTY_SCORE[cellDifficulty(cell)] === 1 ? "" : "s"}`;
-  if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt);
+  const difficultyName = DIFFICULTY_NAME[cellDifficulty(cell)];
+  const points = DIFFICULTY_SCORE[cellDifficulty(cell)];
+  studentProblemTag.textContent = `${difficultyName} · ${points} point${points === 1 ? "" : "s"}`;
+  if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt, { fontSize: 20 });
   else studentProblemPrompt.textContent = "This problem has no text yet.";
   studentAnswerForm.hidden = false;
   studentAnswerError.hidden = true;
@@ -2392,6 +2466,12 @@ async function submitStudentAnswer(event) {
 function studentCellLabel(contest, cell, row, column, index) {
   const team = ownerAt(contest, index, cell);
   const place = `Row ${row}, column ${column}`;
+  if (cell.kind === "problem") {
+    const difficultyName = DIFFICULTY_NAME[cellDifficulty(cell)];
+    if (team && team.id !== teamForUser(contest)?.id) return `${place}, ${difficultyName}, solved by ${team.name}`;
+    if (team) return `${place}, ${difficultyName}, ${team.name}`;
+    return `${place}, ${difficultyName}`;
+  }
   if (team) return `${place}, ${team.name}`;
   return cellLabel(cell, row, column);
 }
