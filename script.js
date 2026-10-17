@@ -153,6 +153,7 @@ const studentLeaderboard = document.querySelector("#student-leaderboard");
 const studentBoard = document.querySelector("#student-board");
 const studentGrid = document.querySelector("#student-grid");
 const studentProblem = document.querySelector("#student-problem");
+const studentProblemClose = document.querySelector("#student-problem-close");
 const studentProblemTag = document.querySelector("#student-problem-tag");
 const studentProblemPrompt = document.querySelector("#student-problem-prompt");
 const studentAnswerForm = document.querySelector("#student-answer-form");
@@ -242,8 +243,17 @@ sidebarBackdrop.addEventListener("click", () => setMenuOpen(false));
 document.querySelector(".sidebar").addEventListener("click", (event) => {
   if (event.target.closest("button")) setMenuOpen(false);
 });
+studentProblem.addEventListener("click", (event) => {
+  if (event.target === studentProblem) closeStudentProblem();
+});
+studentProblemClose.addEventListener("click", closeStudentProblem);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") setMenuOpen(false);
+  if (event.key !== "Escape") return;
+  if (!studentProblem.hidden) {
+    closeStudentProblem();
+    return;
+  }
+  setMenuOpen(false);
 });
 mapsButton.addEventListener("click", showMaps);
 problemsButton.addEventListener("click", showProblems);
@@ -2379,6 +2389,16 @@ function writeStudentStatus(contest, phase, map, frozen) {
   studentSpawnNote.textContent = "Your team does not have a spawn point.";
 }
 
+function closeStudentProblem() {
+  if (studentProblem.hidden) return;
+  selectedStudentCell = null;
+  studentProblem.hidden = true;
+  studentAnswerForm.hidden = true;
+  for (const button of studentGrid.querySelectorAll("[aria-pressed='true']")) {
+    button.removeAttribute("aria-pressed");
+  }
+}
+
 function showStudentProblem(contest, map, phase, frozen) {
   const team = teamForUser(contest);
   const cell = selectedStudentCell === null ? null : map.cells[selectedStudentCell];
@@ -2404,6 +2424,7 @@ function showStudentProblem(contest, map, phase, frozen) {
     studentProblemPrompt.classList.remove("rich-html");
     studentProblemPrompt.textContent = "This problem has no text yet.";
   }
+  if (!studentAnswer.readOnly) studentAnswer.focus();
 }
 
 function onStudentGridClick(event) {
