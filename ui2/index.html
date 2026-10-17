@@ -1,0 +1,87 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Puzzle Territory · Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a href="index.html" class="brand mobile-logo">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span> Menu
+      </button>
+    </header>
+
+    <aside class="sidebar">
+      <a href="index.html" class="brand" id="home-button">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections">
+        <ul>
+          <li><a href="editmap.html" class="nav-link">Maps</a></li>
+          <li><a href="editproblem.html" class="nav-link">Problems</a></li>
+          <li><a href="#" class="nav-link disabled" aria-disabled="true">Contests</a></li>
+          <li><a href="#" class="nav-link disabled" aria-disabled="true">Tutorial</a></li>
+          <li class="section-label">Credits</li>
+          <li><a href="editusers.html" class="nav-link">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+
+    <main>
+      <section id="home-view">
+        <p class="eyebrow">Home</p>
+        <h1>Territory Game</h1>
+        <p class="lead">Welcome to Territory Game.</p>
+        <p id="load-error" class="form-error" hidden></p>
+
+        <div class="quick-links">
+          <a href="editmap.html" class="quick-card">
+            <span class="quick-icon">🗺️</span>
+            <span>Maps</span>
+            <small>Create & place problems</small>
+          </a>
+          <a href="editproblem.html" class="quick-card">
+            <span class="quick-icon">🧩</span>
+            <span>Problems</span>
+            <small>Write & edit questions</small>
+          </a>
+          <a href="editusers.html" class="quick-card">
+            <span class="quick-icon">👥</span>
+            <span>Users</span>
+            <small>Manage student accounts</small>
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Simple nav toggle for mobile
+    document.getElementById('menu-button')?.addEventListener('click', () => {
+      document.querySelector('.sidebar').classList.toggle('open');
+      document.querySelector('.sidebar-backdrop').hidden = !document.querySelector('.sidebar').classList.contains('open');
+      const expanded = document.getElementById('menu-button').getAttribute('aria-expanded') === 'true';
+      document.getElementById('menu-button').setAttribute('aria-expanded', String(!expanded));
+    });
+    document.querySelector('.sidebar-backdrop')?.addEventListener('click', () => {
+      document.querySelector('.sidebar').classList.remove('open');
+      document.querySelector('.sidebar-backdrop').hidden = true;
+      document.getElementById('menu-button').setAttribute('aria-expanded', 'false');
+    });
+  </script>
+</body>
+</html>
