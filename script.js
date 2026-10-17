@@ -201,8 +201,8 @@ const contestReadyField = document.querySelector("#contest-ready-input");
 const contestScheduleError = document.querySelector("#contest-schedule-error");
 const teamForm = document.querySelector("#team-form");
 const teamNameInput = document.querySelector("#team-name");
-const teamMemberA = document.querySelector("#team-member-a");
-const teamMemberB = document.querySelector("#team-member-b");
+const teamMembersInput = document.querySelector("#team-members");
+const contestCountdown = document.querySelector("#contest-countdown");
 const teamFormError = document.querySelector("#team-form-error");
 const contestantEmpty = document.querySelector("#contestant-empty");
 const contestantList = document.querySelector("#contestant-list");
@@ -216,7 +216,11 @@ const studentContestList = document.querySelector("#student-contest-list");
 const studentPlayView = document.querySelector("#student-play-view");
 const studentBack = document.querySelector("#student-back");
 const studentPlayTitle = document.querySelector("#student-play-title");
+const studentCountdown = document.querySelector("#student-countdown");
 const studentPlayMeta = document.querySelector("#student-play-meta");
+const spawnAgreement = document.querySelector("#spawn-agreement");
+const spawnVoteList = document.querySelector("#spawn-votes");
+const spawnAgreementNote = document.querySelector("#spawn-agreement-note");
 const studentSpawnNote = document.querySelector("#student-spawn-note");
 const studentJoined = document.querySelector("#student-joined");
 const studentLeaderboardHeading = document.querySelector("#student-leaderboard-heading");
@@ -1958,8 +1962,39 @@ function cellPlace(map, index) {
 function normalizeTeams(value) {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((team) => team && typeof team.id === "string" && typeof team.name === "string" && Array.isArray(team.members) && team.members.length === 2)
-    .map((team) => ({ id: team.id, name: team.name, members: [String(team.members[0]), String(team.members[1])] }));
+    .filter((team) => team && typeof team.id === "string" && typeof team.name === "string" && Array.isArray(team.members))
+    .map((team) => {
+      const members = [];
+      for (const member of team.members.map((item) => String(item || "").trim()).filter(Boolean)) {
+        if (members.some((item) => sameContestant(item, member))) continue;
+        members.push(member);
+      }
+      return { id: team.id, name: team.name, members };
+    })
+    .filter((team) => team.members.length >= 1 && team.members.length <= 5);
+}
+
+function normalizeSpawnVotes(value) {
+  if (!Array.isArray(value)) return [];
+  const votes = [];
+  for (const vote of value) {
+    if (!vote || typeof vote.teamId !== "string" || typeof vote.username !== "string" || !Number.isInteger(vote.cell) || vote.cell < 0) continue;
+    const existing = votes.findIndex((item) => item.teamId === vote.teamId && sameContestant(item.username, vote.username));
+    if (existing >= 0) votes.splice(existing, 1);
+    votes.push({ teamId: vote.teamId, username: vote.username, cell: vote.cell });
+  }
+  return votes;
+}
+
+function agreedSpawnChoices(contest) {
+  const choices = [];
+  for (const team of contest?.teams || []) {
+    const votes = (contest.spawnVotes || []).filter((vote) => vote.teamId === team.id && team.members.some((member) => sameContestant(member, vote.username)));
+    if (votes.length !== team.members.length) continue;
+    const cell = votes[0].cell;
+    if (votes.every((vote) => vote.cell === cell)) choices.push({ teamId: team.id, cell });
+  }
+  return choices;
 }
 
 function normalizeTeamCells(value) {
@@ -1999,6 +2034,7 @@ function applyContestPlayState(contest, data) {
   }
   if (typeof next.spawnResolved === "boolean") contest.spawnResolved = next.spawnResolved;
   if (Array.isArray(next.spawnChoices)) contest.spawnChoices = normalizeTeamCells(next.spawnChoices);
+  if (Array.isArray(next.spawnVotes)) contest.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
   if (Array.isArray(next.spawns)) contest.spawns = normalizeTeamCells(next.spawns);
   if (Array.isArray(next.claims)) contest.claims = normalizeClaims(next.claims);
   noteServerTime(data?.serverNow);
@@ -2103,9 +2139,15 @@ function paintPlayGrid(grid, contest, map, options) {
         button.classList.add("territory-dot");
         button.textContent = "";
       } else {
-        const choice = choosing ? (contest.spawnChoices || []).find((item) => item.teamId === options.team?.id) : null;
-        if (choice && choice.cell === index) {
+        const myVote = choosing
+          ? (contest.spawnVotes || []).find((vote) => vote.teamId === options.team?.id && sameContestant(vote.username, contestantId()))
+          : null;
+        const teammateVote = choosing && (contest.spawnVotes || []).some((vote) => vote.teamId === options.team?.id && vote.cell === index && !sameContestant(vote.username, contestantId()));
+        if (myVote && myVote.cell === index) {
           button.classList.add("mine");
+          button.style.setProperty("--team", teamColor(contest, options.team.id));
+        } else if (teammateVote) {
+          button.classList.add("proposed");
           button.style.setProperty("--team", teamColor(contest, options.team.id));
         }
         button.textContent = cell.kind === "problem" ? "" : cellText(cell);
@@ -2176,6 +2218,7 @@ async function syncContest(contest) {
     const key = JSON.stringify({
       teams: contest.teams,
       choices: contest.spawnChoices,
+      votes: contest.spawnVotes,
       spawns: contest.spawns,
       resolved: contest.spawnResolved,
       claims: contest.claims,
@@ -2223,7 +2266,7 @@ function applyAccount() {
 function updateHomeLead() {
   const user = session?.user;
   homeLead.textContent = isContestant()
-    ? `Signed in as ${user.displayName || user.username}. Open Contests, choose a spawn point with your teammate, then solve problems next to your territory.`
+    ? `Signed in as ${user.displayName || user.username}. Open Contests, agree on a spawn point with your team, then solve problems next to your territory.`
     : "Welcome to Territory Game.";
 }
 
@@ -2306,6 +2349,7 @@ function createContest(event) {
     contestantIds: [],
     teams: [],
     spawnChoices: [],
+    spawnVotes: [],
     spawns: [],
     claims: [],
     spawnResolved: false,
@@ -2355,6 +2399,7 @@ function commitContestMap() {
   if (contest.mapId !== contestMapField.value) {
     contest.spawns = [];
     contest.spawnChoices = [];
+    contest.spawnVotes = [];
     contest.claims = [];
     contest.spawnResolved = false;
   }
@@ -2410,26 +2455,24 @@ async function addTeam(event) {
   const contest = currentContest();
   if (!contest || isContestant()) return;
   const name = readContestName(teamNameInput.value);
-  const memberA = teamMemberA.value.trim();
-  const memberB = teamMemberB.value.trim();
+  const members = teamMembersInput.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
   if (!name) {
     teamFormError.hidden = false;
     teamFormError.textContent = "Give the team a name.";
     return;
   }
-  if (!memberA || !memberB || memberA.toLowerCase() === memberB.toLowerCase()) {
+  if (members.length < 1 || members.length > 5 || new Set(members.map((item) => item.toLowerCase())).size !== members.length) {
     teamFormError.hidden = false;
-    teamFormError.textContent = "Enter two different student usernames.";
+    teamFormError.textContent = "Enter 1 to 5 different student usernames, one per line.";
     return;
   }
   teamFormError.hidden = true;
   try {
     await saveContestsNow();
-    const data = await apiCall("save-team", { contestId: contest.id, name, memberA, memberB });
+    const data = await apiCall("save-team", { contestId: contest.id, name, members });
     applyContestPlayState(contest, data);
     teamNameInput.value = "";
-    teamMemberA.value = "";
-    teamMemberB.value = "";
+    teamMembersInput.value = "";
     renderContest();
   } catch (error) {
     teamFormError.hidden = false;
@@ -2452,11 +2495,13 @@ async function onContestantListClick(event) {
   const previous = {
     teams: contest.teams.slice(),
     spawnChoices: contest.spawnChoices.slice(),
+    spawnVotes: (contest.spawnVotes || []).slice(),
     spawns: contest.spawns.slice(),
     claims: contest.claims.slice(),
   };
   contest.teams = previous.teams.filter((team) => team.id !== teamId);
   contest.spawnChoices = previous.spawnChoices.filter((choice) => choice.teamId !== teamId);
+  contest.spawnVotes = previous.spawnVotes.filter((vote) => vote.teamId !== teamId);
   contest.spawns = previous.spawns.filter((spawn) => spawn.teamId !== teamId);
   contest.claims = previous.claims.filter((claim) => claim.teamId !== teamId);
   renderContest();
@@ -2482,7 +2527,7 @@ function renderCompetitions() {
   createContestForm.hidden = contestant;
   competitionsLead.textContent = contestant
     ? "Open the contest your team was added to."
-    : "Each contest uses one map. Teams of two students choose spawn points, then expand by solving adjacent problems.";
+    : "Each contest uses one map. A team of 1 to 5 students agrees on one spawn point, then expands by solving adjacent problems.";
   if (!contestant) {
     fillMapSelect(contestMapSelect, contestMapSelect.value);
     updateContestSpawnNote(contestMapSelect, contestMapNote);
@@ -2508,7 +2553,8 @@ function renderCompetitions() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.textContent = `${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people}`;
+    detail.append(`${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people} · `);
+    detail.append(phaseClockNode(contest));
     openButton.append(name, detail);
     item.append(openButton);
     contestList.append(item);
@@ -2531,6 +2577,7 @@ function renderContest() {
   renderContestTeams(contest, map);
   renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
   renderAdminBoard(contest, map);
+  paintPhaseClocks();
   ensureContestClock();
 }
 
@@ -2617,7 +2664,8 @@ function renderStudent() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.textContent = `${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · ${phaseLabel(contest)}`;
+    detail.append(`${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · `);
+    detail.append(phaseClockNode(contest));
     openButton.append(name, detail);
     item.append(openButton);
     studentContestList.append(item);
@@ -2655,12 +2703,37 @@ function renderStudentPlay() {
   studentBoard.hidden = !map;
 
   if (!map) {
+    spawnAgreement.hidden = true;
+    paintPhaseClocks();
     ensureContestClock();
     return;
   }
 
   paintPlayGrid(studentGrid, contest, map, { student: true, phase, frozen, team });
+  renderSpawnAgreement(contest, map, phase);
+  paintPhaseClocks();
   ensureContestClock();
+}
+
+function renderSpawnAgreement(contest, map, phase) {
+  const team = teamForUser(contest);
+  const open = Boolean(team && map && phase === "spawn" && !contest.spawnResolved);
+  spawnAgreement.hidden = !open;
+  if (!open) return;
+  spawnVoteList.replaceChildren();
+  for (const member of team.members) {
+    const vote = (contest.spawnVotes || []).find((item) => item.teamId === team.id && sameContestant(item.username, member));
+    const item = document.createElement("li");
+    const who = sameContestant(member, contestantId()) ? `${member} (you)` : member;
+    item.textContent = vote ? `${who} — ${cellPlace(map, vote.cell)}` : `${who} — waiting`;
+    spawnVoteList.append(item);
+  }
+  const agreed = (contest.spawnChoices || []).find((choice) => choice.teamId === team.id);
+  spawnAgreementNote.textContent = agreed
+    ? `Your team agrees on ${cellPlace(map, agreed.cell)}.`
+    : team.members.length === 1
+      ? "You are the only member, so the cell you click is the team choice."
+      : "The team choice is saved when every member has picked the same cell. Changing your pick clears the agreement until you match again.";
 }
 
 function writeStudentStatus(contest, phase, map, frozen) {
@@ -2682,13 +2755,10 @@ function writeStudentStatus(contest, phase, map, frozen) {
     return;
   }
   if (phase === "spawn" && !contest.spawnResolved) {
-    const choice = (contest.spawnChoices || []).find((item) => item.teamId === team?.id);
     const count = map.cells.filter((cell) => cell.kind === "spawnpoint").length;
-    studentSpawnNote.textContent = choice
-      ? `Your team chose ${cellPlace(map, choice.cell)}. Either student can change it until every team has chosen.`
-      : count > 0
-        ? "Click a spawn point. Either student on your team can choose, and the latest choice is kept."
-        : "This map has no spawn points.";
+    studentSpawnNote.textContent = count > 0
+      ? "Click the spawn point you want. It becomes your team's choice when every member has clicked that same cell."
+      : "This map has no spawn points.";
     return;
   }
   if (phase === "before") {
@@ -2763,15 +2833,18 @@ function onStudentGridClick(event) {
 async function chooseSpawn(contest, cell) {
   const team = teamForUser(contest);
   if (!team) return;
-  const previous = (contest.spawnChoices || []).slice();
-  contest.spawnChoices = previous.filter((choice) => choice.teamId !== team.id);
-  contest.spawnChoices.push({ teamId: team.id, cell });
+  const previousVotes = (contest.spawnVotes || []).slice();
+  const previousChoices = (contest.spawnChoices || []).slice();
+  contest.spawnVotes = previousVotes.filter((vote) => !(vote.teamId === team.id && sameContestant(vote.username, contestantId())));
+  contest.spawnVotes.push({ teamId: team.id, username: contestantId(), cell });
+  contest.spawnChoices = agreedSpawnChoices(contest);
   renderStudentPlay();
   try {
     const data = await apiCall("choose-spawn", { contestId: contest.id, cell });
     applyContestPlayState(contest, data);
   } catch (error) {
-    contest.spawnChoices = previous;
+    contest.spawnVotes = previousVotes;
+    contest.spawnChoices = previousChoices;
     alert(error.message);
   }
   renderStudentPlay();
@@ -2832,6 +2905,7 @@ function tickContestClock() {
     contestClock = null;
     return;
   }
+  paintPhaseClocks();
   if (onPlay || onAdmin) {
     const contest = currentContest();
     if (contest) syncContest(contest);
@@ -2925,7 +2999,7 @@ function phaseLabel(contest) {
   const schedule = contestSchedule(contest);
   if (!schedule) return "Schedule not set";
   if (phase === "before") return `Starts ${formatContestTime(schedule.startAt)}`;
-  if (phase === "spawn") return "Choosing spawn points";
+  if (phase === "spawn") return "Agreeing on spawn points";
   if (phase === "ready") return "Waiting for the contest";
   if (phase === "live") return "Contest in progress";
   return "Ended";
@@ -2942,11 +3016,61 @@ function phaseSentence(contest, phase, frozen = false) {
   if (phase === "spawn") {
     return contest.spawnResolved
       ? `Spawn points are assigned. The wait begins ${formatContestTime(schedule.spawnEnd)}.`
-      : `Choose a spawn point before ${formatContestTime(schedule.spawnEnd)}.`;
+      : "Agree on one spawn point with your team before this phase ends.";
   }
   if (phase === "ready") return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
   if (phase === "live") return `Solve a problem next to your territory before ${formatContestTime(schedule.endAt)}. Easy is 1, normal 2, hard 3, and insane 4.`;
   return `The contest ended ${formatContestTime(schedule.endAt)}. The board is frozen.`;
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  return `${minutes}:${pad(seconds)}`;
+}
+
+function phaseClock(contest, now = serverNow()) {
+  const phase = contestPhase(contest, now);
+  const schedule = contestSchedule(contest);
+  if (!schedule) return "Schedule not set";
+  if (phase === "ended") return "Ended";
+  const end = phase === "before" ? schedule.startAt
+    : phase === "spawn" ? schedule.spawnEnd
+    : phase === "ready" ? schedule.liveAt
+    : schedule.endAt;
+  const label = phase === "before" ? "Until spawning"
+    : phase === "spawn" ? "Spawn time left"
+    : phase === "ready" ? "Until the contest"
+    : "Contest time left";
+  return `${label} ${formatCountdown(end - now)}`;
+}
+
+function phaseClockNode(contest) {
+  const node = document.createElement("span");
+  node.dataset.phaseClock = contest.id;
+  node.textContent = phaseClock(contest);
+  return node;
+}
+
+function paintPhaseClocks() {
+  const boxes = [
+    [studentCountdown, studentPlayView && !studentPlayView.hidden ? currentContest() : null],
+    [contestCountdown, contestView && !contestView.hidden && isAdmin() ? currentContest() : null],
+  ];
+  for (const [node, contest] of boxes) {
+    if (!node) continue;
+    const text = contest ? phaseClock(contest) : "";
+    node.hidden = !text;
+    node.textContent = text;
+  }
+  for (const node of document.querySelectorAll("[data-phase-clock]")) {
+    const contest = contests.find((item) => item.id === node.dataset.phaseClock);
+    if (contest) node.textContent = phaseClock(contest);
+  }
 }
 
 function contestTimingLine(contest) {
@@ -3033,6 +3157,8 @@ function updateContestSpawnNote(select, note) {
 }
 
 function spawnSummary(contest, map, teamId) {
+  const team = (contest.teams || []).find((item) => item.id === teamId);
+  const votes = (contest.spawnVotes || []).filter((vote) => vote.teamId === teamId);
   const choice = !contest.spawnResolved
     ? (contest.spawnChoices || []).find((item) => item.teamId === teamId)
     : null;
@@ -3040,11 +3166,14 @@ function spawnSummary(contest, map, teamId) {
     ? (contest.spawns || []).find((item) => item.teamId === teamId)
     : null;
   const cell = spawn?.cell ?? choice?.cell;
-  if (!Number.isInteger(cell)) return contest.spawnResolved ? "No spawn point" : "Has not chosen";
+  if (!Number.isInteger(cell)) {
+    if (contest.spawnResolved) return "No spawn point";
+    return team ? `${votes.length} of ${team.members.length} chosen` : "Has not chosen";
+  }
   if (!map || cell < 0 || cell >= map.cells.length || map.cells[cell].kind !== "spawnpoint") {
     return "Spawn point no longer on the map";
   }
-  return `${contest.spawnResolved ? "Starts" : "Chose"} ${cellPlace(map, cell)}`;
+  return `${contest.spawnResolved ? "Starts" : "Agrees"} ${cellPlace(map, cell)}`;
 }
 
 function loadedContest(raw) {
@@ -3060,6 +3189,7 @@ function loadedContest(raw) {
     spawnMinutes: Number.isInteger(raw.spawnMinutes) ? raw.spawnMinutes : null,
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
     spawnChoices: normalizeTeamCells(raw.spawnChoices),
+    spawnVotes: normalizeSpawnVotes(raw.spawnVotes),
     spawns: normalizeTeamCells(raw.spawns),
     claims: normalizeClaims(raw.claims),
     spawnResolved: raw.spawnResolved === true,
