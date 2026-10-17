@@ -69,6 +69,7 @@ const editorTitle = document.querySelector("#editor-title");
 const editorSize = document.querySelector("#editor-size");
 const editorNameInput = document.querySelector("#map-name-input");
 const editorGrid = document.querySelector("#editor-grid");
+const kindMove = document.querySelector("#kind-move");
 const kindProblem = document.querySelector("#kind-problem");
 const kindSpawnpoint = document.querySelector("#kind-spawnpoint");
 const kindObstacle = document.querySelector("#kind-obstacle");
@@ -326,6 +327,7 @@ editorNameInput.addEventListener("change", () => {
   if (map && !readMapName(editorNameInput.value)) editorNameInput.value = map.name;
 });
 mapList.addEventListener("click", onMapListClick);
+kindMove.addEventListener("click", () => chooseTool("move"));
 kindProblem.addEventListener("click", () => chooseTool("problem"));
 kindSpawnpoint.addEventListener("click", () => chooseTool("spawnpoint"));
 kindObstacle.addEventListener("click", () => chooseTool("obstacle"));
@@ -685,14 +687,17 @@ function onMapListClick(event) {
 
 function chooseTool(kind) {
   paintKind = kind;
+  kindMove.setAttribute("aria-pressed", String(kind === "move"));
   kindProblem.setAttribute("aria-pressed", String(kind === "problem"));
   kindSpawnpoint.setAttribute("aria-pressed", String(kind === "spawnpoint"));
   kindObstacle.setAttribute("aria-pressed", String(kind === "obstacle"));
   kindEmpty.setAttribute("aria-pressed", String(kind === "empty"));
+  editorGrid.classList.toggle("is-moving", kind === "move");
   problemOptions.hidden = kind !== "problem";
 }
 
 function startPaint(event) {
+  if (paintKind === "move") return;
   const index = cellIndexFromTarget(event.target);
   if (index === null) return;
 
