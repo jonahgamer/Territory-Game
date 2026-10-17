@@ -442,19 +442,19 @@ button[type="submit"],
 .preview-cell.problem.oi,
 .grid-cell.problem.oi,
 .swatch.problem.oi {
-  background: #ff9a1a;
+  background: #4d7cff;
 }
 
 .preview-cell.problem.science,
 .grid-cell.problem.science,
 .swatch.problem.science {
-  background: #d6ff4a;
+  background: #f4f7fb;
 }
 
 .preview-cell.problem.puzzle,
 .grid-cell.problem.puzzle,
 .swatch.problem.puzzle {
-  background: #c084fc;
+  background: #ff7eb6;
 }
 
 .preview-cell.problem.easy { box-shadow: inset 0 0 0 2px #3ddc6a; }
@@ -490,9 +490,9 @@ button[type="submit"],
 .preview-cell.spawnpoint,
 .grid-cell.spawnpoint,
 .swatch.spawnpoint {
-  background: #123f32;
-  color: #b8ffe4;
-  box-shadow: inset 0 0 0 1px #3dffb0, 0 0 10px rgba(61, 255, 176, 0.25);
+  background: #121820;
+  color: #f4feff;
+  box-shadow: inset 0 0 0 2px #f4feff;
 }
 
 .grid-cell.spawnpoint {
@@ -503,8 +503,16 @@ button[type="submit"],
 .preview-cell.obstacle,
 .grid-cell.obstacle,
 .swatch.obstacle {
-  background: rgba(255, 93, 115, 0.28);
-  box-shadow: inset 0 0 0 2px #ff4d8d;
+  background-color: #121820;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(180, 198, 214, 0.7) 3px,
+    rgba(180, 198, 214, 0.7) 5px
+  );
+  box-shadow: inset 0 0 0 1px rgba(180, 198, 214, 0.8);
+  color: #d5e2ec;
 }
 
 .preview-cell.empty,
