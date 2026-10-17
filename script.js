@@ -548,7 +548,7 @@ function paintCell(map, index) {
   const cell = map.cells[index];
   const row = Math.floor(index / map.cols) + 1;
   const column = (index % map.cols) + 1;
-  button.className = `grid-cell ${cell.kind}`;
+  button.className = cellClassName(cell, "grid-cell");
   button.textContent = cellText(cell);
   button.setAttribute("aria-label", cellLabel(cell, row, column));
 }
@@ -615,7 +615,7 @@ function renderEditor() {
     const column = (index % map.cols) + 1;
 
     button.type = "button";
-    button.className = `grid-cell ${cell.kind}`;
+    button.className = cellClassName(cell, "grid-cell");
     button.dataset.index = String(index);
     button.setAttribute("aria-label", cellLabel(cell, row, column));
     button.textContent = cellText(cell);
@@ -633,7 +633,7 @@ function createPreview(map) {
 
   for (const cell of map.cells) {
     const node = document.createElement("span");
-    node.className = `preview-cell ${cell.kind}`;
+    node.className = cellClassName(cell, "preview-cell");
     if (showNumbers) node.textContent = cellText(cell);
     preview.append(node);
   }
@@ -1071,6 +1071,12 @@ function findProblem(index, type) {
 
 function blankProblem(index) {
   return { index, type: "math", prompt: "", answer: "" };
+}
+
+function cellClassName(cell, ...extra) {
+  const parts = [...extra, cell.kind];
+  if (cell.kind === "problem") parts.push(typeInfo(cell.type) ? cell.type : "math");
+  return parts.join(" ");
 }
 
 function cellText(cell) {
@@ -1601,7 +1607,7 @@ function renderStudentPlay() {
     const interactive = (cell.kind === "spawnpoint" && phase === "spawn")
       || (cell.kind === "problem" && (phase === "live" || phase === "ended"));
     button.type = "button";
-    button.className = `grid-cell student-cell ${cell.kind}`;
+    button.className = cellClassName(cell, "grid-cell", "student-cell");
     button.dataset.index = String(index);
     button.disabled = !interactive;
     button.textContent = cellText(cell);
