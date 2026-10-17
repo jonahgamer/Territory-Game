@@ -12,9 +12,15 @@
   </head>
   <body>
     <div class="app">
+      <header class="mobile-bar">
+        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span class="menu-bars" aria-hidden="true"></span>
+          Menu
+        </button>
+      </header>
       <aside class="sidebar">
         <button class="brand" id="home-button" type="button">Puzzle Territory</button>
-        <nav aria-label="Sections">
+        <nav id="site-nav" aria-label="Sections">
           <ul>
             <li><button id="maps-button" type="button">Maps</button></li>
             <li><button id="problems-button" type="button">Problems</button></li>
@@ -30,6 +36,7 @@
           <p id="account-role"></p>
         </div>
       </aside>
+      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
 
       <main>
         <section id="settings-view" hidden>
