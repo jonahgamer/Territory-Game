@@ -650,6 +650,13 @@ button[type="submit"],
   touch-action: pan-x pan-y;
 }
 
+@media (pointer: fine) {
+  #kind-move,
+  .move-hint {
+    display: none;
+  }
+}
+
 .cell-owner {
   position: absolute;
   right: 2px;

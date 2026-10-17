@@ -1301,6 +1301,10 @@ function onBulkDifficultyClick(event) {
   const difficulty = button.dataset.bulkDifficulty;
   const chosen = selectedProblems();
   if (!DIFFICULTIES.includes(difficulty) || chosen.length === 0) return;
+  const label = chosen.length === 1
+    ? problemTag(chosen[0].index, chosen[0].type)
+    : `${chosen.length} ${typeInfo(activeProblemType).name} problems`;
+  if (!window.confirm(`Set ${label} to ${DIFFICULTY_NAME[difficulty]}?`)) return;
   for (const problem of chosen) problem.difficulty = difficulty;
   persistProblems();
   renderProblems();
