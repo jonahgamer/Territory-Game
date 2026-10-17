@@ -62,6 +62,71 @@ const formError = document.querySelector("#map-form-error");
 const emptyMessage = document.querySelector("#map-empty");
 const mapList = document.querySelector("#map-list");
 const CELL_SIZE = 48;
+const mapCellSize = new WeakMap();
+const pinchBound = new WeakSet();
+
+function mapUsesPinch() {
+  return window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1100px)").matches;
+}
+
+function cellSizeLimits(scroll, cols, rows) {
+  const width = Math.max(scroll?.clientWidth || 0, 240);
+  const height = Math.max(scroll?.clientHeight || 0, 240);
+  const fit = Math.min(
+    (width - 2 * Math.max(cols - 1, 0)) / Math.max(cols, 1),
+    (height - 2 * Math.max(rows - 1, 0)) / Math.max(rows, 1)
+  );
+  const close = Math.min(width, height) / 6;
+  const min = Math.max(12, Math.min(fit, close));
+  return { min, max: Math.max(min, close) };
+}
+
+function layoutMapGrid(grid, cols, rows) {
+  const scroll = grid.closest(".grid-scroll");
+  let size = CELL_SIZE;
+  if (scroll && mapUsesPinch()) {
+    const limits = cellSizeLimits(scroll, cols, rows);
+    const saved = mapCellSize.get(grid);
+    size = Math.min(limits.max, Math.max(limits.min, saved || limits.min));
+    mapCellSize.set(grid, size);
+    ensurePinch(grid);
+  }
+  const px = `${size}px`;
+  grid.style.setProperty("--cell", px);
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${px})`;
+  grid.style.gridTemplateRows = `repeat(${rows}, ${px})`;
+}
+
+function ensurePinch(grid) {
+  const scroll = grid.closest(".grid-scroll");
+  if (!scroll || pinchBound.has(scroll)) return;
+  pinchBound.add(scroll);
+  let startDistance = 0;
+  let startSize = CELL_SIZE;
+  const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  scroll.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 2) return;
+    startDistance = distance(event.touches);
+    startSize = mapCellSize.get(grid) || CELL_SIZE;
+  }, { passive: true });
+  scroll.addEventListener("touchmove", (event) => {
+    if (event.touches.length !== 2 || !startDistance) return;
+    event.preventDefault();
+    const cols = Number(grid.dataset.cols) || 1;
+    const rows = Number(grid.dataset.rows) || 1;
+    layoutMapGrid(grid, cols, rows);
+    const limits = cellSizeLimits(scroll, cols, rows);
+    const next = Math.min(limits.max, Math.max(limits.min, startSize * (distance(event.touches) / startDistance)));
+    mapCellSize.set(grid, next);
+    const px = `${next}px`;
+    grid.style.setProperty("--cell", px);
+    grid.style.gridTemplateColumns = `repeat(${cols}, ${px})`;
+    grid.style.gridTemplateRows = `repeat(${rows}, ${px})`;
+  }, { passive: false });
+  scroll.addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) startDistance = 0;
+  });
+}
 
 const backButton = document.querySelector("#back-button");
 const deleteOpenMapButton = document.querySelector("#delete-open-map");
@@ -69,8 +134,11 @@ const editorTitle = document.querySelector("#editor-title");
 const editorSize = document.querySelector("#editor-size");
 const editorNameInput = document.querySelector("#map-name-input");
 const editorGrid = document.querySelector("#editor-grid");
-const kindMove = document.querySelector("#kind-move");
+const saveMapButton = document.querySelector("#save-map-button");
+const saveProblemButton = document.querySelector("#save-problem-button");
+const problemSaveError = document.querySelector("#problem-save-error");
 const kindProblem = document.querySelector("#kind-problem");
+const mobileHome = document.querySelector("#mobile-home");
 const kindSpawnpoint = document.querySelector("#kind-spawnpoint");
 const kindObstacle = document.querySelector("#kind-obstacle");
 const kindEmpty = document.querySelector("#kind-empty");
@@ -184,6 +252,10 @@ let problemRangeStart = 1;
 const PROBLEM_PAGE_SIZE = 20;
 const selectedProblemKeys = new Set();
 let problemSelectMode = false;
+let mapSnapshot = null;
+let mapDirty = false;
+let problemDraft = null;
+let problemDirty = false;
 let placeType = "math";
 let serverOffsetMs = 0;
 let contestClock = null;
@@ -238,13 +310,18 @@ const _persistContestsDebounced = debounce(
 // ═══════════════════════════════════════════════════════════════════
 
 homeButton.addEventListener("click", showHome);
+mobileHome.addEventListener("click", showHome);
 menuButton.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
 sidebarBackdrop.addEventListener("click", () => setMenuOpen(false));
 document.querySelector(".sidebar").addEventListener("click", (event) => {
-  if (event.target.closest("button")) setMenuOpen(false);
+  if (!event.target.closest("button, input, a, textarea")) setMenuOpen(false);
+  else if (event.target.closest("button")) setMenuOpen(false);
+});
+document.querySelector("main").addEventListener("click", () => {
+  if (document.body.classList.contains("menu-open")) setMenuOpen(false);
 });
 studentProblem.addEventListener("click", (event) => {
-  if (event.target === studentProblem) closeStudentProblem();
+  if (!event.target.closest(".student-problem-card")) closeStudentProblem();
 });
 studentProblemClose.addEventListener("click", closeStudentProblem);
 document.addEventListener("keydown", (event) => {
@@ -298,7 +375,7 @@ problemBulkDifficulty.addEventListener("click", onBulkDifficultyClick);
 problemBulkDelete.addEventListener("click", deleteSelectedProblems);
 placeTypeChoices.addEventListener("click", onPlaceTypeClick);
 problemBackButton.addEventListener("click", closeProblemEditor);
-deleteOpenProblemButton.addEventListener("click", () => deleteProblem(editingProblemNo, editingProblemType));
+deleteOpenProblemButton.addEventListener("click", deleteOpenProblem);
 problemEditorForm.addEventListener("submit", (event) => event.preventDefault());
 problemIndexInput.addEventListener("change", () => {
   if (problemReturn === "map") return;
@@ -329,6 +406,8 @@ problemAnswer.addEventListener("input", () => {
   requestAnimationFrame(renderProblemPreview);
 });
 backButton.addEventListener("click", showMaps);
+saveMapButton.addEventListener("click", saveOpenMap);
+saveProblemButton.addEventListener("click", saveOpenProblem);
 deleteOpenMapButton.addEventListener("click", deleteOpenMap);
 createForm.addEventListener("submit", createMap);
 editorNameInput.addEventListener("input", commitMapName);
@@ -337,7 +416,6 @@ editorNameInput.addEventListener("change", () => {
   if (map && !readMapName(editorNameInput.value)) editorNameInput.value = map.name;
 });
 mapList.addEventListener("click", onMapListClick);
-kindMove.addEventListener("click", () => chooseTool("move"));
 kindProblem.addEventListener("click", () => chooseTool("problem"));
 kindSpawnpoint.addEventListener("click", () => chooseTool("spawnpoint"));
 kindObstacle.addEventListener("click", () => chooseTool("obstacle"));
@@ -367,16 +445,106 @@ function persistContests() {
   _persistContestsDebounced();
 }
 
+function markMapDirty() {
+  mapDirty = true;
+  if (saveMapButton) saveMapButton.disabled = false;
+}
+
+function updateMapSaveButton() {
+  if (saveMapButton) saveMapButton.disabled = !mapDirty;
+}
+
+function saveOpenMap() {
+  if (!mapDirty || !bootstrapped || !isAdmin()) return;
+  apiCall("save-maps", { maps }).catch((error) => console.error("[save-maps]", error));
+  const map = currentMap();
+  mapSnapshot = map ? structuredClone(map) : null;
+  mapDirty = false;
+  updateMapSaveButton();
+}
+
+function discardUnsavedMap() {
+  if (!mapDirty || !mapSnapshot) return true;
+  if (!window.confirm("Leave without saving map changes?")) return false;
+  const index = maps.findIndex((item) => item.id === mapSnapshot.id);
+  if (index >= 0) maps[index] = mapSnapshot;
+  mapDirty = false;
+  mapSnapshot = null;
+  updateMapSaveButton();
+  return true;
+}
+
+function updateProblemSaveButton() {
+  if (!saveProblemButton) return;
+  saveProblemButton.disabled = !(problemDraft?.isNew || problemDirty);
+}
+
+function problemHasUnsavedEdits() {
+  if (!problemDraft) return false;
+  if (problemDirty) return true;
+  if (!problemDraft.isNew) return false;
+  return Boolean(problemPrompt.value.trim() || problemAnswer.value.trim());
+}
+
+function discardUnsavedProblem() {
+  if (problemEditorView.hidden || !problemHasUnsavedEdits()) {
+    if (!problemEditorView.hidden) problemDraft = null;
+    return true;
+  }
+  if (!window.confirm("Leave without saving this problem?")) return false;
+  problemDraft = null;
+  problemDirty = false;
+  return true;
+}
+
+function saveOpenProblem() {
+  if (!problemDraft) return;
+  const prompt = problemPrompt.value;
+  const answer = problemAnswer.value;
+  problemDraft.prompt = prompt;
+  problemDraft.answer = answer;
+  if (!prompt.trim() || !answer.trim()) {
+    problemSaveError.hidden = false;
+    problemSaveError.textContent = "Add both a question and an answer before saving.";
+    return;
+  }
+  problemSaveError.hidden = true;
+  let problem = findProblem(problemDraft.index, problemDraft.type);
+  if (!problem) {
+    problem = {
+      index: problemDraft.index,
+      type: problemDraft.type,
+      prompt,
+      answer,
+      difficulty: problemDraft.difficulty,
+    };
+    problems.push(problem);
+    problems.sort(compareProblems);
+  } else {
+    problem.prompt = prompt;
+    problem.answer = answer;
+    problem.difficulty = problemDraft.difficulty;
+  }
+  problemDraft.isNew = false;
+  problemDirty = false;
+  if (bootstrapped && isAdmin()) {
+    apiCall("save-problems", { problems }).catch((error) => console.error("[save-problems]", error));
+  }
+  updateProblemSaveButton();
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Views
 // ═══════════════════════════════════════════════════════════════════
 
 function showHome() {
+  setMenuOpen(false);
   if (!requireSession()) return;
   if (isContestant()) {
     showStudent();
     return;
   }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -391,6 +559,7 @@ function showHome() {
 function showMaps() {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -407,6 +576,7 @@ let accounts = [];
 function showSettings() {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -567,6 +737,7 @@ async function updateAccount(username, change) {
 function showProblems() {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -581,6 +752,7 @@ function showProblems() {
 function showEditor(mapId, options = {}) {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
+  if (mapSnapshot && mapSnapshot.id !== mapId && !discardUnsavedMap()) return;
   stopPaint();
   openMapId = mapId;
   openContestId = null;
@@ -595,6 +767,12 @@ function showEditor(mapId, options = {}) {
   }
   problemNoError.hidden = true;
   renderEditor();
+  const map = currentMap();
+  if (map && (!mapSnapshot || mapSnapshot.id !== map.id)) {
+    mapSnapshot = structuredClone(map);
+    mapDirty = false;
+  }
+  updateMapSaveButton();
 }
 
 function hideViews() {
@@ -641,6 +819,9 @@ function deleteOpenMap() {
   const name = map.name || "this map";
   if (!confirmTwice(`Delete the map ${name}?`, `Delete ${name} now? The map and every cell on it will be removed.`)) return;
   maps = maps.filter((item) => item.id !== openMapId);
+  mapDirty = false;
+  mapSnapshot = null;
+  updateMapSaveButton();
   persistMaps();
   showMaps();
 }
@@ -683,7 +864,7 @@ function commitMapName() {
   map.name = name;
   editorTitle.textContent = name;
   deleteOpenMapButton.setAttribute("aria-label", `Delete map ${name}`);
-  persistMaps();
+  markMapDirty();
 }
 
 function onMapListClick(event) {
@@ -697,19 +878,24 @@ function onMapListClick(event) {
 
 function chooseTool(kind) {
   paintKind = kind;
-  kindMove.setAttribute("aria-pressed", String(kind === "move"));
   kindProblem.setAttribute("aria-pressed", String(kind === "problem"));
   kindSpawnpoint.setAttribute("aria-pressed", String(kind === "spawnpoint"));
   kindObstacle.setAttribute("aria-pressed", String(kind === "obstacle"));
   kindEmpty.setAttribute("aria-pressed", String(kind === "empty"));
-  editorGrid.classList.toggle("is-moving", kind === "move");
   problemOptions.hidden = kind !== "problem";
 }
 
+function fingerMap() {
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
 function startPaint(event) {
-  if (paintKind === "move") return;
   const index = cellIndexFromTarget(event.target);
   if (index === null) return;
+  if (fingerMap() && event.pointerType === "touch") {
+    armTouchPaint(event, index);
+    return;
+  }
 
   event.preventDefault();
   painting = true;
@@ -729,7 +915,36 @@ function continuePaint(event) {
   applyTool(index, "toggle");
 }
 
+let touchPaint = null;
+
+function armTouchPaint(event, index) {
+  touchPaint = { x: event.clientX, y: event.clientY, index, pointerId: event.pointerId, moved: false };
+  window.addEventListener("pointermove", moveTouchPaint);
+  window.addEventListener("pointerup", finishTouchPaint);
+  window.addEventListener("pointercancel", cancelTouchPaint);
+}
+
+function moveTouchPaint(event) {
+  if (!touchPaint || event.pointerId !== touchPaint.pointerId) return;
+  if (Math.hypot(event.clientX - touchPaint.x, event.clientY - touchPaint.y) > 10) touchPaint.moved = true;
+}
+
+function finishTouchPaint(event) {
+  if (!touchPaint || (event && event.pointerId !== touchPaint.pointerId)) return;
+  const tap = touchPaint;
+  cancelTouchPaint();
+  if (!tap.moved) applyTool(tap.index, "toggle");
+}
+
+function cancelTouchPaint() {
+  touchPaint = null;
+  window.removeEventListener("pointermove", moveTouchPaint);
+  window.removeEventListener("pointerup", finishTouchPaint);
+  window.removeEventListener("pointercancel", cancelTouchPaint);
+}
+
 function stopPaint() {
+  cancelTouchPaint();
   if (!painting) return;
   const openNo = strokeCount === 1 ? pendingProblemOpen : null;
   painting = false;
@@ -761,7 +976,7 @@ function applyTool(index, mode) {
     strokeCount += 1;
     map.cells[index] = { kind: "empty" };
     paintCell(map, index);
-    persistMaps();
+    markMapDirty();
     return;
   }
 
@@ -778,9 +993,8 @@ function applyTool(index, mode) {
     paintedThisStroke.add(index);
     strokeCount += 1;
     map.cells[index] = { kind: "problem", problemNo, type: placeType };
-    ensureProblem(problemNo, placeType);
     paintCell(map, index);
-    persistMaps();
+    markMapDirty();
     if (nextNumberInput.checked && problemNo < MAX_PROBLEM_NO) {
       problemNoInput.value = String(problemNo + 1);
     }
@@ -793,7 +1007,7 @@ function applyTool(index, mode) {
   else if (paintKind === "obstacle") map.cells[index] = { kind: "obstacle" };
   else map.cells[index] = { kind: "empty" };
   paintCell(map, index);
-  persistMaps();
+  markMapDirty();
 }
 
 function paintCell(map, index) {
@@ -860,8 +1074,9 @@ function renderEditor() {
   editorSize.textContent = `${map.cols} × ${map.rows}`;
   editorNameInput.value = map.name;
   deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
-  editorGrid.style.gridTemplateColumns = `repeat(${map.cols}, ${CELL_SIZE}px)`;
-  editorGrid.style.gridTemplateRows = `repeat(${map.rows}, ${CELL_SIZE}px)`;
+  editorGrid.dataset.cols = String(map.cols);
+  editorGrid.dataset.rows = String(map.rows);
+  layoutMapGrid(editorGrid, map.cols, map.rows);
   editorGrid.replaceChildren();
 
   map.cells.forEach((cell, index) => {
@@ -952,13 +1167,17 @@ function toggleProblemSelectMode() {
 
 function addProblem(type) {
   const problemType = typeInfo(type) ? type : "math";
-  const index = nextProblemNo(problemType);
-  const problem = blankProblem(index);
-  problem.type = problemType;
-  problems.push(problem);
-  problems.sort(compareProblems);
-  persistProblems();
-  showProblemEditor(index, problemType, false);
+  showProblemEditor(nextProblemNo(problemType), problemType, false);
+}
+
+function deleteOpenProblem() {
+  if (problemDraft?.isNew && !findProblem(problemDraft.index, problemDraft.type)) {
+    problemDraft = null;
+    problemDirty = false;
+    showProblems();
+    return;
+  }
+  deleteProblem(editingProblemNo, editingProblemType);
 }
 
 function onProblemListClick(event) {
@@ -986,7 +1205,18 @@ function onProblemListClick(event) {
 
 function showProblemEditor(index, type, fromMap) {
   const problemType = typeInfo(type) ? type : "math";
-  ensureProblem(index, problemType);
+  const existing = findProblem(index, problemType);
+  problemDraft = existing
+    ? {
+      index: existing.index,
+      type: existing.type,
+      prompt: existing.prompt,
+      answer: existing.answer,
+      difficulty: problemDifficulty(existing),
+      isNew: false,
+    }
+    : { index, type: problemType, prompt: "", answer: "", difficulty: "normal", isNew: true };
+  problemDirty = false;
   stopPaint();
   if (!fromMap) openMapId = null;
   openContestId = null;
@@ -997,10 +1227,12 @@ function showProblemEditor(index, type, fromMap) {
   problemEditorView.hidden = false;
   setCurrentSection(problemsButton);
   renderProblemEditor();
+  updateProblemSaveButton();
   problemPrompt.focus();
 }
 
 function closeProblemEditor() {
+  if (!discardUnsavedProblem()) return;
   const mapId = openMapId;
   if (problemReturn === "map" && mapId && maps.some((map) => map.id === mapId)) {
     showEditor(mapId, { keepTool: true });
@@ -1025,12 +1257,27 @@ function commitProblemIndex() {
 
   problemIndexError.hidden = true;
   if (next === editingProblemNo) return;
+  if (problemDraft?.isNew) {
+    if (findProblem(next, problemDraft.type)) {
+      problemIndexError.hidden = false;
+      problemIndexError.textContent = "That index already belongs to another problem.";
+      problemIndexInput.value = String(problemDraft.index);
+      return;
+    }
+    problemDraft.index = next;
+    editingProblemNo = next;
+    problemDirty = true;
+    updateProblemSaveButton();
+    renderProblemEditor();
+    return;
+  }
   if (!reindexProblem(editingProblemNo, next)) {
     problemIndexInput.value = String(editingProblemNo);
     return;
   }
 
   editingProblemNo = next;
+  if (problemDraft) problemDraft.index = next;
   renderProblemEditor();
 }
 
@@ -1104,6 +1351,21 @@ function swapProblemTypesOnMaps(index, firstType, secondType) {
 }
 
 function setProblemType(index, type) {
+  if (problemDraft?.isNew) {
+    if (!typeInfo(type) || problemDraft.type === type) return;
+    if (findProblem(problemDraft.index, type)) {
+      problemIndexError.hidden = false;
+      problemIndexError.textContent = "That index already belongs to another problem of this type.";
+      return;
+    }
+    problemIndexError.hidden = true;
+    problemDraft.type = type;
+    editingProblemType = type;
+    problemDirty = true;
+    updateProblemSaveButton();
+    renderProblemEditor();
+    return;
+  }
   const problem = findProblem(index, editingProblemType);
   if (!problem || !typeInfo(type) || problem.type === type) return;
 
@@ -1132,6 +1394,7 @@ function setProblemType(index, type) {
   }
 
   editingProblemType = type;
+  if (problemDraft) problemDraft.type = type;
   problems.sort(compareProblems);
   persistProblems();
   persistMaps();
@@ -1140,18 +1403,19 @@ function setProblemType(index, type) {
 }
 
 function setProblemDifficulty(difficulty) {
-  const problem = findProblem(editingProblemNo, editingProblemType);
-  if (!problem || !DIFFICULTIES.includes(difficulty) || problem.difficulty === difficulty) return;
-  problem.difficulty = difficulty;
-  persistProblems();
+  if (!problemDraft || !DIFFICULTIES.includes(difficulty) || problemDraft.difficulty === difficulty) return;
+  problemDraft.difficulty = difficulty;
+  problemDirty = true;
+  updateProblemSaveButton();
   renderProblemEditor();
 }
 
 function updateProblemField(field, value) {
-  const problem = findProblem(editingProblemNo, editingProblemType);
-  if (!problem || (field !== "prompt" && field !== "answer")) return;
-  problem[field] = value;
-  persistProblems();
+  if (!problemDraft || (field !== "prompt" && field !== "answer")) return;
+  problemDraft[field] = value;
+  problemDirty = true;
+  if (problemSaveError) problemSaveError.hidden = true;
+  updateProblemSaveButton();
 }
 
 function deleteProblem(index, type) {
@@ -1465,7 +1729,7 @@ function problemSnippet(problem) {
 }
 
 function renderProblemEditor() {
-  const problem = findProblem(editingProblemNo, editingProblemType);
+  const problem = problemDraft;
   if (!problem) { showProblems(); return; }
 
   const tag = problemTag(problem.index, problem.type);
@@ -1768,8 +2032,9 @@ function renderLeaderboard(list, empty, contest) {
 }
 
 function paintPlayGrid(grid, contest, map, options) {
-  grid.style.gridTemplateColumns = `repeat(${map.cols}, ${CELL_SIZE}px)`;
-  grid.style.gridTemplateRows = `repeat(${map.rows}, ${CELL_SIZE}px)`;
+  grid.dataset.cols = String(map.cols);
+  grid.dataset.rows = String(map.rows);
+  layoutMapGrid(grid, map.cols, map.rows);
   grid.replaceChildren();
   const choosing = options.student && options.phase === "spawn" && !contest.spawnResolved;
   map.cells.forEach((cell, index) => {
@@ -1793,7 +2058,8 @@ function paintPlayGrid(grid, contest, map, options) {
         button.classList.add("owned");
         if (options.team && owner.id === options.team.id) button.classList.add("mine");
         button.style.setProperty("--team", teamColor(contest, owner.id));
-        button.textContent = teamShort(owner.name);
+        button.classList.add("territory-dot");
+        button.textContent = "";
       } else {
         const choice = choosing ? (contest.spawnChoices || []).find((item) => item.teamId === options.team?.id) : null;
         if (choice && choice.cell === index) {
@@ -1934,6 +2200,7 @@ function showCompetitions() {
     showStudent();
     return;
   }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
   openContestId = null;
@@ -2342,7 +2609,6 @@ function renderStudentPlay() {
   studentLeaderboardHeading.hidden = !showScores;
   studentLeaderboardHeading.textContent = frozen || phase === "ended" ? "Leaderboard" : "Scores";
   studentBoard.hidden = !map;
-  studentProblem.hidden = true;
 
   if (!map) {
     ensureContestClock();
@@ -2350,7 +2616,6 @@ function renderStudentPlay() {
   }
 
   paintPlayGrid(studentGrid, contest, map, { student: true, phase, frozen, team });
-  showStudentProblem(contest, map, phase, frozen);
   ensureContestClock();
 }
 
@@ -2442,9 +2707,12 @@ function onStudentGridClick(event) {
     return;
   }
   if (cell?.kind === "problem" && phase === "live" && !contestFrozen(contest, map)) {
-    selectedStudentCell = index;
-    studentAnswer.value = "";
-    renderStudentPlay();
+    const claim = (contest.claims || []).some((item) => item.cell === index);
+    if (claim || !adjacentToTeam(map, contest, team.id, index)) return;
+    const url = new URL("answer.html", location.href);
+    url.searchParams.set("contest", contest.id);
+    url.searchParams.set("cell", String(index));
+    window.open(url.href, "_blank", "noopener");
   }
 }
 

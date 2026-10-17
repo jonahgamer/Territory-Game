@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Problem · Territory Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+  </head>
+  <body>
+    <main class="answer-page">
+      <p id="answer-status" class="form-error" hidden></p>
+      <h1 id="student-problem-tag"></h1>
+      <div id="student-problem-prompt"></div>
+      <form id="student-answer-form">
+        <label>
+          Answer
+          <input id="student-answer" type="text" maxlength="5000" />
+        </label>
+        <button type="submit">Submit</button>
+        <p id="student-answer-error" class="form-error" hidden></p>
+      </form>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <script src="answer.js"></script>
+  </body>
+</html>

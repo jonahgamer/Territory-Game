@@ -13,6 +13,7 @@
   <body>
     <div class="app">
       <header class="mobile-bar">
+        <button id="mobile-home" class="brand mobile-logo" type="button">Puzzle Territory</button>
         <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
           <span class="menu-bars" aria-hidden="true"></span>
           Menu
@@ -144,6 +145,7 @@
         <section id="problem-editor-view" hidden>
           <div class="editor-toolbar">
             <button class="back-button" id="problem-back-button" type="button">Back to problems</button>
+            <button id="save-problem-button" class="save-changes" type="button">Save problem</button>
             <button class="delete-map" id="delete-open-problem" type="button">Delete</button>
           </div>
           <p class="eyebrow">Problems</p>
@@ -170,13 +172,14 @@
             <p class="field-note">Students see this difficulty as the cell color. On this map, difficulty is the colored border.</p>
             <label>
               Problem
-              <textarea id="problem-prompt" rows="3"></textarea>
+              <textarea id="problem-prompt" rows="12"></textarea>
             </label>
             <label>
               Answer
               <textarea id="problem-answer" rows="2"></textarea>
             </label>
             <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. HTML in the problem is shown on the contest page, and a script there can fill the answer box. The answer is the exact text a student types.</p>
+            <p id="problem-save-error" class="form-error" hidden></p>
           </form>
         </section>
 
@@ -340,6 +343,7 @@
         <section id="editor-view" hidden>
           <div class="editor-toolbar">
             <button class="back-button" id="back-button" type="button">Back to maps</button>
+            <button id="save-map-button" class="save-changes" type="button" disabled>Save changes</button>
             <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
           </div>
           <p class="eyebrow">Problem map</p>
@@ -349,9 +353,8 @@
             Name
             <input id="map-name-input" type="text" maxlength="60" />
           </label>
-          <p class="lead">Click or drag to place and clear cells. <span class="move-hint">Choose Move to slide the map without changing cells. </span>With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
+          <p class="lead">Click or drag to place and clear cells. On a phone, pinch the map to zoom and drag with one finger to slide it. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
           <div class="kind-choices editor-tools">
-            <button id="kind-move" type="button" aria-pressed="false">Move</button>
             <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
             <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
             <button id="kind-obstacle" type="button" aria-pressed="false">Obstacle</button>
