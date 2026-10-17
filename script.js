@@ -47,7 +47,7 @@ const accountRole = document.querySelector("#account-role");
 const accountPfp = document.querySelector("#account-pfp");
 const accountButton = document.querySelector("#account-button");
 const homeView = document.querySelector("#home-view");
-const homeLead = homeView.querySelector(".lead");
+const homeLead = homeView?.querySelector(".lead") || null;
 const loadError = document.querySelector("#load-error");
 const mapsView = document.querySelector("#maps-view");
 const problemsView = document.querySelector("#problems-view");
@@ -106,12 +106,12 @@ function ensurePinch(grid) {
   let startDistance = 0;
   let startSize = CELL_SIZE;
   const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-  scroll.addEventListener("touchstart", (event) => {
+  scroll?.addEventListener("touchstart", (event) => {
     if (event.touches.length !== 2) return;
     startDistance = distance(event.touches);
     startSize = mapCellSize.get(grid) || CELL_SIZE;
   }, { passive: true });
-  scroll.addEventListener("touchmove", (event) => {
+  scroll?.addEventListener("touchmove", (event) => {
     if (event.touches.length !== 2 || !startDistance) return;
     event.preventDefault();
     const cols = Number(grid.dataset.cols) || 1;
@@ -125,7 +125,7 @@ function ensurePinch(grid) {
     grid.style.gridTemplateColumns = `repeat(${cols}, ${px})`;
     grid.style.gridTemplateRows = `repeat(${rows}, ${px})`;
   }, { passive: false });
-  scroll.addEventListener("touchend", (event) => {
+  scroll?.addEventListener("touchend", (event) => {
     if (event.touches.length < 2) startDistance = 0;
   });
 }
@@ -201,8 +201,8 @@ const contestReadyField = document.querySelector("#contest-ready-input");
 const contestScheduleError = document.querySelector("#contest-schedule-error");
 const teamForm = document.querySelector("#team-form");
 const teamNameInput = document.querySelector("#team-name");
-const teamMemberA = document.querySelector("#team-member-a");
-const teamMemberB = document.querySelector("#team-member-b");
+const teamMembersInput = document.querySelector("#team-members");
+const contestCountdown = document.querySelector("#contest-countdown");
 const teamFormError = document.querySelector("#team-form-error");
 const contestantEmpty = document.querySelector("#contestant-empty");
 const contestantList = document.querySelector("#contestant-list");
@@ -216,7 +216,11 @@ const studentContestList = document.querySelector("#student-contest-list");
 const studentPlayView = document.querySelector("#student-play-view");
 const studentBack = document.querySelector("#student-back");
 const studentPlayTitle = document.querySelector("#student-play-title");
+const studentCountdown = document.querySelector("#student-countdown");
 const studentPlayMeta = document.querySelector("#student-play-meta");
+const spawnAgreement = document.querySelector("#spawn-agreement");
+const spawnVoteList = document.querySelector("#spawn-votes");
+const spawnAgreementNote = document.querySelector("#spawn-agreement-note");
 const studentSpawnNote = document.querySelector("#student-spawn-note");
 const studentJoined = document.querySelector("#student-joined");
 const studentLeaderboardHeading = document.querySelector("#student-leaderboard-heading");
@@ -312,22 +316,22 @@ const _persistContestsDebounced = debounce(
 // Event wiring
 // ═══════════════════════════════════════════════════════════════════
 
-homeButton.addEventListener("click", showHome);
-mobileHome.addEventListener("click", showHome);
-menuButton.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
-sidebarBackdrop.addEventListener("click", () => setMenuOpen(false));
-document.querySelector(".sidebar").addEventListener("click", (event) => {
+homeButton?.addEventListener("click", showHome);
+mobileHome?.addEventListener("click", showHome);
+menuButton?.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
+sidebarBackdrop?.addEventListener("click", () => setMenuOpen(false));
+document.querySelector(".sidebar")?.addEventListener("click", (event) => {
   if (!event.target.closest("button, input, a, textarea")) setMenuOpen(false);
-  else if (event.target.closest("button")) setMenuOpen(false);
+  else if (event.target.closest("button, a")) setMenuOpen(false);
 });
-document.querySelector("main").addEventListener("click", () => {
+document.querySelector("main")?.addEventListener("click", () => {
   if (document.body.classList.contains("menu-open")) setMenuOpen(false);
 });
-studentProblem.addEventListener("click", (event) => {
+studentProblem?.addEventListener("click", (event) => {
   if (!event.target.closest(".student-problem-card")) closeStudentProblem();
 });
-studentProblemClose.addEventListener("click", closeStudentProblem);
-document.addEventListener("keydown", (event) => {
+studentProblemClose?.addEventListener("click", closeStudentProblem);
+document?.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!studentProblem.hidden) {
     closeStudentProblem();
@@ -335,100 +339,100 @@ document.addEventListener("keydown", (event) => {
   }
   setMenuOpen(false);
 });
-mapsButton.addEventListener("click", showMaps);
-problemsButton.addEventListener("click", showProblems);
-competitionsButton.addEventListener("click", showCompetitions);
-tutorialButton.addEventListener("click", showTutorial);
-settingsButton.addEventListener("click", showSettings);
-accountForm.addEventListener("submit", createAccount);
-accountList.addEventListener("click", onAccountListClick);
-accountButton.addEventListener("click", logOut);
-createContestForm.addEventListener("submit", createContest);
-contestList.addEventListener("click", onContestListClick);
-contestBackButton.addEventListener("click", showCompetitions);
-deleteOpenContestButton.addEventListener("click", deleteOpenContest);
-contestForm.addEventListener("submit", (event) => event.preventDefault());
-contestNameField.addEventListener("input", commitContestName);
-contestNameField.addEventListener("change", () => {
+mapsButton?.addEventListener("click", showMaps);
+problemsButton?.addEventListener("click", showProblems);
+competitionsButton?.addEventListener("click", showCompetitions);
+tutorialButton?.addEventListener("click", showTutorial);
+settingsButton?.addEventListener("click", showSettings);
+accountForm?.addEventListener("submit", createAccount);
+accountList?.addEventListener("click", onAccountListClick);
+accountButton?.addEventListener("click", logOut);
+createContestForm?.addEventListener("submit", createContest);
+contestList?.addEventListener("click", onContestListClick);
+contestBackButton?.addEventListener("click", showCompetitions);
+deleteOpenContestButton?.addEventListener("click", deleteOpenContest);
+contestForm?.addEventListener("submit", (event) => event.preventDefault());
+contestNameField?.addEventListener("input", commitContestName);
+contestNameField?.addEventListener("change", () => {
   const contest = currentContest();
   if (contest && !readContestName(contestNameField.value)) contestNameField.value = contest.name;
 });
-contestMapField.addEventListener("change", commitContestMap);
-contestMapSelect.addEventListener("change", () => updateContestSpawnNote(contestMapSelect, contestMapNote));
-contestStartField.addEventListener("input", commitContestSchedule);
-contestDurationField.addEventListener("input", commitContestSchedule);
-contestSpawnField.addEventListener("input", commitContestSchedule);
-contestReadyField.addEventListener("input", commitContestSchedule);
-contestStartField.addEventListener("change", finishContestScheduleEdit);
-contestDurationField.addEventListener("change", finishContestScheduleEdit);
-contestSpawnField.addEventListener("change", finishContestScheduleEdit);
-contestReadyField.addEventListener("change", finishContestScheduleEdit);
-teamForm.addEventListener("submit", addTeam);
-contestantList.addEventListener("click", onContestantListClick);
-studentContestList.addEventListener("click", onStudentListClick);
-studentBack.addEventListener("click", showStudent);
-studentGrid.addEventListener("click", onStudentGridClick);
-studentAnswerForm.addEventListener("submit", submitStudentAnswer);
-problemSectionChoices.addEventListener("click", onProblemSectionClick);
-problemSection.addEventListener("click", onProblemListClick);
-problemSection.addEventListener("change", onProblemSelectionChange);
-problemSelectToggle.addEventListener("click", toggleProblemSelectMode);
-problemSelectPage.addEventListener("change", selectProblemPage);
-problemSelectAll.addEventListener("change", selectAllProblems);
-problemBulkDifficulty.addEventListener("click", onBulkDifficultyClick);
-problemBulkDelete.addEventListener("click", deleteSelectedProblems);
-placeTypeChoices.addEventListener("click", onPlaceTypeClick);
-problemBackButton.addEventListener("click", closeProblemEditor);
-deleteOpenProblemButton.addEventListener("click", deleteOpenProblem);
-problemEditorForm.addEventListener("submit", (event) => event.preventDefault());
-problemIndexInput.addEventListener("change", () => {
+contestMapField?.addEventListener("change", commitContestMap);
+contestMapSelect?.addEventListener("change", () => updateContestSpawnNote(contestMapSelect, contestMapNote));
+contestStartField?.addEventListener("input", commitContestSchedule);
+contestDurationField?.addEventListener("input", commitContestSchedule);
+contestSpawnField?.addEventListener("input", commitContestSchedule);
+contestReadyField?.addEventListener("input", commitContestSchedule);
+contestStartField?.addEventListener("change", finishContestScheduleEdit);
+contestDurationField?.addEventListener("change", finishContestScheduleEdit);
+contestSpawnField?.addEventListener("change", finishContestScheduleEdit);
+contestReadyField?.addEventListener("change", finishContestScheduleEdit);
+teamForm?.addEventListener("submit", addTeam);
+contestantList?.addEventListener("click", onContestantListClick);
+studentContestList?.addEventListener("click", onStudentListClick);
+studentBack?.addEventListener("click", showStudent);
+studentGrid?.addEventListener("click", onStudentGridClick);
+studentAnswerForm?.addEventListener("submit", submitStudentAnswer);
+problemSectionChoices?.addEventListener("click", onProblemSectionClick);
+problemSection?.addEventListener("click", onProblemListClick);
+problemSection?.addEventListener("change", onProblemSelectionChange);
+problemSelectToggle?.addEventListener("click", toggleProblemSelectMode);
+problemSelectPage?.addEventListener("change", selectProblemPage);
+problemSelectAll?.addEventListener("change", selectAllProblems);
+problemBulkDifficulty?.addEventListener("click", onBulkDifficultyClick);
+problemBulkDelete?.addEventListener("click", deleteSelectedProblems);
+placeTypeChoices?.addEventListener("click", onPlaceTypeClick);
+problemBackButton?.addEventListener("click", closeProblemEditor);
+deleteOpenProblemButton?.addEventListener("click", deleteOpenProblem);
+problemEditorForm?.addEventListener("submit", (event) => event.preventDefault());
+problemIndexInput?.addEventListener("change", () => {
   if (problemReturn === "map") return;
   commitProblemIndex();
 });
-problemIndexInput.addEventListener("keydown", (event) => {
+problemIndexInput?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     problemIndexInput.blur();
   }
 });
-problemTypeChoices.addEventListener("click", (event) => {
+problemTypeChoices?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-type]");
   if (!button || editingProblemNo === null || problemReturn === "map") return;
   setProblemType(editingProblemNo, button.dataset.problemType);
 });
-problemDifficultyChoices.addEventListener("click", (event) => {
+problemDifficultyChoices?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-problem-difficulty]");
   if (!button || editingProblemNo === null) return;
   setProblemDifficulty(button.dataset.problemDifficulty);
 });
-problemPrompt.addEventListener("input", () => {
+problemPrompt?.addEventListener("input", () => {
   updateProblemField("prompt", problemPrompt.value);
   requestAnimationFrame(renderProblemPreview);
 });
-problemAnswer.addEventListener("input", () => {
+problemAnswer?.addEventListener("input", () => {
   updateProblemField("answer", problemAnswer.value);
   requestAnimationFrame(renderProblemPreview);
 });
-problemLogic.addEventListener("input", () => {
+problemLogic?.addEventListener("input", () => {
   updateProblemField("logic", problemLogic.value);
 });
-backButton.addEventListener("click", showMaps);
-saveMapButton.addEventListener("click", saveOpenMap);
-saveProblemButton.addEventListener("click", saveOpenProblem);
-deleteOpenMapButton.addEventListener("click", deleteOpenMap);
-createForm.addEventListener("submit", createMap);
-editorNameInput.addEventListener("input", commitMapName);
-editorNameInput.addEventListener("change", () => {
+backButton?.addEventListener("click", showMaps);
+saveMapButton?.addEventListener("click", saveOpenMap);
+saveProblemButton?.addEventListener("click", saveOpenProblem);
+deleteOpenMapButton?.addEventListener("click", deleteOpenMap);
+createForm?.addEventListener("submit", createMap);
+editorNameInput?.addEventListener("input", commitMapName);
+editorNameInput?.addEventListener("change", () => {
   const map = currentMap();
   if (map && !readMapName(editorNameInput.value)) editorNameInput.value = map.name;
 });
-mapList.addEventListener("click", onMapListClick);
-kindProblem.addEventListener("click", () => chooseTool("problem"));
-kindSpawnpoint.addEventListener("click", () => chooseTool("spawnpoint"));
-kindObstacle.addEventListener("click", () => chooseTool("obstacle"));
-kindEmpty.addEventListener("click", () => chooseTool("empty"));
-editorGrid.addEventListener("pointerdown", startPaint);
-problemNoInput.addEventListener("input", () => {
+mapList?.addEventListener("click", onMapListClick);
+kindProblem?.addEventListener("click", () => chooseTool("problem"));
+kindSpawnpoint?.addEventListener("click", () => chooseTool("spawnpoint"));
+kindObstacle?.addEventListener("click", () => chooseTool("obstacle"));
+kindEmpty?.addEventListener("click", () => chooseTool("empty"));
+editorGrid?.addEventListener("pointerdown", startPaint);
+problemNoInput?.addEventListener("input", () => {
   problemNoError.hidden = true;
 });
 
@@ -502,8 +506,8 @@ function problemHasUnsavedEdits() {
 }
 
 function discardUnsavedProblem() {
-  if (problemEditorView.hidden || !problemHasUnsavedEdits()) {
-    if (!problemEditorView.hidden) problemDraft = null;
+  if (!problemEditorView || problemEditorView.hidden || !problemHasUnsavedEdits()) {
+    if (problemEditorView && !problemEditorView.hidden) problemDraft = null;
     return true;
   }
   if (!window.confirm("Leave without saving this problem?")) return false;
@@ -687,7 +691,7 @@ function renderAccounts() {
       display.value = account.displayName;
       display.maxLength = 60;
       display.setAttribute("aria-label", `Display name for ${account.username}`);
-      display.addEventListener("change", () => updateAccount(account.username, { displayName: display.value }));
+      display?.addEventListener("change", () => updateAccount(account.username, { displayName: display.value }));
 
       const password = document.createElement("input");
       password.type = "password";
@@ -809,34 +813,26 @@ function showEditor(mapId, options = {}) {
 }
 
 function hideViews() {
-  homeView.hidden = true;
-  mapsView.hidden = true;
-  problemsView.hidden = true;
-  problemEditorView.hidden = true;
-  competitionsView.hidden = true;
-  contestView.hidden = true;
-  studentView.hidden = true;
-  studentPlayView.hidden = true;
-  editorView.hidden = true;
-  settingsView.hidden = true;
-  tutorialView.hidden = true;
+  for (const view of [homeView, mapsView, problemsView, problemEditorView, competitionsView, contestView, studentView, studentPlayView, editorView, settingsView, tutorialView]) {
+    if (view) view.hidden = true;
+  }
 }
 
 function setMenuOpen(open) {
   const wasOpen = document.body.classList.contains("menu-open");
   document.body.classList.toggle("menu-open", open);
-  menuButton.setAttribute("aria-expanded", String(open));
-  menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
-  sidebarBackdrop.hidden = !open;
-  if (wasOpen && !open) menuButton.focus();
+  if (menuButton) {
+    menuButton.setAttribute("aria-expanded", String(open));
+    menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    if (wasOpen && !open) menuButton.focus();
+  }
+  if (sidebarBackdrop) sidebarBackdrop.hidden = !open;
 }
 
 function setCurrentSection(button) {
-  mapsButton.removeAttribute("aria-current");
-  problemsButton.removeAttribute("aria-current");
-  competitionsButton.removeAttribute("aria-current");
-  tutorialButton.removeAttribute("aria-current");
-  settingsButton.removeAttribute("aria-current");
+  for (const item of [mapsButton, problemsButton, competitionsButton, tutorialButton, settingsButton]) {
+    item?.removeAttribute("aria-current");
+  }
   if (button) button.setAttribute("aria-current", "page");
 }
 
@@ -937,9 +933,9 @@ function startPaint(event) {
   strokeCount = 0;
   pendingProblemOpen = null;
   paintedThisStroke = new Set();
-  window.addEventListener("pointermove", continuePaint);
-  window.addEventListener("pointerup", stopPaint);
-  window.addEventListener("pointercancel", stopPaint);
+  window?.addEventListener("pointermove", continuePaint);
+  window?.addEventListener("pointerup", stopPaint);
+  window?.addEventListener("pointercancel", stopPaint);
   applyTool(index, "toggle");
 }
 
@@ -954,9 +950,9 @@ let touchPaint = null;
 
 function armTouchPaint(event, index) {
   touchPaint = { x: event.clientX, y: event.clientY, index, pointerId: event.pointerId, moved: false };
-  window.addEventListener("pointermove", moveTouchPaint);
-  window.addEventListener("pointerup", finishTouchPaint);
-  window.addEventListener("pointercancel", cancelTouchPaint);
+  window?.addEventListener("pointermove", moveTouchPaint);
+  window?.addEventListener("pointerup", finishTouchPaint);
+  window?.addEventListener("pointercancel", cancelTouchPaint);
 }
 
 function moveTouchPaint(event) {
@@ -1958,8 +1954,39 @@ function cellPlace(map, index) {
 function normalizeTeams(value) {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((team) => team && typeof team.id === "string" && typeof team.name === "string" && Array.isArray(team.members) && team.members.length === 2)
-    .map((team) => ({ id: team.id, name: team.name, members: [String(team.members[0]), String(team.members[1])] }));
+    .filter((team) => team && typeof team.id === "string" && typeof team.name === "string" && Array.isArray(team.members))
+    .map((team) => {
+      const members = [];
+      for (const member of team.members.map((item) => String(item || "").trim()).filter(Boolean)) {
+        if (members.some((item) => sameContestant(item, member))) continue;
+        members.push(member);
+      }
+      return { id: team.id, name: team.name, members };
+    })
+    .filter((team) => team.members.length >= 1 && team.members.length <= 5);
+}
+
+function normalizeSpawnVotes(value) {
+  if (!Array.isArray(value)) return [];
+  const votes = [];
+  for (const vote of value) {
+    if (!vote || typeof vote.teamId !== "string" || typeof vote.username !== "string" || !Number.isInteger(vote.cell) || vote.cell < 0) continue;
+    const existing = votes.findIndex((item) => item.teamId === vote.teamId && sameContestant(item.username, vote.username));
+    if (existing >= 0) votes.splice(existing, 1);
+    votes.push({ teamId: vote.teamId, username: vote.username, cell: vote.cell });
+  }
+  return votes;
+}
+
+function agreedSpawnChoices(contest) {
+  const choices = [];
+  for (const team of contest?.teams || []) {
+    const votes = (contest.spawnVotes || []).filter((vote) => vote.teamId === team.id && team.members.some((member) => sameContestant(member, vote.username)));
+    if (votes.length !== team.members.length) continue;
+    const cell = votes[0].cell;
+    if (votes.every((vote) => vote.cell === cell)) choices.push({ teamId: team.id, cell });
+  }
+  return choices;
 }
 
 function normalizeTeamCells(value) {
@@ -1999,6 +2026,7 @@ function applyContestPlayState(contest, data) {
   }
   if (typeof next.spawnResolved === "boolean") contest.spawnResolved = next.spawnResolved;
   if (Array.isArray(next.spawnChoices)) contest.spawnChoices = normalizeTeamCells(next.spawnChoices);
+  if (Array.isArray(next.spawnVotes)) contest.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
   if (Array.isArray(next.spawns)) contest.spawns = normalizeTeamCells(next.spawns);
   if (Array.isArray(next.claims)) contest.claims = normalizeClaims(next.claims);
   noteServerTime(data?.serverNow);
@@ -2103,9 +2131,15 @@ function paintPlayGrid(grid, contest, map, options) {
         button.classList.add("territory-dot");
         button.textContent = "";
       } else {
-        const choice = choosing ? (contest.spawnChoices || []).find((item) => item.teamId === options.team?.id) : null;
-        if (choice && choice.cell === index) {
+        const myVote = choosing
+          ? (contest.spawnVotes || []).find((vote) => vote.teamId === options.team?.id && sameContestant(vote.username, contestantId()))
+          : null;
+        const teammateVote = choosing && (contest.spawnVotes || []).some((vote) => vote.teamId === options.team?.id && vote.cell === index && !sameContestant(vote.username, contestantId()));
+        if (myVote && myVote.cell === index) {
           button.classList.add("mine");
+          button.style.setProperty("--team", teamColor(contest, options.team.id));
+        } else if (teammateVote) {
+          button.classList.add("proposed");
           button.style.setProperty("--team", teamColor(contest, options.team.id));
         }
         button.textContent = cell.kind === "problem" ? "" : cellText(cell);
@@ -2160,8 +2194,8 @@ function noteMouseMove() {
   if (wasIdle) contestSyncAt = 0;
 }
 
-document.addEventListener("mousemove", noteMouseMove, { passive: true });
-document.addEventListener("visibilitychange", () => {
+document?.addEventListener("mousemove", noteMouseMove, { passive: true });
+document?.addEventListener("visibilitychange", () => {
   if (!document.hidden) contestSyncAt = 0;
 });
 
@@ -2176,6 +2210,7 @@ async function syncContest(contest) {
     const key = JSON.stringify({
       teams: contest.teams,
       choices: contest.spawnChoices,
+      votes: contest.spawnVotes,
       spawns: contest.spawns,
       resolved: contest.spawnResolved,
       claims: contest.claims,
@@ -2196,41 +2231,44 @@ async function syncContest(contest) {
 
 function requireSession() {
   if (isSignedIn()) return true;
-  location.replace("login.html");
+  location.replace("/login.html");
   return false;
 }
 
 function applyAccount() {
   if (!isSignedIn()) {
-    location.replace("login.html");
+    location.replace("/login.html");
     return;
   }
 
   const contestant = isContestant();
   const user = session.user;
-  mapsButton.hidden = contestant;
-  problemsButton.hidden = contestant;
-  creditsLabel.hidden = contestant;
-  tutorialButton.hidden = contestant;
-  settingsButton.hidden = contestant;
-  accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
+  if (mapsButton) mapsButton.hidden = contestant;
+  if (problemsButton) problemsButton.hidden = contestant;
+  if (creditsLabel) creditsLabel.hidden = contestant;
+  if (tutorialButton) tutorialButton.hidden = contestant;
+  if (settingsButton) settingsButton.hidden = contestant;
+  if (accountRole) accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
-  accountPfp.hidden = !pfp;
-  accountPfp.src = pfp;
+  if (accountPfp) {
+    accountPfp.hidden = !pfp;
+    accountPfp.src = pfp;
+  }
   updateHomeLead();
 }
 
 function updateHomeLead() {
+  if (!homeLead) return;
   const user = session?.user;
   homeLead.textContent = isContestant()
-    ? `Signed in as ${user.displayName || user.username}. Open Contests, choose a spawn point with your teammate, then solve problems next to your territory.`
+    ? `Signed in as ${user.displayName || user.username}. Open Contests, agree on a spawn point with your team, then solve problems next to your territory.`
     : "Welcome to Territory Game.";
 }
 
 function logOut() {
   session = null;
   persistSession();
-  location.replace("login.html");
+  location.replace("/login.html");
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2306,6 +2344,7 @@ function createContest(event) {
     contestantIds: [],
     teams: [],
     spawnChoices: [],
+    spawnVotes: [],
     spawns: [],
     claims: [],
     spawnResolved: false,
@@ -2355,6 +2394,7 @@ function commitContestMap() {
   if (contest.mapId !== contestMapField.value) {
     contest.spawns = [];
     contest.spawnChoices = [];
+    contest.spawnVotes = [];
     contest.claims = [];
     contest.spawnResolved = false;
   }
@@ -2410,26 +2450,24 @@ async function addTeam(event) {
   const contest = currentContest();
   if (!contest || isContestant()) return;
   const name = readContestName(teamNameInput.value);
-  const memberA = teamMemberA.value.trim();
-  const memberB = teamMemberB.value.trim();
+  const members = teamMembersInput.value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
   if (!name) {
     teamFormError.hidden = false;
     teamFormError.textContent = "Give the team a name.";
     return;
   }
-  if (!memberA || !memberB || memberA.toLowerCase() === memberB.toLowerCase()) {
+  if (members.length < 1 || members.length > 5 || new Set(members.map((item) => item.toLowerCase())).size !== members.length) {
     teamFormError.hidden = false;
-    teamFormError.textContent = "Enter two different student usernames.";
+    teamFormError.textContent = "Enter 1 to 5 different student usernames, one per line.";
     return;
   }
   teamFormError.hidden = true;
   try {
     await saveContestsNow();
-    const data = await apiCall("save-team", { contestId: contest.id, name, memberA, memberB });
+    const data = await apiCall("save-team", { contestId: contest.id, name, members });
     applyContestPlayState(contest, data);
     teamNameInput.value = "";
-    teamMemberA.value = "";
-    teamMemberB.value = "";
+    teamMembersInput.value = "";
     renderContest();
   } catch (error) {
     teamFormError.hidden = false;
@@ -2452,11 +2490,13 @@ async function onContestantListClick(event) {
   const previous = {
     teams: contest.teams.slice(),
     spawnChoices: contest.spawnChoices.slice(),
+    spawnVotes: (contest.spawnVotes || []).slice(),
     spawns: contest.spawns.slice(),
     claims: contest.claims.slice(),
   };
   contest.teams = previous.teams.filter((team) => team.id !== teamId);
   contest.spawnChoices = previous.spawnChoices.filter((choice) => choice.teamId !== teamId);
+  contest.spawnVotes = previous.spawnVotes.filter((vote) => vote.teamId !== teamId);
   contest.spawns = previous.spawns.filter((spawn) => spawn.teamId !== teamId);
   contest.claims = previous.claims.filter((claim) => claim.teamId !== teamId);
   renderContest();
@@ -2482,7 +2522,7 @@ function renderCompetitions() {
   createContestForm.hidden = contestant;
   competitionsLead.textContent = contestant
     ? "Open the contest your team was added to."
-    : "Each contest uses one map. Teams of two students choose spawn points, then expand by solving adjacent problems.";
+    : "Each contest uses one map. A team of 1 to 5 students agrees on one spawn point, then expands by solving adjacent problems.";
   if (!contestant) {
     fillMapSelect(contestMapSelect, contestMapSelect.value);
     updateContestSpawnNote(contestMapSelect, contestMapNote);
@@ -2508,7 +2548,8 @@ function renderCompetitions() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.textContent = `${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people}`;
+    detail.append(`${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people} · `);
+    detail.append(phaseClockNode(contest));
     openButton.append(name, detail);
     item.append(openButton);
     contestList.append(item);
@@ -2531,6 +2572,7 @@ function renderContest() {
   renderContestTeams(contest, map);
   renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
   renderAdminBoard(contest, map);
+  paintPhaseClocks();
   ensureContestClock();
 }
 
@@ -2617,7 +2659,8 @@ function renderStudent() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.textContent = `${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · ${phaseLabel(contest)}`;
+    detail.append(`${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · `);
+    detail.append(phaseClockNode(contest));
     openButton.append(name, detail);
     item.append(openButton);
     studentContestList.append(item);
@@ -2655,12 +2698,37 @@ function renderStudentPlay() {
   studentBoard.hidden = !map;
 
   if (!map) {
+    spawnAgreement.hidden = true;
+    paintPhaseClocks();
     ensureContestClock();
     return;
   }
 
   paintPlayGrid(studentGrid, contest, map, { student: true, phase, frozen, team });
+  renderSpawnAgreement(contest, map, phase);
+  paintPhaseClocks();
   ensureContestClock();
+}
+
+function renderSpawnAgreement(contest, map, phase) {
+  const team = teamForUser(contest);
+  const open = Boolean(team && map && phase === "spawn" && !contest.spawnResolved);
+  spawnAgreement.hidden = !open;
+  if (!open) return;
+  spawnVoteList.replaceChildren();
+  for (const member of team.members) {
+    const vote = (contest.spawnVotes || []).find((item) => item.teamId === team.id && sameContestant(item.username, member));
+    const item = document.createElement("li");
+    const who = sameContestant(member, contestantId()) ? `${member} (you)` : member;
+    item.textContent = vote ? `${who} — ${cellPlace(map, vote.cell)}` : `${who} — waiting`;
+    spawnVoteList.append(item);
+  }
+  const agreed = (contest.spawnChoices || []).find((choice) => choice.teamId === team.id);
+  spawnAgreementNote.textContent = agreed
+    ? `Your team agrees on ${cellPlace(map, agreed.cell)}.`
+    : team.members.length === 1
+      ? "You are the only member, so the cell you click is the team choice."
+      : "The team choice is saved when every member has picked the same cell. Changing your pick clears the agreement until you match again.";
 }
 
 function writeStudentStatus(contest, phase, map, frozen) {
@@ -2682,13 +2750,10 @@ function writeStudentStatus(contest, phase, map, frozen) {
     return;
   }
   if (phase === "spawn" && !contest.spawnResolved) {
-    const choice = (contest.spawnChoices || []).find((item) => item.teamId === team?.id);
     const count = map.cells.filter((cell) => cell.kind === "spawnpoint").length;
-    studentSpawnNote.textContent = choice
-      ? `Your team chose ${cellPlace(map, choice.cell)}. Either student can change it until every team has chosen.`
-      : count > 0
-        ? "Click a spawn point. Either student on your team can choose, and the latest choice is kept."
-        : "This map has no spawn points.";
+    studentSpawnNote.textContent = count > 0
+      ? "Click the spawn point you want. It becomes your team's choice when every member has clicked that same cell."
+      : "This map has no spawn points.";
     return;
   }
   if (phase === "before") {
@@ -2763,15 +2828,18 @@ function onStudentGridClick(event) {
 async function chooseSpawn(contest, cell) {
   const team = teamForUser(contest);
   if (!team) return;
-  const previous = (contest.spawnChoices || []).slice();
-  contest.spawnChoices = previous.filter((choice) => choice.teamId !== team.id);
-  contest.spawnChoices.push({ teamId: team.id, cell });
+  const previousVotes = (contest.spawnVotes || []).slice();
+  const previousChoices = (contest.spawnChoices || []).slice();
+  contest.spawnVotes = previousVotes.filter((vote) => !(vote.teamId === team.id && sameContestant(vote.username, contestantId())));
+  contest.spawnVotes.push({ teamId: team.id, username: contestantId(), cell });
+  contest.spawnChoices = agreedSpawnChoices(contest);
   renderStudentPlay();
   try {
     const data = await apiCall("choose-spawn", { contestId: contest.id, cell });
     applyContestPlayState(contest, data);
   } catch (error) {
-    contest.spawnChoices = previous;
+    contest.spawnVotes = previousVotes;
+    contest.spawnChoices = previousChoices;
     alert(error.message);
   }
   renderStudentPlay();
@@ -2832,6 +2900,7 @@ function tickContestClock() {
     contestClock = null;
     return;
   }
+  paintPhaseClocks();
   if (onPlay || onAdmin) {
     const contest = currentContest();
     if (contest) syncContest(contest);
@@ -2925,7 +2994,7 @@ function phaseLabel(contest) {
   const schedule = contestSchedule(contest);
   if (!schedule) return "Schedule not set";
   if (phase === "before") return `Starts ${formatContestTime(schedule.startAt)}`;
-  if (phase === "spawn") return "Choosing spawn points";
+  if (phase === "spawn") return "Agreeing on spawn points";
   if (phase === "ready") return "Waiting for the contest";
   if (phase === "live") return "Contest in progress";
   return "Ended";
@@ -2942,11 +3011,61 @@ function phaseSentence(contest, phase, frozen = false) {
   if (phase === "spawn") {
     return contest.spawnResolved
       ? `Spawn points are assigned. The wait begins ${formatContestTime(schedule.spawnEnd)}.`
-      : `Choose a spawn point before ${formatContestTime(schedule.spawnEnd)}.`;
+      : "Agree on one spawn point with your team before this phase ends.";
   }
   if (phase === "ready") return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
   if (phase === "live") return `Solve a problem next to your territory before ${formatContestTime(schedule.endAt)}. Easy is 1, normal 2, hard 3, and insane 4.`;
   return `The contest ended ${formatContestTime(schedule.endAt)}. The board is frozen.`;
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  return `${minutes}:${pad(seconds)}`;
+}
+
+function phaseClock(contest, now = serverNow()) {
+  const phase = contestPhase(contest, now);
+  const schedule = contestSchedule(contest);
+  if (!schedule) return "Schedule not set";
+  if (phase === "ended") return "Ended";
+  const end = phase === "before" ? schedule.startAt
+    : phase === "spawn" ? schedule.spawnEnd
+    : phase === "ready" ? schedule.liveAt
+    : schedule.endAt;
+  const label = phase === "before" ? "Until spawning"
+    : phase === "spawn" ? "Spawn time left"
+    : phase === "ready" ? "Until the contest"
+    : "Contest time left";
+  return `${label} ${formatCountdown(end - now)}`;
+}
+
+function phaseClockNode(contest) {
+  const node = document.createElement("span");
+  node.dataset.phaseClock = contest.id;
+  node.textContent = phaseClock(contest);
+  return node;
+}
+
+function paintPhaseClocks() {
+  const boxes = [
+    [studentCountdown, studentPlayView && !studentPlayView.hidden ? currentContest() : null],
+    [contestCountdown, contestView && !contestView.hidden && isAdmin() ? currentContest() : null],
+  ];
+  for (const [node, contest] of boxes) {
+    if (!node) continue;
+    const text = contest ? phaseClock(contest) : "";
+    node.hidden = !text;
+    node.textContent = text;
+  }
+  for (const node of document.querySelectorAll("[data-phase-clock]")) {
+    const contest = contests.find((item) => item.id === node.dataset.phaseClock);
+    if (contest) node.textContent = phaseClock(contest);
+  }
 }
 
 function contestTimingLine(contest) {
@@ -3033,6 +3152,8 @@ function updateContestSpawnNote(select, note) {
 }
 
 function spawnSummary(contest, map, teamId) {
+  const team = (contest.teams || []).find((item) => item.id === teamId);
+  const votes = (contest.spawnVotes || []).filter((vote) => vote.teamId === teamId);
   const choice = !contest.spawnResolved
     ? (contest.spawnChoices || []).find((item) => item.teamId === teamId)
     : null;
@@ -3040,11 +3161,14 @@ function spawnSummary(contest, map, teamId) {
     ? (contest.spawns || []).find((item) => item.teamId === teamId)
     : null;
   const cell = spawn?.cell ?? choice?.cell;
-  if (!Number.isInteger(cell)) return contest.spawnResolved ? "No spawn point" : "Has not chosen";
+  if (!Number.isInteger(cell)) {
+    if (contest.spawnResolved) return "No spawn point";
+    return team ? `${votes.length} of ${team.members.length} chosen` : "Has not chosen";
+  }
   if (!map || cell < 0 || cell >= map.cells.length || map.cells[cell].kind !== "spawnpoint") {
     return "Spawn point no longer on the map";
   }
-  return `${contest.spawnResolved ? "Starts" : "Chose"} ${cellPlace(map, cell)}`;
+  return `${contest.spawnResolved ? "Starts" : "Agrees"} ${cellPlace(map, cell)}`;
 }
 
 function loadedContest(raw) {
@@ -3060,6 +3184,7 @@ function loadedContest(raw) {
     spawnMinutes: Number.isInteger(raw.spawnMinutes) ? raw.spawnMinutes : null,
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
     spawnChoices: normalizeTeamCells(raw.spawnChoices),
+    spawnVotes: normalizeSpawnVotes(raw.spawnVotes),
     spawns: normalizeTeamCells(raw.spawns),
     claims: normalizeClaims(raw.claims),
     spawnResolved: raw.spawnResolved === true,
@@ -3187,7 +3312,7 @@ function safePfp(value) {
 
 async function bootstrap() {
   if (!isSignedIn()) {
-    location.replace("login.html");
+    location.replace("/login.html");
     return;
   }
 
@@ -3216,7 +3341,8 @@ async function bootstrap() {
 
     applyAccount();
     updateHomeLead();
-    if (isContestant()) showStudent();
+    if (isContestant() && studentView) showStudent();
+    else openSplitPage();
   } catch (e) {
     console.error("[bootstrap]", e);
     if (String(e.message).includes("Unauthorized")) {
@@ -3224,12 +3350,30 @@ async function bootstrap() {
       return;
     }
     bootstrapped = false;
-    loadError.hidden = false;
-    loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
+    if (loadError) {
+      loadError.hidden = false;
+      loadError.textContent = "The game data could not be loaded, so changes will not be saved. Refresh the page to try again.";
+    }
     applyAccount();
     updateHomeLead();
-    if (isContestant()) showStudent();
+    if (isContestant() && studentView) showStudent();
+    else openSplitPage();
   }
+}
+
+function openSplitPage() {
+  if (mapsButton) return;
+  if (isContestant()) {
+    location.replace("/index.html");
+    return;
+  }
+  if (location.hash === "#tutorial" && tutorialView) {
+    showTutorial();
+    return;
+  }
+  if (mapsView) showMaps();
+  else if (problemsView) showProblems();
+  else if (settingsView) showSettings();
 }
 
 bootstrap();

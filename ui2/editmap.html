@@ -1,0 +1,113 @@
+<!-- /ui2/editmap.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Puzzle Territory · Maps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a href="/ui2/index.html" class="brand mobile-logo">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span> Menu
+      </button>
+    </header>
+
+    <aside class="sidebar">
+      <a href="/ui2/index.html" class="brand">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections">
+        <ul>
+          <li><a href="/ui2/editmap.html" class="nav-link active">Maps</a></li>
+          <li><a href="/ui2/editproblem.html" class="nav-link">Problems</a></li>
+          <li><a href="#" class="nav-link disabled" aria-disabled="true">Contests</a></li>
+          <li><a href="/ui2/editusers.html#tutorial" class="nav-link">Tutorial</a></li>
+          <li class="section-label">Credits</li>
+          <li><a href="/ui2/editusers.html" class="nav-link">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+
+    <main>
+      <section id="maps-view">
+        <p class="eyebrow">Problem map</p>
+        <h1>Problem map</h1>
+        <p class="lead">Each map is a grid. Choose a name, width, and height, then create it. Open a map to place problems and obstacles.</p>
+
+        <form id="create-map-form" class="create-map">
+          <label>Name <input id="map-name" class="contest-name" name="name" type="text" maxlength="60" required /></label>
+          <label>Width <input id="map-cols" name="cols" type="number" min="1" max="40" value="8" required /></label>
+          <label>Height <input id="map-rows" name="rows" type="number" min="1" max="40" value="8" required /></label>
+          <button type="submit">Create map</button>
+          <p id="map-form-error" class="form-error" hidden></p>
+        </form>
+
+        <h2>Created maps</h2>
+        <p id="map-empty">No maps yet.</p>
+        <ul id="map-list" class="map-list" hidden></ul>
+      </section>
+
+      <section id="editor-view" hidden>
+        <div class="editor-toolbar">
+          <button class="back-button" id="back-button" type="button">Back to maps</button>
+          <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
+        </div>
+        <p class="eyebrow">Problem map</p>
+        <h1 id="editor-title"></h1>
+        <p id="editor-size" class="field-note"></p>
+        <label class="map-name-field">Name <input id="map-name-input" type="text" maxlength="60" /></label>
+        <p class="lead">Click or drag to place and clear cells. On a phone, pinch the map to zoom and drag with one finger to slide it. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
+        <div class="kind-choices editor-tools">
+          <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
+          <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
+          <button id="kind-obstacle" type="button" aria-pressed="false">Obstacle</button>
+          <button id="kind-empty" type="button" aria-pressed="false">Clear</button>
+        </div>
+        <div id="problem-options" class="problem-options">
+          <div class="kind-choices place-types" id="place-type-choices">
+            <button type="button" data-place-type="math" aria-pressed="true">Math</button>
+            <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
+            <button type="button" data-place-type="science" aria-pressed="false">Science</button>
+            <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
+          </div>
+          <label id="problem-no-field">Problem no. <input id="problem-no" type="number" min="1" max="999" value="1" /></label>
+          <label class="next-number"><input id="next-number" type="checkbox" checked /> Use the next number for each cell</label>
+          <p id="problem-no-error" class="form-error" hidden></p>
+        </div>
+        <ul class="legend">
+          <li><span class="swatch problem math"></span>Math</li>
+          <li><span class="swatch problem oi"></span>OI</li>
+          <li><span class="swatch problem science"></span>Science</li>
+          <li><span class="swatch problem puzzle"></span>Puzzle</li>
+          <li><span class="swatch difficulty easy"></span>Easy</li>
+          <li><span class="swatch difficulty normal"></span>Normal</li>
+          <li><span class="swatch difficulty hard"></span>Hard</li>
+          <li><span class="swatch difficulty insane"></span>Insane</li>
+          <li><span class="swatch spawnpoint"></span>Spawn point</li>
+          <li><span class="swatch obstacle"></span>Obstacle</li>
+          <li><span class="swatch empty"></span>Empty</li>
+        </ul>
+        <div class="grid-scroll">
+          <div id="editor-grid" class="editor-grid"></div>
+        </div>
+        <button id="save-map-button" class="save-changes" type="button" disabled>Save changes</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>
