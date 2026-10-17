@@ -450,8 +450,8 @@ button[type="submit"],
 .preview-cell.obstacle,
 .grid-cell.obstacle,
 .swatch.obstacle {
-  background: #10141c;
-  box-shadow: inset 0 0 0 1px rgba(255, 93, 115, 0.45);
+  background: rgba(255, 93, 115, 0.28);
+  box-shadow: none;
 }
 
 .preview-cell.empty,
