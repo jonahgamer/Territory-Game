@@ -892,10 +892,14 @@ button[type="submit"],
   background: rgba(8, 18, 32, 0.72);
 }
 
+.problem-pages {
+  margin-top: 16px;
+}
+
 .open-problem {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 32px;
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -910,6 +914,7 @@ button[type="submit"],
 .problem-index {
   min-width: 4.5ch;
   font-size: 22px;
+  white-space: nowrap;
 }
 
 .contest-name-label {
