@@ -429,9 +429,32 @@ button[type="submit"],
 .preview-cell.problem,
 .grid-cell.problem,
 .swatch.problem {
-  background: #ff4d8d;
   color: #1a0610;
   box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.25);
+}
+
+.preview-cell.problem.math,
+.grid-cell.problem.math,
+.swatch.problem.math {
+  background: #3ee0ff;
+}
+
+.preview-cell.problem.oi,
+.grid-cell.problem.oi,
+.swatch.problem.oi {
+  background: #ff4d8d;
+}
+
+.preview-cell.problem.science,
+.grid-cell.problem.science,
+.swatch.problem.science {
+  background: #d6ff4a;
+}
+
+.preview-cell.problem.puzzle,
+.grid-cell.problem.puzzle,
+.swatch.problem.puzzle {
+  background: #c084fc;
 }
 
 .preview-cell.spawnpoint,
@@ -443,8 +466,8 @@ button[type="submit"],
 }
 
 .grid-cell.spawnpoint {
-  font-size: 11px;
-  letter-spacing: -0.03em;
+  font-size: 20px;
+  letter-spacing: 0;
 }
 
 .preview-cell.obstacle,
@@ -538,8 +561,8 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 11px;
-  letter-spacing: -0.03em;
+  font-size: 14px;
+  letter-spacing: -0.04em;
 }
 
 .grid-cell.student-cell:disabled {
