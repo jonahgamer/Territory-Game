@@ -816,16 +816,23 @@ async function handleSolve(req, res, db, user, body) {
   const mapCell = map.cells[cell];
   const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
   const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
-  if (logic) {
-    const judged = runProblemLogic(logic, problem.answer, body.answer);
-    if (judged.systemError || !judged.correct) {
-      return res.status(400).json({
-        success: false,
-        message: judged.comment || (judged.systemError ? 'The checker could not run.' : 'That answer is not right.'),
-        serverNow: now,
-      });
-    }
-  } else if (!problem || !answersMatch(problem.answer, body.answer)) {
+if (logic) {
+  const judged = runProblemLogic(logic, problem.answer, body.answer);
+  if (judged.systemError) {
+    return res.status(500).json({
+      success: false,
+      message: judged.comment || 'The checker could not run.',
+      serverNow: now,
+    });
+  }
+  if (!judged.correct) {
+    return res.status(400).json({
+      success: false,
+      message: judged.comment || 'That answer is not right.',
+      serverNow: now,
+    });
+  }
+} else if (!problem || !answersMatch(problem.answer, body.answer)) {
     const message = problem && String(problem.answer || '').trim()
       ? 'That answer is not right.'
       : 'This problem has no answer yet.';
