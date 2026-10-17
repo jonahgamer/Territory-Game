@@ -52,6 +52,7 @@ function containsHtml(source) {
   return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
+// 重新创建 script 节点以使其执行
 function liveScript(old) {
   const fresh = document.createElement("script");
   for (const attr of old.attributes) {
@@ -77,11 +78,21 @@ function setRichText(element, source) {
   element.classList.add("rich-html");
   const template = document.createElement("template");
   template.innerHTML = text;
+  
+  // 将 script 提取出来并从 template 中移除
   const scripts = [...template.content.querySelectorAll("script")];
   for (const script of scripts) script.remove();
+  
   element.append(template.content);
   renderMath(element);
-  for (const script of scripts) element.append(liveScript(script));
+  
+  // 重新插入 script 以执行
+  const runScripts = () => {
+    if (!element.isConnected) return;
+    for (const script of scripts) element.append(liveScript(script));
+  };
+  if (element.isConnected) runScripts();
+  else queueMicrotask(runScripts);
 }
 
 function showStatus(message) {
@@ -104,22 +115,33 @@ async function loadProblem() {
     form.hidden = true;
     return;
   }
+  
   const data = await api("bootstrap");
   const contest = (data.contests || []).find((item) => item.id === contestId);
   const map = contest && (data.maps || []).find((item) => item.id === contest.mapId);
   const mapCell = map?.cells?.[cellIndex];
+  
   if (!contest || !map || mapCell?.kind !== "problem") {
     showStatus("That problem is not available.");
     form.hidden = true;
     return;
   }
+  
   const problem = (data.problems || []).find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
   const difficulty = difficultyOf(problem);
   const points = DIFFICULTY_SCORE[difficulty];
   title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
-  if (problem?.prompt?.trim()) setRichText(prompt, problem.prompt);
-  else prompt.textContent = "This problem has no text yet.";
-  answer.focus();
+  
+  if (problem?.prompt?.trim()) {
+    setRichText(prompt, problem.prompt);
+  } else {
+    prompt.textContent = "This problem has no text yet.";
+  }
+  
+  // 脚本执行完后，将焦点放到输入框上（如果它还可见的话）
+  if (answer.offsetParent !== null) {
+    answer.focus();
+  }
 }
 
 form.addEventListener("submit", async (event) => {
