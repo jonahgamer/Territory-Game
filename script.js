@@ -30,6 +30,8 @@ const mapsButton = document.querySelector("#maps-button");
 const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
 const creditsLabel = document.querySelector("#credits-label");
+const tutorialButton = document.querySelector("#tutorial-button");
+const tutorialView = document.querySelector("#tutorial-view");
 const settingsButton = document.querySelector("#settings-button");
 const settingsView = document.querySelector("#settings-view");
 const accountForm = document.querySelector("#account-form");
@@ -336,6 +338,7 @@ document.addEventListener("keydown", (event) => {
 mapsButton.addEventListener("click", showMaps);
 problemsButton.addEventListener("click", showProblems);
 competitionsButton.addEventListener("click", showCompetitions);
+tutorialButton.addEventListener("click", showTutorial);
 settingsButton.addEventListener("click", showSettings);
 accountForm.addEventListener("submit", createAccount);
 accountList.addEventListener("click", onAccountListClick);
@@ -581,6 +584,20 @@ function showMaps() {
 
 let accounts = [];
 
+function showTutorial() {
+  if (!requireSession()) return;
+  if (isContestant()) { showCompetitions(); return; }
+  if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
+  stopPaint();
+  openMapId = null;
+  openContestId = null;
+  editingProblemNo = null;
+  editingProblemType = null;
+  hideViews();
+  tutorialView.hidden = false;
+  setCurrentSection(tutorialButton);
+}
+
 function showSettings() {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
@@ -794,6 +811,7 @@ function hideViews() {
   studentPlayView.hidden = true;
   editorView.hidden = true;
   settingsView.hidden = true;
+  tutorialView.hidden = true;
 }
 
 function setMenuOpen(open) {
@@ -809,6 +827,7 @@ function setCurrentSection(button) {
   mapsButton.removeAttribute("aria-current");
   problemsButton.removeAttribute("aria-current");
   competitionsButton.removeAttribute("aria-current");
+  tutorialButton.removeAttribute("aria-current");
   settingsButton.removeAttribute("aria-current");
   if (button) button.setAttribute("aria-current", "page");
 }
@@ -2180,6 +2199,7 @@ function applyAccount() {
   mapsButton.hidden = contestant;
   problemsButton.hidden = contestant;
   creditsLabel.hidden = contestant;
+  tutorialButton.hidden = contestant;
   settingsButton.hidden = contestant;
   accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
