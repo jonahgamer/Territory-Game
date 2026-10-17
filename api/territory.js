@@ -12,10 +12,15 @@
 //   POST /api/territory  { action: 'choose-spawn', contestId, cell }
 //   POST /api/territory  { action: 'solve', contestId, cell, answer }
 //   POST /api/territory  { action: 'contest-state', contestId }
+//   GET  /api/territory?action=list-accounts
+//   POST /api/territory  { action: 'create-account', username, displayName, password }
+//   POST /api/territory  { action: 'update-account', username, displayName?, password?, banned? }
+//   POST /api/territory  { action: 'delete-account', username }
 //
-// Map and problem writes, contest saves, and team changes are admin-only.
+// Map and problem writes, contest saves, team changes, and account changes are admin-only.
 // Choosing a spawn point and solving a problem are for a student on a team.
 
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 
@@ -791,6 +796,126 @@ async function handleSolve(req, res, db, user, body) {
   return res.status(200).json(contestPayload(updated, map, problems, user));
 }
 
+function cleanUsername(value) {
+  const username = String(value || '').trim();
+  if (!username || username.length > 64 || !/^[A-Za-z0-9._-]+$/.test(username)) return '';
+  return username;
+}
+
+function accountIsProtected(record) {
+  return record?.role === 'admin' || record?.role === 'root';
+}
+
+function publicAccount(record) {
+  return {
+    username: String(record.username || ''),
+    displayName: String(record.displayName || record.username || ''),
+    role: accountIsProtected(record) ? 'admin' : 'student',
+    banned: record.banned === true,
+  };
+}
+
+async function handleListAccounts(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const records = await db.collection('users').find({}, { projection: { password: 0 } }).toArray();
+  const accounts = records
+    .filter((record) => typeof record.username === 'string' && record.username)
+    .map(publicAccount)
+    .sort((a, b) => Number(b.role === 'admin') - Number(a.role === 'admin') || a.username.localeCompare(b.username));
+  return res.status(200).json({ success: true, accounts });
+}
+
+async function handleCreateAccount(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const username = cleanUsername(body.username);
+  const password = String(body.password || '');
+  const displayName = String(body.displayName || '').trim() || username;
+  if (!username) {
+    return res.status(400).json({ success: false, message: 'Username can use letters, numbers, dots, dashes, and underscores, up to 64 characters.' });
+  }
+  if (password.length < 4 || password.length > 256) {
+    return res.status(400).json({ success: false, message: 'Password must be 4 to 256 characters.' });
+  }
+  if (displayName.length > 60) {
+    return res.status(400).json({ success: false, message: 'Display name must be 60 characters or fewer.' });
+  }
+  const users = db.collection('users');
+  const existing = await users.findOne({ username });
+  if (existing) return res.status(409).json({ success: false, message: 'That username is already used.' });
+  const passwordHash = await bcrypt.hash(password, 10);
+  await users.insertOne({
+    username,
+    displayName,
+    password: passwordHash,
+    role: 'student',
+    banned: false,
+    pfp: '',
+    createdAt: new Date(),
+  });
+  const created = await users.findOne({ username }, { projection: { password: 0 } });
+  return res.status(200).json({ success: true, account: publicAccount(created) });
+}
+
+async function handleUpdateAccount(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const username = cleanUsername(body.username);
+  if (!username) return res.status(400).json({ success: false, message: 'Missing account' });
+  const users = db.collection('users');
+  const record = await users.findOne({ username });
+  if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
+  if (accountIsProtected(record)) {
+    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
+  }
+  const update = {};
+  if (body.displayName !== undefined) {
+    const displayName = String(body.displayName || '').trim() || username;
+    if (displayName.length > 60) {
+      return res.status(400).json({ success: false, message: 'Display name must be 60 characters or fewer.' });
+    }
+    update.displayName = displayName;
+  }
+  if (body.password !== undefined && String(body.password) !== '') {
+    const password = String(body.password);
+    if (password.length < 4 || password.length > 256) {
+      return res.status(400).json({ success: false, message: 'Password must be 4 to 256 characters.' });
+    }
+    update.password = await bcrypt.hash(password, 10);
+  }
+  if (body.banned !== undefined) {
+    if (typeof body.banned !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Missing account' });
+    }
+    if (username === user.username && body.banned) {
+      return res.status(400).json({ success: false, message: 'You cannot suspend your own account.' });
+    }
+    update.banned = body.banned;
+  }
+  if (Object.keys(update).length === 0) {
+    return res.status(400).json({ success: false, message: 'Nothing to change.' });
+  }
+  update.updatedAt = new Date();
+  await users.updateOne({ username }, { $set: update });
+  const updated = await users.findOne({ username }, { projection: { password: 0 } });
+  return res.status(200).json({ success: true, account: publicAccount(updated) });
+}
+
+async function handleDeleteAccount(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const username = cleanUsername(body.username);
+  if (!username) return res.status(400).json({ success: false, message: 'Missing account' });
+  if (username === user.username) {
+    return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
+  }
+  const users = db.collection('users');
+  const record = await users.findOne({ username });
+  if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
+  if (accountIsProtected(record)) {
+    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
+  }
+  await users.deleteOne({ username });
+  return res.status(200).json({ success: true });
+}
+
 async function handleContestState(req, res, db, user, body) {
   const contestId = String(body.contestId || req.query.contestId || '').trim();
   if (!contestId) return res.status(400).json({ success: false, message: 'Missing contest' });
@@ -852,6 +977,10 @@ export default async function handler(req, res) {
       case 'choose-spawn':  return await handleChooseSpawn(req, res, db, user, body);
       case 'solve':         return await handleSolve(req, res, db, user, body);
       case 'contest-state': return await handleContestState(req, res, db, user, body);
+      case 'list-accounts': return await handleListAccounts(req, res, db, user);
+      case 'create-account': return await handleCreateAccount(req, res, db, user, body);
+      case 'update-account': return await handleUpdateAccount(req, res, db, user, body);
+      case 'delete-account': return await handleDeleteAccount(req, res, db, user, body);
       default:
         return res.status(400).json({ success: false, message: 'Unknown action' });
     }

@@ -28,7 +28,16 @@ const mapsButton = document.querySelector("#maps-button");
 const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
 const creditsLabel = document.querySelector("#credits-label");
-const settingsLabel = document.querySelector("#settings-label");
+const settingsButton = document.querySelector("#settings-button");
+const settingsView = document.querySelector("#settings-view");
+const accountForm = document.querySelector("#account-form");
+const accountUsername = document.querySelector("#account-username");
+const accountDisplayName = document.querySelector("#account-display-name");
+const accountPassword = document.querySelector("#account-password");
+const accountFormError = document.querySelector("#account-form-error");
+const accountListError = document.querySelector("#account-list-error");
+const accountEmpty = document.querySelector("#account-empty");
+const accountList = document.querySelector("#account-list");
 const accountName = document.querySelector("#account-name");
 const accountRole = document.querySelector("#account-role");
 const accountPfp = document.querySelector("#account-pfp");
@@ -216,6 +225,9 @@ homeButton.addEventListener("click", showHome);
 mapsButton.addEventListener("click", showMaps);
 problemsButton.addEventListener("click", showProblems);
 competitionsButton.addEventListener("click", showCompetitions);
+settingsButton.addEventListener("click", showSettings);
+accountForm.addEventListener("submit", createAccount);
+accountList.addEventListener("click", onAccountListClick);
 accountButton.addEventListener("click", logOut);
 createContestForm.addEventListener("submit", createContest);
 contestList.addEventListener("click", onContestListClick);
@@ -350,6 +362,165 @@ function showMaps() {
   renderMaps();
 }
 
+let accounts = [];
+
+function showSettings() {
+  if (!requireSession()) return;
+  if (isContestant()) { showCompetitions(); return; }
+  stopPaint();
+  openMapId = null;
+  openContestId = null;
+  editingProblemNo = null;
+  editingProblemType = null;
+  hideViews();
+  settingsView.hidden = false;
+  setCurrentSection(settingsButton);
+  loadAccounts();
+}
+
+async function loadAccounts() {
+  accountFormError.hidden = true;
+  accountListError.hidden = true;
+  try {
+    const data = await apiCall("list-accounts");
+    accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    renderAccounts();
+  } catch (error) {
+    accountListError.hidden = false;
+    accountListError.textContent = error.message;
+  }
+}
+
+async function createAccount(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const username = accountUsername.value.trim();
+  const password = accountPassword.value;
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(username)) {
+    accountFormError.hidden = false;
+    accountFormError.textContent = "Username can use letters, numbers, dots, dashes, and underscores.";
+    return;
+  }
+  if (password.length < 4) {
+    accountFormError.hidden = false;
+    accountFormError.textContent = "Password must be at least 4 characters.";
+    return;
+  }
+  accountFormError.hidden = true;
+  try {
+    await apiCall("create-account", {
+      username,
+      displayName: accountDisplayName.value.trim(),
+      password,
+    });
+    accountUsername.value = "";
+    accountDisplayName.value = "";
+    accountPassword.value = "";
+    await loadAccounts();
+  } catch (error) {
+    accountFormError.hidden = false;
+    accountFormError.textContent = error.message;
+  }
+}
+
+function renderAccounts() {
+  accountList.replaceChildren();
+  accountEmpty.hidden = accounts.length > 0;
+  accountList.hidden = accounts.length === 0;
+  for (const account of accounts) {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    const detail = document.createElement("span");
+    name.className = "contest-name-label";
+    name.textContent = account.username;
+    detail.className = "problem-snippet";
+    detail.textContent = account.role === "admin"
+      ? "Admin"
+      : account.banned ? "Student · suspended" : "Student";
+    item.append(name, detail);
+    if (account.role !== "admin") {
+      const display = document.createElement("input");
+      display.className = "contest-name";
+      display.value = account.displayName;
+      display.maxLength = 60;
+      display.setAttribute("aria-label", `Display name for ${account.username}`);
+      display.addEventListener("change", () => updateAccount(account.username, { displayName: display.value }));
+
+      const password = document.createElement("input");
+      password.type = "password";
+      password.className = "contest-name";
+      password.placeholder = "New password";
+      password.maxLength = 256;
+      password.autocomplete = "new-password";
+      password.setAttribute("aria-label", `New password for ${account.username}`);
+
+      const setPassword = document.createElement("button");
+      setPassword.type = "button";
+      setPassword.className = "remove-contestant";
+      setPassword.dataset.accountPassword = account.username;
+      setPassword.textContent = "Set password";
+
+      const suspend = document.createElement("button");
+      suspend.type = "button";
+      suspend.className = "remove-contestant";
+      suspend.dataset.accountSuspend = account.username;
+      suspend.dataset.banned = String(account.banned);
+      suspend.textContent = account.banned ? "Restore" : "Suspend";
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove-contestant";
+      remove.dataset.accountDelete = account.username;
+      remove.textContent = "Delete";
+      remove.setAttribute("aria-label", `Delete ${account.username}`);
+      item.append(display, password, setPassword, suspend, remove);
+    }
+    accountList.append(item);
+  }
+}
+
+async function onAccountListClick(event) {
+  const passwordButton = event.target.closest("[data-account-password]");
+  if (passwordButton) {
+    const field = passwordButton.parentElement.querySelector("input[type='password']");
+    await updateAccount(passwordButton.dataset.accountPassword, { password: field.value });
+    return;
+  }
+  const suspendButton = event.target.closest("[data-account-suspend]");
+  if (suspendButton) {
+    await updateAccount(suspendButton.dataset.accountSuspend, { banned: suspendButton.dataset.banned !== "true" });
+    return;
+  }
+  const deleteButton = event.target.closest("[data-account-delete]");
+  if (!deleteButton) return;
+  const username = deleteButton.dataset.accountDelete;
+  if (!window.confirm(`Delete the student account ${username}?`)) return;
+  accountListError.hidden = true;
+  try {
+    await apiCall("delete-account", { username });
+    await loadAccounts();
+  } catch (error) {
+    accountListError.hidden = false;
+    accountListError.textContent = error.message;
+  }
+}
+
+async function updateAccount(username, change) {
+  if (typeof change.password === "string" && change.password.length < 4) {
+    accountListError.hidden = false;
+    accountListError.textContent = "Password must be at least 4 characters.";
+    return;
+  }
+  accountListError.hidden = true;
+  try {
+    await apiCall("update-account", { username, ...change });
+    await loadAccounts();
+  } catch (error) {
+    accountListError.hidden = false;
+    accountListError.textContent = error.message;
+  }
+}
+
 function showProblems() {
   if (!requireSession()) return;
   if (isContestant()) { showCompetitions(); return; }
@@ -393,12 +564,14 @@ function hideViews() {
   studentView.hidden = true;
   studentPlayView.hidden = true;
   editorView.hidden = true;
+  settingsView.hidden = true;
 }
 
 function setCurrentSection(button) {
   mapsButton.removeAttribute("aria-current");
   problemsButton.removeAttribute("aria-current");
   competitionsButton.removeAttribute("aria-current");
+  settingsButton.removeAttribute("aria-current");
   if (button) button.setAttribute("aria-current", "page");
 }
 
@@ -981,6 +1154,7 @@ function createProblemEntity(problem) {
   index.textContent = `${tag} · ${DIFFICULTY_NAME[problemDifficulty(problem)]}`;
   snippet.className = "problem-snippet";
   snippet.textContent = problemSnippet(problem);
+  renderMath(snippet);
   openButton.append(index, snippet);
 
   deleteButton.type = "button";
@@ -992,6 +1166,27 @@ function createProblemEntity(problem) {
 
   item.append(openButton, deleteButton);
   return item;
+}
+
+const MATH_DELIMITERS = [
+  { left: "$$", right: "$$", display: true },
+  { left: "\\[", right: "\\]", display: true },
+  { left: "$", right: "$", display: false },
+  { left: "\\(", right: "\\)", display: false },
+];
+
+function renderMath(element) {
+  if (!element || typeof renderMathInElement !== "function") return;
+  renderMathInElement(element, {
+    delimiters: MATH_DELIMITERS,
+    throwOnError: false,
+    strict: "ignore",
+  });
+}
+
+function setRichText(element, source) {
+  element.innerHTML = source;
+  renderMath(element);
 }
 
 function problemSnippet(problem) {
@@ -1066,7 +1261,7 @@ function renderProblemPreview() {
     title.textContent = "Prompt — preview";
     const content = document.createElement("div");
     content.className = "problem-preview-content";
-    content.innerHTML = promptHtml;
+    setRichText(content, promptHtml);
     box.append(title, content);
   }
 
@@ -1076,7 +1271,7 @@ function renderProblemPreview() {
     title.textContent = "Answer — preview";
     const content = document.createElement("div");
     content.className = "problem-preview-content";
-    content.innerHTML = answerHtml;
+    setRichText(content, answerHtml);
     box.append(title, content);
   }
 
@@ -1419,7 +1614,7 @@ function applyAccount() {
   mapsButton.hidden = contestant;
   problemsButton.hidden = contestant;
   creditsLabel.hidden = contestant;
-  settingsLabel.hidden = contestant;
+  settingsButton.hidden = contestant;
   competitionsButton.textContent = contestant ? "Contests" : "Competition";
   accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
@@ -1907,9 +2102,8 @@ function showStudentProblem(contest, map, phase, frozen) {
   const problem = findProblem(cell.problemNo, cell.type);
   studentProblem.hidden = false;
   studentProblemTag.textContent = `${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[cellDifficulty(cell)]} · ${DIFFICULTY_SCORE[cellDifficulty(cell)]} point${DIFFICULTY_SCORE[cellDifficulty(cell)] === 1 ? "" : "s"}`;
-  studentProblemPrompt.textContent = problem && problem.prompt.trim()
-    ? problem.prompt
-    : "This problem has no text yet.";
+  if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt);
+  else studentProblemPrompt.textContent = "This problem has no text yet.";
   studentAnswerForm.hidden = false;
   studentAnswerError.hidden = true;
 }

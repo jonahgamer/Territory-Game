@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
   </head>
   <body>
     <div class="app">
@@ -19,7 +20,7 @@
             <li><button id="problems-button" type="button">Problems</button></li>
             <li><button id="competitions-button" type="button">Competition</button></li>
             <li class="section-label" id="credits-label">Credits</li>
-            <li class="section-label" id="settings-label">Settings</li>
+            <li><button id="settings-button" type="button">Settings</button></li>
           </ul>
         </nav>
         <div class="account">
@@ -31,6 +32,32 @@
       </aside>
 
       <main>
+        <section id="settings-view" hidden>
+          <p class="eyebrow">Settings</p>
+          <h1>Accounts</h1>
+          <p class="lead">Add a student here, then use that username on a team. A suspended student cannot sign in.</p>
+          <form id="account-form" class="create-map">
+            <label>
+              Username
+              <input id="account-username" class="contest-name" type="text" maxlength="64" required />
+            </label>
+            <label>
+              Display name
+              <input id="account-display-name" class="contest-name" type="text" maxlength="60" />
+            </label>
+            <label>
+              Password
+              <input id="account-password" class="contest-name" type="password" maxlength="256" autocomplete="new-password" required />
+            </label>
+            <button type="submit">Add student</button>
+            <p id="account-form-error" class="form-error" hidden></p>
+          </form>
+          <h2>Accounts</h2>
+          <p id="account-list-error" class="form-error" hidden></p>
+          <p id="account-empty">No accounts yet.</p>
+          <ul id="account-list" class="problem-list" hidden></ul>
+        </section>
+
         <section id="home-view">
           <p class="eyebrow">Home</p>
           <h1>Territory Game</h1>
@@ -120,6 +147,7 @@
               Answer
               <textarea id="problem-answer" rows="2"></textarea>
             </label>
+            <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. The answer is the exact text a student types.</p>
           </form>
         </section>
 
@@ -263,7 +291,7 @@
             </div>
             <article id="student-problem" class="student-problem" hidden>
               <h2 id="student-problem-tag"></h2>
-              <p id="student-problem-prompt"></p>
+              <div id="student-problem-prompt"></div>
               <form id="student-answer-form" hidden>
                 <label>
                   Answer
@@ -331,6 +359,8 @@
         </section>
       </main>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
     <script src="script.js"></script>
   </body>
 </html>

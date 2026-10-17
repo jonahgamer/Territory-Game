@@ -747,11 +747,12 @@ button[type="submit"],
   font-size: 28px;
 }
 
-.student-problem p {
+#student-problem-prompt {
   margin: 0;
   font-size: 20px;
   line-height: 1.5;
   white-space: pre-wrap;
+  overflow-x: auto;
 }
 
 .kind-choices {
@@ -953,6 +954,39 @@ button[type="submit"],
 
 .problem-editor textarea {
   resize: vertical;
+}
+
+.problem-preview-box {
+  display: grid;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.problem-preview-title {
+  margin-bottom: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.problem-preview-content {
+  font-size: 18px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.katex {
+  color: inherit;
+  font-size: 1.05em;
+}
+
+.problem-snippet .katex {
+  font-size: 1em;
 }
 
 .field-note {

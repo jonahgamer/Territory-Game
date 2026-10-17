@@ -54,4 +54,20 @@ A student on a team, only while the contest is running, the cell is an unsolved 
 
 Returns the team's view of teams, spawn choices, assigned spawns, solved cells, and the leaderboard. An admin can read any contest. If spawn time has ended, this assigns any spawn points that are still open.
 
+### `GET ?action=list-accounts`
+
+Admin only. Returns `{ username, displayName, role, banned }` for each account. Passwords are not included. `role` is `admin` or `student`.
+
+### `POST { "action": "create-account", "username": "...", "displayName": "...", "password": "..." }`
+
+Admin only. Creates a student. The username can use letters, numbers, dots, dashes, and underscores. The password must be 4 to 256 characters.
+
+### `POST { "action": "update-account", "username": "...", "displayName": "...", "password": "...", "banned": false }`
+
+Admin only. Changes a student's display name, password, or suspended state. Any of those fields can be left out. Admin accounts cannot be changed here.
+
+### `POST { "action": "delete-account", "username": "..." }`
+
+Admin only. Deletes a student account. An admin cannot delete their own account or another admin.
+
 If the page cannot load this data, it does not save. Refresh and try again.
