@@ -105,6 +105,13 @@
               <button type="button" data-problem-type="science">Science</button>
               <button type="button" data-problem-type="puzzle">Puzzle</button>
             </div>
+            <div class="kind-choices" id="problem-difficulty-choices">
+              <button type="button" data-problem-difficulty="easy">Easy</button>
+              <button type="button" data-problem-difficulty="normal">Normal</button>
+              <button type="button" data-problem-difficulty="hard">Hard</button>
+              <button type="button" data-problem-difficulty="insane">Insane</button>
+            </div>
+            <p class="field-note">Students see this difficulty as the cell color. On this map, difficulty is the colored border.</p>
             <label>
               Problem
               <textarea id="problem-prompt" rows="3"></textarea>
@@ -195,18 +202,38 @@
             </fieldset>
             <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
-          <p id="contest-summary" class="lead" hidden></p>
-          <h2>Contestants</h2>
-          <p id="contestant-empty">No contestants yet.</p>
+          <h2>Teams</h2>
+          <p class="field-note">Each team is two students on two devices. They share one spawn point, one territory, and one score. Use at least as many spawn points as teams.</p>
+          <form id="team-form" class="create-map">
+            <label>
+              Team name
+              <input id="team-name" class="contest-name" type="text" maxlength="60" required />
+            </label>
+            <label>
+              Student 1
+              <input id="team-member-a" class="contest-name" type="text" maxlength="80" required />
+            </label>
+            <label>
+              Student 2
+              <input id="team-member-b" class="contest-name" type="text" maxlength="80" required />
+            </label>
+            <button type="submit">Add team</button>
+            <p id="team-form-error" class="form-error" hidden></p>
+          </form>
+          <p id="contestant-empty">No teams yet.</p>
           <ul id="contestant-list" class="problem-list" hidden></ul>
-          <button id="join-contest" class="join-contest" type="button" hidden>Join contest</button>
-          <p id="joined-note" class="field-note" hidden></p>
+          <h2>Leaderboard</h2>
+          <ol id="contest-leaderboard" class="leaderboard" hidden></ol>
+          <p id="contest-leaderboard-empty" class="field-note">Scores appear after the contest begins.</p>
+          <div class="grid-scroll">
+            <div id="contest-grid" class="editor-grid"></div>
+          </div>
         </section>
 
         <section id="student-view" hidden>
           <p class="eyebrow">Student</p>
           <h1>Contests</h1>
-          <p class="lead">Join a contest, then open it. The map shows each problem. The answer stays hidden.</p>
+          <p class="lead">Open your team's contest. Both students share the spawn point, the territory, and the score.</p>
           <p id="student-error" class="form-error" hidden></p>
           <p id="student-empty">No contests yet.</p>
           <ul id="student-contest-list" class="problem-list" hidden></ul>
@@ -220,15 +247,31 @@
           <h1 id="student-play-title"></h1>
           <p id="student-play-meta" class="lead"></p>
           <p id="student-spawn-note" class="field-note" hidden></p>
-          <button id="student-join" class="join-contest" type="button" hidden>Join contest</button>
           <p id="student-joined" class="field-note" hidden></p>
+          <h2 id="student-leaderboard-heading" hidden>Leaderboard</h2>
+          <ol id="student-leaderboard" class="leaderboard" hidden></ol>
           <div id="student-board" class="student-board" hidden>
+            <ul class="legend">
+              <li><span class="swatch fill easy"></span>Easy</li>
+              <li><span class="swatch fill normal"></span>Normal</li>
+              <li><span class="swatch fill hard"></span>Hard</li>
+              <li><span class="swatch fill insane"></span>Insane</li>
+              <li><span class="swatch owned-sample"></span>Territory</li>
+            </ul>
             <div class="grid-scroll">
               <div id="student-grid" class="editor-grid"></div>
             </div>
             <article id="student-problem" class="student-problem" hidden>
               <h2 id="student-problem-tag"></h2>
               <p id="student-problem-prompt"></p>
+              <form id="student-answer-form" hidden>
+                <label>
+                  Answer
+                  <input id="student-answer" type="text" maxlength="5000" />
+                </label>
+                <button type="submit">Submit</button>
+                <p id="student-answer-error" class="form-error" hidden></p>
+              </form>
             </article>
           </div>
         </section>
@@ -245,7 +288,7 @@
             Name
             <input id="map-name-input" type="text" maxlength="60" />
           </label>
-          <p class="lead">Click or drag to place and clear cells. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. Spawn points are where contestants can start.</p>
+          <p class="lead">Click or drag to place and clear cells. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
           <div class="kind-choices">
             <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
             <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
@@ -274,6 +317,10 @@
             <li><span class="swatch problem oi"></span>OI</li>
             <li><span class="swatch problem science"></span>Science</li>
             <li><span class="swatch problem puzzle"></span>Puzzle</li>
+            <li><span class="swatch difficulty easy"></span>Easy border</li>
+            <li><span class="swatch difficulty normal"></span>Normal border</li>
+            <li><span class="swatch difficulty hard"></span>Hard border</li>
+            <li><span class="swatch difficulty insane"></span>Insane border</li>
             <li><span class="swatch spawnpoint"></span>Spawn point</li>
             <li><span class="swatch obstacle"></span>Obstacle</li>
             <li><span class="swatch empty"></span>Empty</li>

@@ -7,12 +7,14 @@
 //   POST /api/territory  { action: 'save-maps',     maps }
 //   POST /api/territory  { action: 'save-problems', problems }
 //   POST /api/territory  { action: 'save-contests', contests }
-//   POST /api/territory  { action: 'join-contest', contestId }
-//   POST /api/territory  { action: 'remove-contestant', contestId, contestantId }
+//   POST /api/territory  { action: 'save-team', contestId, name, memberA, memberB }
+//   POST /api/territory  { action: 'remove-team', contestId, teamId }
 //   POST /api/territory  { action: 'choose-spawn', contestId, cell }
+//   POST /api/territory  { action: 'solve', contestId, cell, answer }
+//   POST /api/territory  { action: 'contest-state', contestId }
 //
-// Map and problem writes, contest saves, and removing a contestant are admin-only.
-// Joining and choosing a spawn point are for a signed-in contestant.
+// Map and problem writes, contest saves, and team changes are admin-only.
+// Choosing a spawn point and solving a problem are for a student on a team.
 
 import jwt from 'jsonwebtoken';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
@@ -51,6 +53,8 @@ const MAX_CONTEST_MINUTES = 10080;
 const MIN_START_AT = Date.parse('2000-01-01T00:00:00Z');
 const MAX_START_AT = Date.parse('2100-01-01T00:00:00Z');
 const PROBLEM_TYPES = ['math', 'oi', 'science', 'puzzle'];
+const DIFFICULTIES = ['easy', 'normal', 'hard', 'insane'];
+const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
 
 // ═══════════════════════════════════════════════════════════════════
 // Body reader
@@ -115,21 +119,215 @@ function normalizeProblem(v) {
   if (!PROBLEM_TYPES.includes(v.type)) return null;
   if (typeof v.prompt !== 'string' || v.prompt.length > MAX_PROBLEM_TEXT) return null;
   if (typeof v.answer !== 'string' || v.answer.length > MAX_PROBLEM_TEXT) return null;
-  return { index: v.index, type: v.type, prompt: v.prompt, answer: v.answer };
+  return {
+    index: v.index,
+    type: v.type,
+    prompt: v.prompt,
+    answer: v.answer,
+    difficulty: DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal',
+  };
 }
 
-function cleanSpawns(value) {
+function cleanId(value) {
+  if (typeof value !== 'string') return '';
+  const id = value.trim();
+  if (!id || id.length > MAX_CONTESTANT_ID_LEN) return '';
+  return id;
+}
+
+function cleanTeams(value) {
   if (!Array.isArray(value)) return [];
-  const spawns = [];
-  for (const spawn of value) {
-    if (!spawn || typeof spawn.contestantId !== 'string') continue;
-    const contestantId = spawn.contestantId.trim();
-    if (!contestantId || contestantId.length > MAX_CONTESTANT_ID_LEN) continue;
-    if (!Number.isInteger(spawn.cell) || spawn.cell < 0) continue;
-    if (spawns.some((item) => item.contestantId === contestantId)) continue;
-    spawns.push({ contestantId, cell: spawn.cell });
+  const teams = [];
+  const seen = new Set();
+  for (const team of value) {
+    if (!team || typeof team !== 'object') continue;
+    const id = cleanId(team.id);
+    const name = typeof team.name === 'string' ? team.name.trim() : '';
+    const members = Array.isArray(team.members) ? team.members.map(cleanId).filter(Boolean) : [];
+    if (!id || !name || name.length > MAX_NAME_LEN || members.length !== 2) continue;
+    if (members[0].toLowerCase() === members[1].toLowerCase()) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    teams.push({ id, name, members: [members[0], members[1]] });
   }
-  return spawns;
+  return teams;
+}
+
+function cleanTeamCells(value) {
+  if (!Array.isArray(value)) return [];
+  const items = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const teamId = cleanId(item.teamId);
+    if (!teamId || !Number.isInteger(item.cell) || item.cell < 0) continue;
+    const existing = items.findIndex((entry) => entry.teamId === teamId);
+    if (existing >= 0) items.splice(existing, 1);
+    items.push({ teamId, cell: item.cell });
+  }
+  return items;
+}
+
+function cleanClaims(value) {
+  if (!Array.isArray(value)) return [];
+  const claims = [];
+  const seen = new Set();
+  for (const claim of value) {
+    if (!claim || typeof claim !== 'object') continue;
+    const teamId = cleanId(claim.teamId);
+    const solvedBy = cleanId(claim.solvedBy);
+    if (!teamId || !Number.isInteger(claim.cell) || claim.cell < 0 || seen.has(claim.cell)) continue;
+    seen.add(claim.cell);
+    claims.push({
+      cell: claim.cell,
+      teamId,
+      solvedBy,
+      solvedAt: Number.isFinite(claim.solvedAt) ? claim.solvedAt : 0,
+    });
+  }
+  return claims;
+}
+
+function teamForUser(contest, username) {
+  const name = cleanId(username);
+  if (!name) return null;
+  return cleanTeams(contest?.teams).find((team) => team.members.includes(name)) || null;
+}
+
+function spawnCellIndexes(map) {
+  if (!map || !Array.isArray(map.cells)) return [];
+  return map.cells.map((cell, index) => (cell?.kind === 'spawnpoint' ? index : -1)).filter((index) => index >= 0);
+}
+
+function problemCellIndexes(map) {
+  if (!map || !Array.isArray(map.cells)) return [];
+  return map.cells.map((cell, index) => (cell?.kind === 'problem' ? index : -1)).filter((index) => index >= 0);
+}
+
+export function shuffleItems(list) {
+  const copy = list.slice();
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    const held = copy[index];
+    copy[index] = copy[swap];
+    copy[swap] = held;
+  }
+  return copy;
+}
+
+export function resolveSpawns(spawnCells, teams, choices) {
+  const roster = cleanTeams(teams);
+  const validCells = new Set(spawnCells.filter((cell) => Number.isInteger(cell) && cell >= 0));
+  const byCell = new Map();
+  for (const choice of cleanTeamCells(choices)) {
+    if (!roster.some((team) => team.id === choice.teamId) || !validCells.has(choice.cell)) continue;
+    for (const ids of byCell.values()) {
+      const index = ids.indexOf(choice.teamId);
+      if (index >= 0) ids.splice(index, 1);
+    }
+    const list = byCell.get(choice.cell) || [];
+    list.push(choice.teamId);
+    byCell.set(choice.cell, list);
+  }
+
+  const assigned = new Map();
+  const displaced = [];
+  for (const [cell, ids] of byCell) {
+    if (ids.length === 0) continue;
+    const order = shuffleItems(ids);
+    assigned.set(order[0], cell);
+    displaced.push(...order.slice(1));
+  }
+
+  const used = new Set(assigned.values());
+  const free = shuffleItems([...validCells].filter((cell) => !used.has(cell)));
+  const waiting = shuffleItems([
+    ...displaced,
+    ...roster.map((team) => team.id).filter((id) => !assigned.has(id) && !displaced.includes(id)),
+  ]);
+  for (const teamId of waiting) {
+    const cell = free.shift();
+    if (cell === undefined) break;
+    assigned.set(teamId, cell);
+  }
+  return [...assigned].map(([teamId, cell]) => ({ teamId, cell }));
+}
+
+function territoryCells(contest, teamId) {
+  const owned = new Set();
+  for (const spawn of cleanTeamCells(contest?.spawns)) {
+    if (spawn.teamId === teamId) owned.add(spawn.cell);
+  }
+  for (const claim of cleanClaims(contest?.claims)) {
+    if (claim.teamId === teamId) owned.add(claim.cell);
+  }
+  return owned;
+}
+
+function adjacentToTeam(map, contest, teamId, cell) {
+  const cols = map.cols;
+  const row = Math.floor(cell / cols);
+  const column = cell % cols;
+  const owned = territoryCells(contest, teamId);
+  const neighbors = [];
+  if (column > 0) neighbors.push(cell - 1);
+  if (column + 1 < cols) neighbors.push(cell + 1);
+  if (row > 0) neighbors.push(cell - cols);
+  if (row + 1 < map.rows) neighbors.push(cell + cols);
+  return neighbors.some((index) => owned.has(index));
+}
+
+function allProblemsClaimed(map, claims) {
+  const problems = problemCellIndexes(map);
+  if (problems.length === 0) return false;
+  const claimed = new Set(cleanClaims(claims).map((claim) => claim.cell));
+  return problems.every((index) => claimed.has(index));
+}
+
+function problemDifficulty(problem) {
+  return DIFFICULTIES.includes(problem?.difficulty) ? problem.difficulty : 'normal';
+}
+
+export function answersMatch(expected, given) {
+  if (typeof expected !== 'string' || !expected.trim()) return false;
+  return expected.trim().toLowerCase() === String(given ?? '').trim().toLowerCase();
+}
+
+function buildLeaderboard(contest, map, problems) {
+  const claims = cleanClaims(contest?.claims);
+  return cleanTeams(contest?.teams).map((team) => {
+    let score = 0;
+    let solved = 0;
+    for (const claim of claims) {
+      if (claim.teamId !== team.id) continue;
+      const cell = map?.cells?.[claim.cell];
+      if (!cell || cell.kind !== 'problem') continue;
+      const problem = (problems || []).find((item) => item.index === cell.problemNo && item.type === cell.type);
+      score += DIFFICULTY_SCORE[problemDifficulty(problem)];
+      solved += 1;
+    }
+    return { teamId: team.id, name: team.name, score, solved };
+  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+
+function contestPayload(contest, map, problems, user) {
+  const admin = isAdmin(user);
+  const team = teamForUser(contest, user?.username);
+  const resolved = contest?.spawnResolved === true;
+  const choices = cleanTeamCells(contest?.spawnChoices);
+  return {
+    success: true,
+    serverNow: Date.now(),
+    contest: {
+      id: contest.id,
+      teams: cleanTeams(contest?.teams),
+      spawnResolved: resolved,
+      spawnChoices: admin || resolved ? choices : choices.filter((choice) => team && choice.teamId === team.id),
+      spawns: admin || resolved ? cleanTeamCells(contest?.spawns) : [],
+      claims: cleanClaims(contest?.claims),
+      leaderboard: buildLeaderboard(contest, map, problems || []),
+      frozen: Boolean(map) && (Date.now() >= (contestWindow(contest)?.endAt ?? Infinity) || allProblemsClaimed(map, contest?.claims)),
+    },
+  };
 }
 
 function contestWindow(contest) {
@@ -219,32 +417,50 @@ async function replaceCollection(db, name, docs) {
 }
 
 async function handleBootstrap(req, res, db, user) {
-  const [maps, problems, contests] = await Promise.all([
+  const [maps, problems, storedContests] = await Promise.all([
     db.collection('maps').find({}).toArray(),
     db.collection('problems').find({}).toArray(),
     db.collection('contests').find({}).toArray(),
   ]);
+  const now = Date.now();
+  const contests = [];
+  for (const contest of storedContests) {
+    const map = maps.find((item) => item.id === contest.mapId) || null;
+    contests.push(await maybeResolveSpawns(db, contest, map, now));
+  }
 
   const admin = isAdmin(user);
   const cleanMaps = maps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
   const cleanProblems = problems.map(p => {
-    const problem = { index: p.index, type: p.type, prompt: p.prompt };
+    const problem = {
+      index: p.index,
+      type: p.type,
+      prompt: p.prompt,
+      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+    };
     if (admin) problem.answer = p.answer;
     return problem;
   });
-  const cleanContests = contests.map(c => ({
-    id: c.id,
-    name: c.name,
-    mapId: c.mapId,
-    contestantIds: Array.isArray(c.contestantIds) ? c.contestantIds : [],
-    startAt: Number.isInteger(c.startAt) ? c.startAt : null,
-    durationMinutes: Number.isInteger(c.durationMinutes) ? c.durationMinutes : null,
-    spawnMinutes: Number.isInteger(c.spawnMinutes) ? c.spawnMinutes : null,
-    readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
-    spawns: cleanSpawns(c.spawns).filter((spawn) => (
-      Array.isArray(c.contestantIds) && c.contestantIds.includes(spawn.contestantId)
-    )),
-  }));
+  const cleanContests = contests.map(c => {
+    const map = cleanMaps.find((item) => item.id === c.mapId) || null;
+    const play = contestPayload(c, map, problems, user).contest;
+    const teams = play.teams;
+    return {
+      id: c.id,
+      name: c.name,
+      mapId: c.mapId,
+      contestantIds: teams.flatMap((team) => team.members),
+      startAt: Number.isInteger(c.startAt) ? c.startAt : null,
+      durationMinutes: Number.isInteger(c.durationMinutes) ? c.durationMinutes : null,
+      spawnMinutes: Number.isInteger(c.spawnMinutes) ? c.spawnMinutes : null,
+      readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
+      teams,
+      spawnResolved: play.spawnResolved,
+      spawnChoices: play.spawnChoices,
+      spawns: play.spawns,
+      claims: play.claims,
+    };
+  });
 
   return res.status(200).json({
     success: true,
@@ -292,13 +508,13 @@ async function handleSaveContests(req, res, db, user, body) {
       await col.deleteMany({ id: { $nin: keepIds } }, { session });
       for (const contest of parsed.items) {
         const stored = previous.get(contest.id);
-        const contestantIds = stored && Array.isArray(stored.contestantIds)
-          ? stored.contestantIds
-          : contest.contestantIds;
         const sameMap = stored && stored.mapId === contest.mapId;
-        const spawns = sameMap
-          ? cleanSpawns(stored.spawns).filter((spawn) => contestantIds.includes(spawn.contestantId))
-          : [];
+        const teams = stored ? cleanTeams(stored.teams) : [];
+        const contestantIds = teams.flatMap((team) => team.members);
+        const spawnChoices = sameMap ? cleanTeamCells(stored.spawnChoices) : [];
+        const spawns = sameMap ? cleanTeamCells(stored.spawns) : [];
+        const claims = sameMap ? cleanClaims(stored.claims) : [];
+        const spawnResolved = sameMap ? stored.spawnResolved === true : false;
         await col.updateOne(
           { id: contest.id },
           {
@@ -306,11 +522,15 @@ async function handleSaveContests(req, res, db, user, body) {
               name: contest.name,
               mapId: contest.mapId,
               contestantIds,
+              teams,
               startAt: contest.startAt,
               durationMinutes: contest.durationMinutes,
               spawnMinutes: contest.spawnMinutes,
               readyMinutes: contest.readyMinutes,
+              spawnChoices,
               spawns,
+              claims,
+              spawnResolved,
               updatedAt: new Date(),
             },
           },
@@ -367,19 +587,113 @@ async function handleRemoveContestant(req, res, db, user, body) {
   return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
 }
 
+async function loadContestMap(db, contest) {
+  const map = await db.collection('maps').findOne({ id: contest?.mapId });
+  if (!map || !Array.isArray(map.cells)) return null;
+  return map;
+}
+
+async function maybeResolveSpawns(db, contest, map, now) {
+  if (!contest || contest.spawnResolved === true || !map) return contest;
+  const timing = contestWindow(contest);
+  if (!timing || now < timing.startAt) return contest;
+  const teams = cleanTeams(contest.teams);
+  const choices = cleanTeamCells(contest.spawnChoices).filter((choice) => (
+    teams.some((team) => team.id === choice.teamId)
+  ));
+  const everyoneChose = teams.length > 0 && teams.every((team) => choices.some((choice) => choice.teamId === team.id));
+  if (!everyoneChose && now < timing.spawnEnd) return contest;
+  if (teams.length === 0) return contest;
+
+  const spawns = resolveSpawns(spawnCellIndexes(map), teams, choices);
+  await db.collection('contests').updateOne(
+    { id: contest.id, spawnResolved: { $ne: true } },
+    { $set: { spawns, spawnResolved: true, updatedAt: new Date() } }
+  );
+  return db.collection('contests').findOne({ id: contest.id });
+}
+
+async function handleSaveTeam(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contestId = cleanId(body.contestId) || String(body.contestId || '').trim();
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  const memberA = cleanId(body.memberA);
+  const memberB = cleanId(body.memberB);
+  if (!contestId || !name || name.length > MAX_NAME_LEN || !memberA || !memberB) {
+    return res.status(400).json({ success: false, message: 'Enter a team name and two student usernames.' });
+  }
+  if (memberA.toLowerCase() === memberB.toLowerCase()) {
+    return res.status(400).json({ success: false, message: 'A team needs two different students.' });
+  }
+
+  const col = db.collection('contests');
+  const contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  const teams = cleanTeams(contest.teams);
+  const teamId = cleanId(body.teamId) || crypto.randomUUID();
+  for (const team of teams) {
+    if (team.id === teamId) continue;
+    if (team.members.some((member) => member.toLowerCase() === memberA.toLowerCase() || member.toLowerCase() === memberB.toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'One of those students is already on a team in this contest.' });
+    }
+  }
+  const next = { id: teamId, name, members: [memberA, memberB] };
+  const index = teams.findIndex((team) => team.id === teamId);
+  if (index >= 0) teams[index] = next;
+  else teams.push(next);
+  await col.updateOne(
+    { id: contestId },
+    { $set: { teams, contestantIds: teams.flatMap((team) => team.members), updatedAt: new Date() } }
+  );
+  const updated = await col.findOne({ id: contestId });
+  const map = await loadContestMap(db, updated);
+  const problems = await db.collection('problems').find({}).toArray();
+  return res.status(200).json(contestPayload(updated, map, problems, user));
+}
+
+async function handleRemoveTeam(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contestId = String(body.contestId || '').trim();
+  const teamId = cleanId(body.teamId);
+  if (!contestId || !teamId) return res.status(400).json({ success: false, message: 'Missing team' });
+  const col = db.collection('contests');
+  const contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  const teams = cleanTeams(contest.teams).filter((team) => team.id !== teamId);
+  await col.updateOne(
+    { id: contestId },
+    {
+      $set: {
+        teams,
+        contestantIds: teams.flatMap((team) => team.members),
+        spawnChoices: cleanTeamCells(contest.spawnChoices).filter((choice) => choice.teamId !== teamId),
+        spawns: cleanTeamCells(contest.spawns).filter((spawn) => spawn.teamId !== teamId),
+        claims: cleanClaims(contest.claims).filter((claim) => claim.teamId !== teamId),
+        updatedAt: new Date(),
+      },
+    }
+  );
+  const updated = await col.findOne({ id: contestId });
+  const map = await loadContestMap(db, updated);
+  const problems = await db.collection('problems').find({}).toArray();
+  return res.status(200).json(contestPayload(updated, map, problems, user));
+}
+
 async function handleChooseSpawn(req, res, db, user, body) {
   const contestId = String(body.contestId || '').trim();
-  const contestantId = String(user.username || '').trim();
   const cell = body.cell;
-  if (!contestId || !contestantId || !Number.isInteger(cell) || cell < 0) {
+  const username = cleanId(user.username);
+  if (!contestId || !username || !Number.isInteger(cell) || cell < 0) {
     return res.status(400).json({ success: false, message: 'Choose a spawn point on the map.' });
   }
 
   const col = db.collection('contests');
   const contest = await col.findOne({ id: contestId });
   if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
-  if (!Array.isArray(contest.contestantIds) || !contest.contestantIds.includes(contestantId)) {
-    return res.status(403).json({ success: false, message: 'Join the contest before choosing a spawn point.' });
+  const team = teamForUser(contest, username);
+  if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
+  if (contest.spawnResolved === true) {
+    return res.status(400).json({ success: false, message: 'Spawn points are already assigned.', serverNow: Date.now() });
   }
 
   const timing = contestWindow(contest);
@@ -389,36 +703,107 @@ async function handleChooseSpawn(req, res, db, user, body) {
     return res.status(400).json({ success: false, message: 'Spawning is not open.', serverNow: now });
   }
 
-  const map = await db.collection('maps').findOne({ id: contest.mapId });
-  if (!map || !Array.isArray(map.cells) || cell >= map.cells.length || map.cells[cell]?.kind !== 'spawnpoint') {
+  const map = await loadContestMap(db, contest);
+  if (!map || cell >= map.cells.length || map.cells[cell]?.kind !== 'spawnpoint') {
     return res.status(400).json({ success: false, message: 'That cell is not a spawn point.', serverNow: now });
   }
 
-  await col.updateOne({ id: contestId }, [
+  await col.updateOne({ id: contestId, spawnResolved: { $ne: true } }, [
     {
       $set: {
-        spawns: {
+        spawnChoices: {
           $concatArrays: [
             {
               $filter: {
-                input: { $ifNull: ['$spawns', []] },
-                cond: { $ne: ['$$this.contestantId', contestantId] },
+                input: { $ifNull: ['$spawnChoices', []] },
+                cond: { $ne: ['$$this.teamId', team.id] },
               },
             },
-            [{ contestantId, cell }],
+            [{ teamId: team.id, cell }],
           ],
         },
         updatedAt: new Date(),
       },
     },
   ]);
+  const stored = await col.findOne({ id: contestId });
+  const updated = await maybeResolveSpawns(db, stored, map, Date.now());
+  const problems = await db.collection('problems').find({}).toArray();
+  return res.status(200).json(contestPayload(updated, map, problems, user));
+}
 
+async function handleSolve(req, res, db, user, body) {
+  const contestId = String(body.contestId || '').trim();
+  const cell = body.cell;
+  const username = cleanId(user.username);
+  if (!contestId || !username || !Number.isInteger(cell) || cell < 0) {
+    return res.status(400).json({ success: false, message: 'Choose a problem cell.' });
+  }
+
+  const col = db.collection('contests');
+  let contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  const team = teamForUser(contest, username);
+  if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
+
+  const map = await loadContestMap(db, contest);
+  const problems = await db.collection('problems').find({}).toArray();
+  const now = Date.now();
+  contest = await maybeResolveSpawns(db, contest, map, now);
+  const timing = contestWindow(contest);
+  if (!timing || now < timing.liveAt || now >= timing.endAt) {
+    return res.status(400).json({ success: false, message: 'The contest is not running.', serverNow: now });
+  }
+  if (contest.spawnResolved !== true) {
+    return res.status(400).json({ success: false, message: 'Spawn points are not assigned yet.', serverNow: now });
+  }
+  if (!map || cell >= map.cells.length || map.cells[cell]?.kind !== 'problem') {
+    return res.status(400).json({ success: false, message: 'That cell is not a problem.', serverNow: now });
+  }
+  if (allProblemsClaimed(map, contest.claims)) {
+    return res.status(400).json({ success: false, message: 'Every problem is already solved.', serverNow: now });
+  }
+  if (cleanClaims(contest.claims).some((claim) => claim.cell === cell)) {
+    return res.status(400).json({ success: false, message: 'Another team already holds this cell.', serverNow: now });
+  }
+  if (!adjacentToTeam(map, contest, team.id, cell)) {
+    return res.status(400).json({ success: false, message: 'That cell is not next to your territory.', serverNow: now });
+  }
+
+  const mapCell = map.cells[cell];
+  const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
+  if (!problem || !answersMatch(problem.answer, body.answer)) {
+    const message = problem && String(problem.answer || '').trim()
+      ? 'That answer is not right.'
+      : 'This problem has no answer yet.';
+    return res.status(400).json({ success: false, message, serverNow: now });
+  }
+
+  const claim = { cell, teamId: team.id, solvedBy: username, solvedAt: now };
+  const result = await col.updateOne(
+    { id: contestId, 'claims.cell': { $ne: cell } },
+    { $push: { claims: claim }, $set: { updatedAt: new Date() } }
+  );
+  if (result.matchedCount === 0) {
+    return res.status(400).json({ success: false, message: 'Another team already holds this cell.', serverNow: Date.now() });
+  }
   const updated = await col.findOne({ id: contestId });
-  return res.status(200).json({
-    success: true,
-    spawns: cleanSpawns(updated?.spawns),
-    serverNow: Date.now(),
-  });
+  return res.status(200).json(contestPayload(updated, map, problems, user));
+}
+
+async function handleContestState(req, res, db, user, body) {
+  const contestId = String(body.contestId || req.query.contestId || '').trim();
+  if (!contestId) return res.status(400).json({ success: false, message: 'Missing contest' });
+  const col = db.collection('contests');
+  let contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  if (!isAdmin(user) && !teamForUser(contest, user.username)) {
+    return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
+  }
+  const map = await loadContestMap(db, contest);
+  contest = await maybeResolveSpawns(db, contest, map, Date.now());
+  const problems = await db.collection('problems').find({}).toArray();
+  return res.status(200).json(contestPayload(contest, map, problems, user));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -462,7 +847,11 @@ export default async function handler(req, res) {
       case 'save-contests': return await handleSaveContests(req, res, db, user, body);
       case 'join-contest':  return await handleJoinContest(req, res, db, user, body);
       case 'remove-contestant': return await handleRemoveContestant(req, res, db, user, body);
+      case 'save-team':     return await handleSaveTeam(req, res, db, user, body);
+      case 'remove-team':   return await handleRemoveTeam(req, res, db, user, body);
       case 'choose-spawn':  return await handleChooseSpawn(req, res, db, user, body);
+      case 'solve':         return await handleSolve(req, res, db, user, body);
+      case 'contest-state': return await handleContestState(req, res, db, user, body);
       default:
         return res.status(400).json({ success: false, message: 'Unknown action' });
     }
