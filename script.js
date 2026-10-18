@@ -34,6 +34,9 @@ const tutorialButton = document.querySelector("#tutorial-button");
 const tutorialView = document.querySelector("#tutorial-view");
 const settingsButton = document.querySelector("#settings-button");
 const settingsView = document.querySelector("#settings-view");
+const studentSettingsView = document.querySelector("#student-settings-view");
+const answerOpenModeChoices = document.querySelector("#answer-open-mode");
+const answerOpenModeNote = document.querySelector("#answer-open-mode-note");
 const accountForm = document.querySelector("#account-form");
 const accountUsername = document.querySelector("#account-username");
 const accountDisplayName = document.querySelector("#account-display-name");
@@ -252,6 +255,7 @@ const studentProblemPrompt = document.querySelector("#student-problem-prompt");
 const studentAnswerForm = document.querySelector("#student-answer-form");
 const studentAnswer = document.querySelector("#student-answer");
 const studentAnswerError = document.querySelector("#student-answer-error");
+const studentAnswerSuccess = document.querySelector("#student-answer-success");
 
 // ═══════════════════════════════════════════════════════════════════
 // In-memory state (populated by bootstrap)
@@ -297,6 +301,8 @@ let editingTeamId = null;
 let accountFilter = "all";
 let accountQuery = "";
 let accountStatusTimer = null;
+const ANSWER_OPEN_MODE_KEY = "territory-answer-open-mode";
+let answerOpenMode = readAnswerOpenMode();
 
 // Routing is only enabled on the full single-page app. The split pages in
 // ui2/ keep their own real URLs and are handled by openSplitPage().
@@ -468,7 +474,7 @@ function routeViewLabel(route) {
   if (route.name === "maps") return "Maps";
   if (route.name === "problems") return "Problems";
   if (route.name === "contests" || route.name === "student") return "Contests";
-  if (route.name === "settings") return "Accounts";
+  if (route.name === "settings") return isContestant() ? "Settings" : "Accounts";
   if (route.name === "tutorial") return "Tutorial";
   return "Home";
 }
@@ -593,10 +599,6 @@ function renderRoute(route) {
     }
 
     case "settings": {
-      if (!admin) {
-        showStudent();
-        return "#/student";
-      }
       showSettings();
       return "#/settings";
     }
@@ -636,16 +638,11 @@ document.querySelector(".sidebar")?.addEventListener("click", (event) => {
 document.querySelector("main")?.addEventListener("click", () => {
   if (document.body.classList.contains("menu-open")) setMenuOpen(false);
 });
-studentProblem?.addEventListener("click", (event) => {
-  if (!event.target.closest(".student-problem-card")) closeStudentProblem();
-});
+// The problem panel is closed only by the Close button. Clicking the
+// backdrop and Escape do not dismiss it.
 studentProblemClose?.addEventListener("click", closeStudentProblem);
 document?.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (!studentProblem.hidden) {
-    closeStudentProblem();
-    return;
-  }
   setMenuOpen(false);
 });
 document?.addEventListener("keydown", (event) => {
@@ -666,6 +663,7 @@ accountSearch?.addEventListener("input", () => {
   renderAccounts();
 });
 accountFilters?.addEventListener("click", onAccountFilterClick);
+answerOpenModeChoices?.addEventListener("click", onAnswerModeClick);
 accountButton?.addEventListener("click", logOut);
 createContestForm?.addEventListener("submit", createContest);
 contestList?.addEventListener("click", onContestListClick);
@@ -1037,7 +1035,7 @@ function showTutorial() {
 
 function showSettings() {
   if (!requireSession()) return;
-  if (isContestant()) { showCompetitions(); return; }
+  if (isContestant()) { showStudentSettings(); return; }
   if (!discardUnsavedProblem() || !discardUnsavedMap()) return;
   stopPaint();
   openMapId = null;
@@ -1050,6 +1048,66 @@ function showSettings() {
   loadAccounts();
 }
 
+function answerOpenModeKey() {
+  const username = session?.user?.username;
+  return username ? `${ANSWER_OPEN_MODE_KEY}:${username}` : ANSWER_OPEN_MODE_KEY;
+}
+
+function readAnswerOpenMode() {
+  try {
+    return localStorage.getItem(answerOpenModeKey()) === "newtab" ? "newtab" : "current";
+  } catch {
+    return "current";
+  }
+}
+
+function writeAnswerOpenMode(mode) {
+  try {
+    localStorage.setItem(answerOpenModeKey(), mode);
+  } catch {
+    // The setting still applies for this visit.
+  }
+}
+
+function renderStudentSettings() {
+  if (answerOpenModeChoices) {
+    for (const button of answerOpenModeChoices.querySelectorAll("[data-answer-mode]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.answerMode === answerOpenMode));
+    }
+  }
+  if (answerOpenModeNote) {
+    answerOpenModeNote.textContent = answerOpenMode === "newtab"
+      ? "When you click a problem, it opens in a new tab. The board stays on this tab."
+      : "When you click a problem, it opens over the board in this page. Only the Close button closes it.";
+  }
+}
+
+function onAnswerModeClick(event) {
+  const button = event.target.closest("[data-answer-mode]");
+  if (!button) return;
+  const next = button.dataset.answerMode;
+  if (next !== "current" && next !== "newtab") return;
+  answerOpenMode = next;
+  writeAnswerOpenMode(next);
+  renderStudentSettings();
+}
+
+function showStudentSettings() {
+  if (!requireSession()) return;
+  if (!studentSettingsView) {
+    location.replace("/index.html#/settings");
+    return;
+  }
+  stopPaint();
+  openMapId = null;
+  openContestId = null;
+  editingProblemNo = null;
+  editingProblemType = null;
+  hideViews();
+  studentSettingsView.hidden = false;
+  setCurrentSection(settingsButton);
+  renderStudentSettings();
+}
 async function loadAccounts() {
   accountFormError.hidden = true;
   accountListError.hidden = true;
@@ -1413,7 +1471,7 @@ function showEditor(mapId, options = {}) {
 }
 
 function hideViews() {
-  for (const view of [homeView, mapsView, problemsView, problemEditorView, competitionsView, contestView, studentView, studentPlayView, editorView, settingsView, tutorialView]) {
+  for (const view of [homeView, mapsView, problemsView, problemEditorView, competitionsView, contestView, studentView, studentPlayView, studentSettingsView, editorView, settingsView, tutorialView]) {
     if (view) view.hidden = true;
   }
 }
@@ -2653,52 +2711,96 @@ const MATH_DELIMITERS = [
 
 function renderMath(element) {
   if (!element || typeof renderMathInElement !== "function") return;
-  renderMathInElement(element, {
-    delimiters: MATH_DELIMITERS,
-    throwOnError: false,
-    strict: "ignore",
-  });
+  try {
+    renderMathInElement(element, {
+      delimiters: MATH_DELIMITERS,
+      throwOnError: false,
+      strict: "ignore",
+    });
+  } catch (error) {
+    console.error("[math]", error);
+  }
 }
 
 function containsHtml(source) {
   return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
-function liveScript(old) {
-  const fresh = document.createElement("script");
-  for (const attr of old.attributes) {
-    if (attr.name === "src") continue;
-    fresh.setAttribute(attr.name, attr.value);
+
+const STATEMENT_STYLE = `
+  :host { display: block; }
+  .statement-content {
+    font: inherit;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
   }
-  const src = old.getAttribute("src");
-  if (src) fresh.src = src;
-  else fresh.textContent = old.textContent;
-  return fresh;
+  .statement-content img,
+  .statement-content video,
+  .statement-content canvas,
+  .statement-content svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .statement-content table { max-width: 100%; border-collapse: collapse; }
+  .statement-content pre { overflow: auto; white-space: pre-wrap; }
+  .statement-content a { color: #3ee0ff; }
+`;
+
+function sanitizeProblemFragment(source) {
+  const template = document.createElement("template");
+  template.innerHTML = source;
+  template.content
+    .querySelectorAll("script, style, iframe, object, embed, base, meta, link, form, template, frame, frameset, applet")
+    .forEach((node) => node.remove());
+  for (const element of template.content.querySelectorAll("*")) {
+    for (const attr of [...element.attributes]) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith("on") || name === "srcdoc" || name === "autofocus") {
+        element.removeAttribute(attr.name);
+        continue;
+      }
+      if (["href", "xlink:href", "src", "action", "formaction"].includes(name) && value.startsWith("javascript:")) {
+        element.removeAttribute(attr.name);
+        continue;
+      }
+      if (name === "style" && value.includes("javascript:")) {
+        element.removeAttribute(attr.name);
+      }
+    }
+    if (element.tagName.toUpperCase() === "A" || element.tagName.toUpperCase() === "AREA") element.removeAttribute("href");
+  }
+  return template.content;
 }
 
+// Problem statements are untrusted HTML. They are rendered in a shadow root
+// with scripts and event handlers removed, so a statement cannot reach the
+// close button, the answer input, or the rest of the page.
 function setRichText(element, source) {
+  const text = String(source || "");
   element.replaceChildren();
-  element.classList.remove("rich-html");
-  const text = source || "";
+  element.classList.add("rich-html", "isolated-statement");
+  element.style.contain = "content";
+  element.style.isolation = "isolate";
+  const root = element.shadowRoot || element.attachShadow({ mode: "open" });
+  root.replaceChildren();
   if (!text.trim()) return;
-  if (!containsHtml(text)) {
-    element.textContent = text;
-    renderMath(element);
-    return;
+
+  const base = document.createElement("style");
+  base.textContent = STATEMENT_STYLE;
+  root.append(base);
+  for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+    if (link.href && /katex/i.test(link.href)) root.append(link.cloneNode(true));
   }
-  element.classList.add("rich-html");
-  const template = document.createElement("template");
-  template.innerHTML = text;
-  const scripts = [...template.content.querySelectorAll("script")];
-  for (const script of scripts) script.remove();
-  element.append(template.content);
-  renderMath(element);
-  const runScripts = () => {
-    if (!element.isConnected) return;
-    for (const script of scripts) element.append(liveScript(script));
-  };
-  if (element.isConnected) runScripts();
-  else queueMicrotask(runScripts);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "statement-content";
+  const hasHtml = containsHtml(text);
+  wrapper.style.whiteSpace = hasHtml ? "normal" : "pre-wrap";
+  if (hasHtml) wrapper.append(sanitizeProblemFragment(text));
+  else wrapper.textContent = text;
+  root.append(wrapper);
+  renderMath(wrapper);
 }
 
 function problemSnippet(problem) {
@@ -3314,7 +3416,7 @@ function applyAccount() {
   if (problemsButton) problemsButton.hidden = contestant;
   if (creditsLabel) creditsLabel.hidden = contestant;
   if (tutorialButton) tutorialButton.hidden = contestant;
-  if (settingsButton) settingsButton.hidden = contestant;
+  if (settingsButton) settingsButton.hidden = false;
   if (accountRole) accountRole.textContent = user.role === "admin" ? "Admin" : "Student";
   const pfp = safePfp(user.pfp);
   if (accountPfp) {
@@ -3936,6 +4038,7 @@ function closeStudentProblem() {
   selectedStudentCell = null;
   studentProblem.hidden = true;
   studentAnswerForm.hidden = true;
+  if (studentAnswerSuccess) studentAnswerSuccess.hidden = true;
   for (const button of studentGrid.querySelectorAll("[aria-pressed='true']")) {
     button.removeAttribute("aria-pressed");
   }
@@ -3959,13 +4062,11 @@ function showStudentProblem(contest, map, phase, frozen) {
   studentProblemTag.textContent = `${difficultyName} · ${points} point${points === 1 ? "" : "s"}`;
   studentAnswerForm.hidden = false;
   studentAnswerError.hidden = true;
+  if (studentAnswerSuccess) studentAnswerSuccess.hidden = true;
   studentAnswer.style.cssText = "";
   studentAnswer.readOnly = false;
   if (problem && problem.prompt.trim()) setRichText(studentProblemPrompt, problem.prompt);
-  else {
-    studentProblemPrompt.classList.remove("rich-html");
-    studentProblemPrompt.textContent = "This problem has no text yet.";
-  }
+  else setRichText(studentProblemPrompt, "This problem has no text yet.");
   if (!studentAnswer.readOnly) studentAnswer.focus();
 }
 
@@ -3986,6 +4087,13 @@ function onStudentGridClick(event) {
   if (cell?.kind === "problem" && phase === "live" && !contestFrozen(contest, map)) {
     const claim = (contest.claims || []).some((item) => item.cell === index);
     if (claim || !adjacentToTeam(map, contest, team.id, index)) return;
+    if (answerOpenMode === "newtab") {
+      const url = new URL("answer.html", location.href);
+      url.searchParams.set("contest", contest.id);
+      url.searchParams.set("cell", String(index));
+      window.open(url.href, "_blank", "noopener");
+      return;
+    }
     selectedStudentCell = index;
     renderStudentPlay();
     showStudentProblem(contest, map, phase, false);
@@ -4045,7 +4153,11 @@ async function submitStudentAnswer(event) {
     });
     applyContestPlayState(contest, data);
     studentAnswer.value = "";
-    closeStudentProblem();
+    studentAnswerForm.hidden = true;
+    if (studentAnswerSuccess) {
+      studentAnswerSuccess.hidden = false;
+      studentAnswerSuccess.textContent = "Answer accepted. Close this problem to continue.";
+    }
   } catch (error) {
     contest.claims = previousClaims;
     failure = error.message;

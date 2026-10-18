@@ -1091,11 +1091,14 @@ button[type="submit"],
 }
 
 .student-problem-close {
+  position: sticky;
+  top: 0;
   float: right;
+  z-index: 6;
   margin: 0 0 8px 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.96);
   color: var(--cyan);
   font: inherit;
   text-decoration: underline;
@@ -1115,6 +1118,11 @@ button[type="submit"],
   overflow-x: auto;
 }
 
+.isolated-statement {
+  display: block;
+  contain: content;
+  isolation: isolate;
+}
 #student-problem-prompt.rich-html,
 .problem-preview-content.rich-html {
   white-space: normal;

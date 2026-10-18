@@ -45,54 +45,80 @@ async function api(action, body) {
 
 function renderMath(element) {
   if (!element || typeof renderMathInElement !== "function") return;
-  renderMathInElement(element, { delimiters: MATH_DELIMITERS, throwOnError: false, strict: "ignore" });
+  try {
+    renderMathInElement(element, { delimiters: MATH_DELIMITERS, throwOnError: false, strict: "ignore" });
+  } catch (error) {
+    console.error("[math]", error);
+  }
 }
 
 function containsHtml(source) {
   return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
-// 重新创建 script 节点以使其执行
-function liveScript(old) {
-  const fresh = document.createElement("script");
-  for (const attr of old.attributes) {
-    if (attr.name === "src") continue;
-    fresh.setAttribute(attr.name, attr.value);
+
+const STATEMENT_STYLE = `
+  :host { display: block; }
+  .statement-content { font: inherit; line-height: 1.55; overflow-wrap: anywhere; }
+  .statement-content img,
+  .statement-content video,
+  .statement-content canvas,
+  .statement-content svg { max-width: 100%; height: auto; }
+  .statement-content table { max-width: 100%; border-collapse: collapse; }
+  .statement-content pre { overflow: auto; white-space: pre-wrap; }
+  .statement-content a { color: #3ee0ff; }
+`;
+
+function sanitizeProblemFragment(source) {
+  const template = document.createElement("template");
+  template.innerHTML = source;
+  template.content
+    .querySelectorAll("script, style, iframe, object, embed, base, meta, link, form, template, frame, frameset, applet")
+    .forEach((node) => node.remove());
+  for (const element of template.content.querySelectorAll("*")) {
+    for (const attr of [...element.attributes]) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith("on") || name === "srcdoc" || name === "autofocus") {
+        element.removeAttribute(attr.name);
+        continue;
+      }
+      if (["href", "xlink:href", "src", "action", "formaction"].includes(name) && value.startsWith("javascript:")) {
+        element.removeAttribute(attr.name);
+        continue;
+      }
+      if (name === "style" && value.includes("javascript:")) element.removeAttribute(attr.name);
+    }
+    if (element.tagName.toUpperCase() === "A" || element.tagName.toUpperCase() === "AREA") element.removeAttribute("href");
   }
-  const src = old.getAttribute("src");
-  if (src) fresh.src = src;
-  else fresh.textContent = old.textContent;
-  return fresh;
+  return template.content;
 }
 
 function setRichText(element, source) {
+  const text = String(source || "");
   element.replaceChildren();
-  element.classList.remove("rich-html");
-  const text = source || "";
+  element.classList.add("rich-html", "isolated-statement");
+  element.style.contain = "content";
+  element.style.isolation = "isolate";
+  const root = element.shadowRoot || element.attachShadow({ mode: "open" });
+  root.replaceChildren();
   if (!text.trim()) return;
-  if (!containsHtml(text)) {
-    element.textContent = text;
-    renderMath(element);
-    return;
+
+  const base = document.createElement("style");
+  base.textContent = STATEMENT_STYLE;
+  root.append(base);
+  for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+    if (link.href && /katex/i.test(link.href)) root.append(link.cloneNode(true));
   }
-  element.classList.add("rich-html");
-  const template = document.createElement("template");
-  template.innerHTML = text;
-  
-  // 将 script 提取出来并从 template 中移除
-  const scripts = [...template.content.querySelectorAll("script")];
-  for (const script of scripts) script.remove();
-  
-  element.append(template.content);
-  renderMath(element);
-  
-  // 重新插入 script 以执行
-  const runScripts = () => {
-    if (!element.isConnected) return;
-    for (const script of scripts) element.append(liveScript(script));
-  };
-  if (element.isConnected) runScripts();
-  else queueMicrotask(runScripts);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "statement-content";
+  const hasHtml = containsHtml(text);
+  wrapper.style.whiteSpace = hasHtml ? "normal" : "pre-wrap";
+  if (hasHtml) wrapper.append(sanitizeProblemFragment(text));
+  else wrapper.textContent = text;
+  root.append(wrapper);
+  renderMath(wrapper);
 }
 
 function showStatus(message) {
@@ -135,7 +161,7 @@ async function loadProblem() {
   if (problem?.prompt?.trim()) {
     setRichText(prompt, problem.prompt);
   } else {
-    prompt.textContent = "This problem has no text yet.";
+    setRichText(prompt, "This problem has no text yet.");
   }
   
   // 脚本执行完后，将焦点放到输入框上（如果它还可见的话）
