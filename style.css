@@ -519,6 +519,90 @@ button[type="submit"],
 }
 
 .map-preview,
+/* Territory connections and claim feedback */
+.editor-grid {
+  position: relative;
+}
+
+.territory-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.territory-line {
+  position: absolute;
+  border-radius: 3px;
+  background: var(--team, #3ee0ff);
+  box-shadow: 0 0 7px var(--team, #3ee0ff);
+  opacity: 0.85;
+}
+
+.territory-line.horizontal {
+  width: calc(var(--cell, 48px) + 2px);
+  height: 3px;
+  transform-origin: left center;
+}
+
+.territory-line.vertical {
+  width: 3px;
+  height: calc(var(--cell, 48px) + 2px);
+  transform-origin: center top;
+}
+
+.territory-line.recent.horizontal {
+  animation: territory-line-x 0.5s ease-out;
+}
+
+.territory-line.recent.vertical {
+  animation: territory-line-y 0.5s ease-out;
+}
+
+@keyframes territory-line-x {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 0.85; }
+}
+
+@keyframes territory-line-y {
+  from { transform: scaleY(0); opacity: 0; }
+  to { transform: scaleY(1); opacity: 0.85; }
+}
+
+.grid-cell.student-cell.problem.just-taken {
+  animation: enemy-claim-pulse 0.9s ease-in-out 3;
+}
+
+@keyframes enemy-claim-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 0 3px var(--team, #ff3b4e);
+    background-color: #ff3b4e;
+    color: #2a060a;
+  }
+  45% {
+    box-shadow: inset 0 0 0 4px #ff3b4e, 0 0 20px 6px rgba(255, 59, 78, 0.75);
+    background-color: #ff3b4e;
+    color: #2a060a;
+  }
+}
+
+.grid-cell.just-claimed {
+  animation: claim-cell-glow 1s ease-out 2;
+}
+
+@keyframes claim-cell-glow {
+  0% { filter: brightness(1.8); }
+  100% { filter: brightness(1); }
+}
+
+.grid-cell.student-cell.problem.claim-pending {
+  animation: claim-pending 0.8s ease-in-out infinite;
+}
+
+@keyframes claim-pending {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.5); }
+}
 .editor-grid {
   display: grid;
   gap: 2px;

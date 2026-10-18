@@ -42,21 +42,21 @@ Every request needs `Authorization: Bearer <token>`.
 
 Returns the signed-in user, maps, problems, and contests.
 
-Students receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive the answer and the optional `logic` script as well. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds.
+Students receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive the answer and the optional `logic` script as well. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
 
 A contest has `startAt` (milliseconds since 1970), `durationMinutes`, `spawnMinutes`, and `readyMinutes`. Spawning starts at `startAt` and lasts `spawnMinutes`. The wait after that lasts `readyMinutes`. Both are part of `durationMinutes`. `teams` lists `{ id, name, members }` with 1 to 5 usernames. `spawnVotes` lists each student's pick `{ teamId, username, cell }`. `spawnChoices` lists a cell only after every member of that team has picked it. When every team has agreed, or when spawn time ends, the server assigns one spawn point per team and sets `spawnResolved`. If several teams agreed on the same cell, one random team keeps it and the others move to free spawn points. Teams that have not agreed are placed on free spawn points too. `spawns` then lists `{ teamId, cell }`. `claims` lists solved cells `{ cell, teamId, solvedBy, solvedAt }`. Before spawn points are assigned, a student only receives their own team's votes and choice.
 
 ### `POST { "action": "save-maps", "maps": [...] }`
 
-Admin only. Every map must be valid. If one map is invalid, nothing is saved. The replacement runs in one database transaction.
+Admin only. Every map must be valid. If one map is invalid, nothing is saved. Body may include `revision` from `bootstrap`. The save runs in one database transaction, upserts the maps sent, and removes only maps that are no longer in the list. If `revision` does not match the current revision, the request returns 409 and nothing changes.
 
 ### `POST { "action": "save-problems", "problems": [...] }`
 
-Admin only. Same rule: an invalid problem rejects the whole save.
+Admin only. Same rule: an invalid problem rejects the whole save. Body may include `revision`; a stale revision returns 409. Problems are identified by `type` and `index`, so the save is incremental in the same way as maps.
 
 ### `POST { "action": "save-contests", "contests": [...] }`
 
-Admin only. Updates contest names, maps, and schedules, and deletes contests that are no longer in the list. Teams, spawn choices, assigned spawns, and solved cells already stored are kept. Changing the map clears those cell assignments. Spawn time and the wait must add up to less than the duration.
+Admin only. Updates contest names, maps, and schedules, and deletes contests that are no longer in the list. Teams, spawn choices, assigned spawns, and solved cells already stored are kept. Changing the map clears those cell assignments. Spawn time and the wait must add up to less than the duration. Body may include `revision`; a stale revision returns 409. The response includes the new `revision`.
 
 A contest map should have at least as many spawn points as teams. If a map is changed to one with fewer spawn points than the existing teams, the extra teams are kept but may not receive a spawn point.
 
@@ -66,11 +66,11 @@ Admin only. Creates a team of 1 to 5 different student usernames. Every username
 
 The contest map must have at least one spawn point, and the contest cannot have more teams than spawn points. These two rules keep every team able to start.
 
-Pass an existing `teamId` to edit that team instead of creating one. Editing replaces the name and member list, removes the spawn votes of members who left, and recalculates the team's spawn agreement. A team name must be unique in the contest, ignoring capital letters. `memberA` and `memberB` are still accepted as an alternative to `members` for older clients.
+Pass an existing `teamId` to edit that team instead of creating one. Editing replaces the name and member list, removes the spawn votes of members who left, and recalculates the team's spawn agreement. A team name must be unique in the contest, ignoring capital letters. `memberA` and `memberB` are still accepted as an alternative to `members` for older clients. Team changes bump the `contests` revision, and the response includes the new `revision`.
 
 ### `POST { "action": "remove-team", "contestId": "...", "teamId": "..." }`
 
-Admin only. Removes the team, its spawn choice, its assigned spawn, and the cells it solved. Removing the last team clears `spawnResolved` so a replacement team can start the spawn phase again.
+Admin only. Removes the team, its spawn choice, its assigned spawn, and the cells it solved. Removing the last team clears `spawnResolved` so a replacement team can start the spawn phase again. Team changes bump the `contests` revision, and the response includes the new `revision`.
 
 ### `POST { "action": "choose-spawn", "contestId": "...", "cell": 0 }`
 

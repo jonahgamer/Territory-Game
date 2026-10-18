@@ -287,6 +287,9 @@ let pendingProblemDraft = null;
 let problemDirty = false;
 let placeType = "math";
 let serverOffsetMs = 0;
+const revisions = { maps: 0, problems: 0, contests: 0 };
+const saveQueues = { maps: Promise.resolve(), problems: Promise.resolve(), contests: Promise.resolve() };
+let saveConflictShown = false;
 let contestClock = null;
 let shownPhase = "";
 let shownListPhases = "";
@@ -319,7 +322,12 @@ async function apiCall(action, body) {
   });
 
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+  if (!r.ok) {
+    const error = new Error(data.message || `HTTP ${r.status}`);
+    error.status = r.status;
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 
@@ -331,18 +339,9 @@ function debounce(fn, ms = 500) {
   };
 }
 
-const _persistMapsDebounced = debounce(
-  () => apiCall("save-maps", { maps }).catch(e => console.error("[save-maps]", e)),
-  600
-);
-const _persistProblemsDebounced = debounce(
-  () => apiCall("save-problems", { problems }).catch(e => console.error("[save-problems]", e)),
-  600
-);
-const _persistContestsDebounced = debounce(
-  () => apiCall("save-contests", { contests }).catch(e => console.error("[save-contests]", e)),
-  600
-);
+const _persistMapsDebounced = debounce(() => { persistMapsNow(); }, 600);
+const _persistProblemsDebounced = debounce(() => { persistProblemsNow(); }, 600);
+const _persistContestsDebounced = debounce(() => { persistContestsNow(); }, 600);
 
 // ═══════════════════════════════════════════════════════════════════
 // Routing
@@ -776,6 +775,69 @@ problemNoInput?.addEventListener("input", () => {
 // Persistence
 // ═══════════════════════════════════════════════════════════════════
 
+function handleSaveError(error) {
+  console.error("[save]", error);
+  const conflict = Number(error?.status) === 409 || /changed in another tab/i.test(error?.message || "");
+  if (conflict && !saveConflictShown) {
+    saveConflictShown = true;
+    window.alert("Another tab changed this data. Reload the page before saving again.");
+    setTimeout(() => { saveConflictShown = false; }, 8000);
+  }
+}
+
+function queueSave(name, task) {
+  const next = saveQueues[name].catch(() => {}).then(task);
+  saveQueues[name] = next.catch(() => {});
+  return next;
+}
+
+function noteRevision(name, data) {
+  if (Number.isInteger(data?.revision)) revisions[name] = data.revision;
+}
+
+async function persistMapsNow() {
+  if (!bootstrapped || !isAdmin()) return null;
+  return queueSave("maps", async () => {
+    try {
+      const data = await apiCall("save-maps", { maps, revision: revisions.maps });
+      noteRevision("maps", data);
+      return data;
+    } catch (error) {
+      handleSaveError(error);
+      return null;
+    }
+  });
+}
+
+async function persistProblemsNow() {
+  if (!bootstrapped || !isAdmin()) return null;
+  return queueSave("problems", async () => {
+    try {
+      const data = await apiCall("save-problems", { problems, revision: revisions.problems });
+      noteRevision("problems", data);
+      return data;
+    } catch (error) {
+      handleSaveError(error);
+      return null;
+    }
+  });
+}
+
+async function persistContestsNow() {
+  if (!bootstrapped || !isAdmin()) return null;
+  if (contests.some((contest) => !contestSchedule(contest))) return null;
+  return queueSave("contests", async () => {
+    try {
+      const data = await apiCall("save-contests", { contests, revision: revisions.contests });
+      noteRevision("contests", data);
+      return data;
+    } catch (error) {
+      handleSaveError(error);
+      return null;
+    }
+  });
+}
+
 function persistMaps() {
   if (!bootstrapped || !isAdmin()) return;
   _persistMapsDebounced();
@@ -793,11 +855,20 @@ function persistContests() {
 }
 
 async function saveContestsNow() {
-  if (!bootstrapped || !isAdmin()) return;
+  if (!bootstrapped || !isAdmin()) return null;
   if (contests.some((contest) => !contestSchedule(contest))) {
     throw new Error("Finish the contest schedule before adding a team.");
   }
-  await apiCall("save-contests", { contests });
+  return queueSave("contests", async () => {
+    try {
+      const data = await apiCall("save-contests", { contests, revision: revisions.contests });
+      noteRevision("contests", data);
+      return data;
+    } catch (error) {
+      handleSaveError(error);
+      throw error;
+    }
+  });
 }
 
 function markMapDirty() {
@@ -809,9 +880,10 @@ function updateMapSaveButton() {
   if (saveMapButton) saveMapButton.disabled = !mapDirty;
 }
 
-function saveOpenMap() {
+async function saveOpenMap() {
   if (!mapDirty || !bootstrapped || !isAdmin()) return;
-  apiCall("save-maps", { maps }).catch((error) => console.error("[save-maps]", error));
+  const saved = await persistMapsNow();
+  if (!saved) return;
   const map = currentMap();
   mapSnapshot = map ? structuredClone(map) : null;
   mapDirty = false;
@@ -904,7 +976,7 @@ function saveOpenProblem() {
   problemDraft.isNew = false;
   problemDirty = false;
   if (bootstrapped && isAdmin()) {
-    apiCall("save-problems", { problems }).catch((error) => console.error("[save-problems]", error));
+    persistProblemsNow();
   }
   updateProblemSaveButton();
 }
@@ -1271,7 +1343,8 @@ async function onAccountListClick(event) {
   )) return;
   accountListError.hidden = true;
   try {
-    await apiCall("delete-account", { username });
+    const data = await apiCall("delete-account", { username });
+    noteRevision("contests", data);
     showAccountStatus(`${username} was deleted.`);
     await loadAccounts();
   } catch (error) {
@@ -1288,7 +1361,8 @@ async function updateAccount(username, change, successMessage = "Account updated
   }
   accountListError.hidden = true;
   try {
-    await apiCall("update-account", { username, ...change });
+    const data = await apiCall("update-account", { username, ...change });
+    noteRevision("contests", data);
     showAccountStatus(successMessage);
     await loadAccounts();
   } catch (error) {
@@ -2919,6 +2993,7 @@ function applyContestPlayState(contest, data) {
   if (Array.isArray(next.spawnVotes)) contest.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
   if (Array.isArray(next.spawns)) contest.spawns = normalizeTeamCells(next.spawns);
   if (Array.isArray(next.claims)) contest.claims = normalizeClaims(next.claims);
+  noteRevision("contests", data);
   noteServerTime(data?.serverNow);
 }
 
@@ -3011,22 +3086,96 @@ function renderLeaderboard(list, empty, contest) {
   });
 }
 
+const RECENT_CLAIM_MS = 20000;
+const seenClaimKeys = new Set();
+
+function claimAt(contest, index) {
+  return (contest.claims || []).find((claim) => claim.cell === index) || null;
+}
+
+function claimIsNew(contest, claim) {
+  if (!claim || !Number.isInteger(claim.cell)) return false;
+  const key = `${contest.id}:${claim.cell}:${claim.solvedAt || 0}`;
+  if (seenClaimKeys.has(key)) return false;
+  seenClaimKeys.add(key);
+  return Number.isFinite(claim.solvedAt) && Date.now() - claim.solvedAt < RECENT_CLAIM_MS;
+}
+
+function collectRecentClaims(contest) {
+  const recent = new Map();
+  for (const claim of contest.claims || []) {
+    if (claimIsNew(contest, claim)) recent.set(claim.cell, claim);
+  }
+  return recent;
+}
+
+function renderTerritoryLines(grid, contest, recentClaims) {
+  const old = grid.querySelector(".territory-lines");
+  if (old) old.remove();
+  if (!contest.spawnResolved) return;
+
+  const ownerByCell = new Map();
+  for (const spawn of contest.spawns || []) {
+    if (Number.isInteger(spawn.cell)) ownerByCell.set(spawn.cell, spawn.teamId);
+  }
+  for (const claim of contest.claims || []) {
+    if (Number.isInteger(claim.cell)) ownerByCell.set(claim.cell, claim.teamId);
+  }
+  if (ownerByCell.size === 0) return;
+
+  const cols = Number(grid.dataset.cols) || 1;
+  const rows = Number(grid.dataset.rows) || 1;
+  const overlay = document.createElement("div");
+  overlay.className = "territory-lines";
+  overlay.setAttribute("aria-hidden", "true");
+
+  const addLine = (from, to, teamId) => {
+    const fromRow = Math.floor(from / cols);
+    const fromCol = from % cols;
+    const toRow = Math.floor(to / cols);
+    const toCol = to % cols;
+    const horizontal = fromRow === toRow;
+    const line = document.createElement("span");
+    const recent = recentClaims.has(from) || recentClaims.has(to);
+    line.className = `territory-line ${horizontal ? "horizontal" : "vertical"}${recent ? " recent" : ""}`;
+    line.style.setProperty("--team", teamColor(contest, teamId));
+    if (horizontal) {
+      line.style.left = `calc(${fromCol} * (var(--cell, 48px) + 2px) + var(--cell, 48px) / 2)`;
+      line.style.top = `calc(${fromRow} * (var(--cell, 48px) + 2px) + var(--cell, 48px) / 2 - 1.5px)`;
+    } else {
+      line.style.left = `calc(${fromCol} * (var(--cell, 48px) + 2px) + var(--cell, 48px) / 2 - 1.5px)`;
+      line.style.top = `calc(${fromRow} * (var(--cell, 48px) + 2px) + var(--cell, 48px) / 2)`;
+    }
+    overlay.append(line);
+  };
+
+  for (const [cell, teamId] of ownerByCell) {
+    const row = Math.floor(cell / cols);
+    const col = cell % cols;
+    if (col + 1 < cols && ownerByCell.get(cell + 1) === teamId) addLine(cell, cell + 1, teamId);
+    if (row + 1 < rows && ownerByCell.get(cell + cols) === teamId) addLine(cell, cell + cols, teamId);
+  }
+  grid.append(overlay);
+}
+
 function paintPlayGrid(grid, contest, map, options) {
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
   layoutMapGrid(grid, map.cols, map.rows);
   grid.replaceChildren();
+  const recentClaims = collectRecentClaims(contest);
   const choosing = options.student && options.phase === "spawn" && !contest.spawnResolved;
   map.cells.forEach((cell, index) => {
     const button = document.createElement("button");
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
+    const claim = claimAt(contest, index);
     button.type = "button";
     button.dataset.index = String(index);
     const owner = ownerAt(contest, index, cell);
     if (options.student) {
       const reachable = options.phase === "live" && !options.frozen && cell.kind === "problem"
-        && !(contest.claims || []).some((claim) => claim.cell === index)
+        && !claim
         && adjacentToTeam(map, contest, options.team?.id, index);
       button.className = cellClassName(cell, "grid-cell", "student-cell");
       button.disabled = !((choosing && cell.kind === "spawnpoint") || reachable);
@@ -3034,12 +3183,15 @@ function paintPlayGrid(grid, contest, map, options) {
       if (solvedByOther) {
         button.classList.add("taken");
         button.style.setProperty("--team", teamColor(contest, owner.id));
+        if (recentClaims.has(index)) button.classList.add("just-taken");
       } else if (owner && contest.spawnResolved) {
         button.classList.add("owned");
         if (options.team && owner.id === options.team.id) button.classList.add("mine");
         button.style.setProperty("--team", teamColor(contest, owner.id));
         button.classList.add("territory-dot");
         button.textContent = "";
+        if (claim?.pending) button.classList.add("claim-pending");
+        else if (recentClaims.has(index)) button.classList.add("just-claimed");
       } else {
         const myVote = choosing
           ? (contest.spawnVotes || []).find((vote) => vote.teamId === options.team?.id && sameContestant(vote.username, contestantId()))
@@ -3068,11 +3220,16 @@ function paintPlayGrid(grid, contest, map, options) {
         badge.textContent = teamShort(owner.name);
         badge.style.color = teamColor(contest, owner.id);
         button.append(badge);
+        if (recentClaims.has(index)) {
+          button.classList.add("just-claimed");
+          button.style.setProperty("--team", teamColor(contest, owner.id));
+        }
       }
     }
     button.setAttribute("aria-label", studentCellLabel(contest, cell, row, column, index));
     grid.append(button);
   });
+  renderTerritoryLines(grid, contest, recentClaims);
 }
 
 function renderAdminBoard(contest, map) {
@@ -3087,8 +3244,8 @@ function renderAdminBoard(contest, map) {
 let contestSyncAt = 0;
 let contestSyncKey = "";
 let lastMouseMoveAt = Date.now();
-const CONTEST_SYNC_ACTIVE_MS = 1500;
-const CONTEST_SYNC_IDLE_MS = 15000;
+const CONTEST_SYNC_ACTIVE_MS = 5000;
+const CONTEST_SYNC_IDLE_MS = 20000;
 const CONTEST_SYNC_HIDDEN_MS = 60000;
 const MOUSE_IDLE_MS = 5000;
 
@@ -3829,10 +3986,9 @@ function onStudentGridClick(event) {
   if (cell?.kind === "problem" && phase === "live" && !contestFrozen(contest, map)) {
     const claim = (contest.claims || []).some((item) => item.cell === index);
     if (claim || !adjacentToTeam(map, contest, team.id, index)) return;
-    const url = new URL("answer.html", location.href);
-    url.searchParams.set("contest", contest.id);
-    url.searchParams.set("cell", String(index));
-    window.open(url.href, "_blank", "noopener");
+    selectedStudentCell = index;
+    renderStudentPlay();
+    showStudentProblem(contest, map, phase, false);
   }
 }
 
@@ -3860,23 +4016,42 @@ async function submitStudentAnswer(event) {
   event.preventDefault();
   const contest = currentContest();
   const map = contest && maps.find((item) => item.id === contest.mapId);
-  if (!contest || !map || selectedStudentCell === null) return;
+  const team = contest && teamForUser(contest);
+  if (!contest || !map || !team || selectedStudentCell === null) return;
+  const cell = selectedStudentCell;
   const submitButton = studentAnswerForm.querySelector("button");
+  if (submitButton.disabled) return;
+  const previousClaims = (contest.claims || []).slice();
+  const pendingClaim = {
+    cell,
+    teamId: team.id,
+    solvedBy: contestantId(),
+    solvedAt: Date.now(),
+    pending: true,
+  };
+  contest.claims = previousClaims.filter((claim) => claim.cell !== cell).concat(pendingClaim);
+  studentAnswerError.hidden = true;
+  const submitLabel = submitButton.textContent;
   submitButton.disabled = true;
+  submitButton.textContent = "Checking…";
+  renderStudentPlay();
+
   let failure = "";
   try {
     const data = await apiCall("solve", {
       contestId: contest.id,
-      cell: selectedStudentCell,
+      cell,
       answer: studentAnswer.value,
     });
     applyContestPlayState(contest, data);
     studentAnswer.value = "";
-    selectedStudentCell = null;
+    closeStudentProblem();
   } catch (error) {
+    contest.claims = previousClaims;
     failure = error.message;
   }
   submitButton.disabled = false;
+  submitButton.textContent = submitLabel;
   renderStudentPlay();
   if (failure) {
     studentAnswerError.hidden = false;
@@ -4340,6 +4515,11 @@ async function bootstrap() {
       }))
       : [];
     contests = Array.isArray(data.contests) ? data.contests.map(loadedContest) : [];
+    if (data.revisions) {
+      for (const name of ["maps", "problems", "contests"]) {
+        if (Number.isInteger(data.revisions[name])) revisions[name] = data.revisions[name];
+      }
+    }
     bootstrapped = true;
     loadError.hidden = true;
     noteServerTime(data.serverNow);

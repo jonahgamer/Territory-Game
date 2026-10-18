@@ -451,27 +451,79 @@ function collectUnique(raw, normalize, keyOf, label) {
   return { items };
 }
 
-async function replaceCollection(db, name, docs) {
+class SaveConflictError extends Error {}
+
+async function readRevision(db, name, session) {
+  const options = session ? { session } : {};
+  const doc = await db.collection('meta').findOne({ _id: name }, options);
+  return Number.isInteger(doc?.revision) ? doc.revision : 0;
+}
+
+async function bumpRevision(db, name, session) {
+  const meta = db.collection('meta');
+  const options = session ? { upsert: true, session } : { upsert: true };
+  await meta.updateOne(
+    { _id: name },
+    { $inc: { revision: 1 }, $set: { updatedAt: new Date() } },
+    options
+  );
+  const doc = await meta.findOne({ _id: name }, session ? { session } : {});
+  return Number.isInteger(doc?.revision) ? doc.revision : 1;
+}
+
+function assertRevision(current, expected) {
+  if (Number.isInteger(expected) && expected !== current) {
+    throw new SaveConflictError('This data changed in another tab. Reload before saving.');
+  }
+}
+
+// Upserts the documents the client sent and removes only documents that are no
+// longer in the list. A collection revision stops a stale tab from deleting
+// work that another tab added after this tab loaded.
+async function saveCollection(db, name, docs, idOf, expectedRevision) {
   const col = db.collection(name);
   const session = getMongoClient().startSession();
+  let revision = 0;
   try {
     await session.withTransaction(async () => {
-      await col.deleteMany({}, { session });
+      const current = await readRevision(db, name, session);
+      assertRevision(current, expectedRevision);
+      const keepIds = docs.map(idOf);
+      await col.deleteMany({ id: { $nin: keepIds } }, { session });
       if (docs.length > 0) {
-        await col.insertMany(docs.map((doc) => ({ ...doc, updatedAt: new Date() })), { session });
+        const now = new Date();
+        await col.bulkWrite(
+          docs.map((doc) => ({
+            updateOne: {
+              filter: { id: idOf(doc) },
+              update: { $set: { ...doc, id: idOf(doc), updatedAt: now } },
+              upsert: true,
+            },
+          })),
+          { session, ordered: false }
+        );
       }
+      revision = await bumpRevision(db, name, session);
     });
   } finally {
     await session.endSession();
   }
+  return revision;
 }
 
 async function handleBootstrap(req, res, db, user) {
-  const [maps, problems, storedContests] = await Promise.all([
+  const [maps, problems, storedContests, metaDocs] = await Promise.all([
     db.collection('maps').find({}).toArray(),
     db.collection('problems').find({}).toArray(),
     db.collection('contests').find({}).toArray(),
+    db.collection('meta').find({ _id: { $in: ['maps', 'problems', 'contests'] } }).toArray(),
   ]);
+  const revisions = { maps: 0, problems: 0, contests: 0 };
+  for (const doc of metaDocs) {
+    if (doc && revisions[doc._id] !== undefined && Number.isInteger(doc.revision)) {
+      revisions[doc._id] = doc.revision;
+    }
+  }
   const now = Date.now();
   const contests = [];
   for (const contest of storedContests) {
@@ -522,6 +574,7 @@ async function handleBootstrap(req, res, db, user) {
     maps: cleanMaps,
     problems: cleanProblems,
     contests: cleanContests,
+    revisions,
     serverNow: Date.now(),
   });
 }
@@ -530,8 +583,15 @@ async function handleSaveMaps(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const parsed = collectUnique(body.maps, normalizeMap, (map) => map.id, 'Maps');
   if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
-  await replaceCollection(db, 'maps', parsed.items);
-  return res.status(200).json({ success: true, count: parsed.items.length });
+  try {
+    const revision = await saveCollection(db, 'maps', parsed.items, (map) => map.id, body.revision);
+    return res.status(200).json({ success: true, count: parsed.items.length, revision });
+  } catch (err) {
+    if (err instanceof SaveConflictError) {
+      return res.status(409).json({ success: false, message: err.message, conflict: true });
+    }
+    throw err;
+  }
 }
 
 async function handleSaveProblems(req, res, db, user, body) {
@@ -543,8 +603,21 @@ async function handleSaveProblems(req, res, db, user, body) {
     'Problems'
   );
   if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
-  await replaceCollection(db, 'problems', parsed.items);
-  return res.status(200).json({ success: true, count: parsed.items.length });
+  try {
+    const revision = await saveCollection(
+      db,
+      'problems',
+      parsed.items,
+      (problem) => `${problem.type}:${problem.index}`,
+      body.revision
+    );
+    return res.status(200).json({ success: true, count: parsed.items.length, revision });
+  } catch (err) {
+    if (err instanceof SaveConflictError) {
+      return res.status(409).json({ success: false, message: err.message, conflict: true });
+    }
+    throw err;
+  }
 }
 
 async function handleSaveContests(req, res, db, user, body) {
@@ -554,8 +627,11 @@ async function handleSaveContests(req, res, db, user, body) {
 
   const col = db.collection('contests');
   const session = getMongoClient().startSession();
+  let revision = 0;
   try {
     await session.withTransaction(async () => {
+      const current = await readRevision(db, 'contests', session);
+      assertRevision(current, body.revision);
       const existing = await col.find({}, { session }).toArray();
       const previous = new Map(existing.map((contest) => [contest.id, contest]));
       const keepIds = parsed.items.map((contest) => contest.id);
@@ -593,12 +669,18 @@ async function handleSaveContests(req, res, db, user, body) {
           { upsert: true, session }
         );
       }
+      revision = await bumpRevision(db, 'contests', session);
     });
+  } catch (err) {
+    if (err instanceof SaveConflictError) {
+      return res.status(409).json({ success: false, message: err.message, conflict: true });
+    }
+    throw err;
   } finally {
     await session.endSession();
   }
 
-  return res.status(200).json({ success: true, count: parsed.items.length });
+  return res.status(200).json({ success: true, count: parsed.items.length, revision });
 }
 
 async function handleJoinContest(req, res, db, user, body) {
@@ -617,7 +699,8 @@ async function handleJoinContest(req, res, db, user, body) {
     return res.status(404).json({ success: false, message: 'Contest not found' });
   }
   const contest = await col.findOne({ id: contestId });
-  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
+  const revision = await bumpRevision(db, 'contests');
+  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [], revision });
 }
 
 async function handleRemoveContestant(req, res, db, user, body) {
@@ -640,7 +723,8 @@ async function handleRemoveContestant(req, res, db, user, body) {
     return res.status(404).json({ success: false, message: 'Contest not found' });
   }
   const contest = await col.findOne({ id: contestId });
-  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [] });
+  const revision = await bumpRevision(db, 'contests');
+  return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [], revision });
 }
 
 async function loadContestMap(db, contest) {
@@ -768,7 +852,8 @@ async function handleSaveTeam(req, res, db, user, body) {
   );
   const updated = await col.findOne({ id: contestId });
   const problems = await db.collection('problems').find({}).toArray();
-  return res.status(200).json(contestPayload(updated, map, problems, user));
+  const revision = await bumpRevision(db, 'contests');
+  return res.status(200).json({ ...contestPayload(updated, map, problems, user), revision });
 }
 
 async function handleRemoveTeam(req, res, db, user, body) {
@@ -794,7 +879,8 @@ async function handleRemoveTeam(req, res, db, user, body) {
   const updated = await col.findOne({ id: contestId });
   const map = await loadContestMap(db, updated);
   const problems = await db.collection('problems').find({}).toArray();
-  return res.status(200).json(contestPayload(updated, map, problems, user));
+  const revision = await bumpRevision(db, 'contests');
+  return res.status(200).json({ ...contestPayload(updated, map, problems, user), revision });
 }
 
 async function handleChooseSpawn(req, res, db, user, body) {
@@ -1100,19 +1186,25 @@ async function handleUpdateAccount(req, res, db, user, body) {
   }
   update.updatedAt = new Date();
   const removeFromTeams = update.banned === true;
+  let teamsChanged = 0;
   const session = getMongoClient().startSession();
   try {
     await session.withTransaction(async () => {
       await users.updateOne({ username }, { $set: update }, { session });
-      if (removeFromTeams) await removeStudentFromTeams(db, username, session);
+      if (removeFromTeams) teamsChanged = await removeStudentFromTeams(db, username, session);
     });
   } finally {
     await session.endSession();
   }
+  const revision = teamsChanged > 0 ? await bumpRevision(db, 'contests') : null;
   const updated = await users.findOne({ username }, { projection: { password: 0 } });
   const contests = await db.collection('contests').find({}).toArray();
   const memberships = contestMemberships(contests).get(username.toLowerCase()) || [];
-  return res.status(200).json({ success: true, account: publicAccount(updated, memberships) });
+  return res.status(200).json({
+    success: true,
+    account: publicAccount(updated, memberships),
+    ...(revision === null ? {} : { revision }),
+  });
 }
 
 async function handleDeleteAccount(req, res, db, user, body) {
@@ -1128,16 +1220,18 @@ async function handleDeleteAccount(req, res, db, user, body) {
   if (accountIsProtected(record)) {
     return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
   }
+  let teamsChanged = 0;
   const session = getMongoClient().startSession();
   try {
     await session.withTransaction(async () => {
-      await removeStudentFromTeams(db, username, session);
+      teamsChanged = await removeStudentFromTeams(db, username, session);
       await users.deleteOne({ username }, { session });
     });
   } finally {
     await session.endSession();
   }
-  return res.status(200).json({ success: true });
+  const revision = teamsChanged > 0 ? await bumpRevision(db, 'contests') : null;
+  return res.status(200).json({ success: true, ...(revision === null ? {} : { revision }) });
 }
 
 async function handleContestState(req, res, db, user, body) {
