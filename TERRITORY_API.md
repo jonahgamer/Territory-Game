@@ -54,6 +54,12 @@ Admin only. Every map must be valid. If one map is invalid, nothing is saved. Bo
 
 Admin only. Same rule: an invalid problem rejects the whole save. Body may include `revision`; a stale revision returns 409. Problems are identified by `type` and `index`, so the save is incremental in the same way as maps.
 
+### `POST { "action": "test-problem", "logic": "...", "expected": "...", "answer": "..." }`
+
+Admin only. Runs the submitted answer against the current problem fields without saving anything. `logic` is the checker source; `expected` is the problem answer; `answer` is the simulated student answer. If `logic` is empty, the server compares `expected` and `answer` as text.
+
+The response contains `correct`, `systemError`, `score`, `comment`, and `error`. A checker exception or timeout sets `systemError` and returns the reason in `error`; otherwise `correct` is the AC/WA result. The endpoint uses the same sandbox, one-second timeout, and score interpretation as a real solve.
+
 ### `POST { "action": "save-contests", "contests": [...] }`
 
 Admin only. Updates contest names, maps, and schedules, and deletes contests that are no longer in the list. Teams, spawn choices, assigned spawns, and solved cells already stored are kept. Changing the map clears those cell assignments. Spawn time and the wait must add up to less than the duration. Body may include `revision`; a stale revision returns 409. The response includes the new `revision`.

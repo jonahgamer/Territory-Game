@@ -2,6 +2,12 @@ import vm from 'node:vm';
 
 const TIMEOUT_MS = 1000;
 
+function errorDetail(error) {
+  if (!error) return 'Unknown error';
+  const message = String(error.message || error).replace(/\s+/g, ' ').trim();
+  return message.slice(0, 500) || 'Unknown error';
+}
+
 function readScore(value) {
   // null / undefined mean "not set", not "zero".
   if (value === null || value === undefined) return null;
@@ -33,6 +39,7 @@ function interpret(result) {
       systemError: false,
       score,
       comment,
+      error: '',
     };
   } catch {
     // A returned object with a hostile getter / Proxy trap.
@@ -41,6 +48,7 @@ function interpret(result) {
       systemError: true,
       score: 0,
       comment: 'The checker could not run.',
+      error: 'Could not read the checker result.',
     };
   }
 }
@@ -91,14 +99,26 @@ ${code}
       systemError: true,
       score: 0,
       comment: timedOut ? 'The checker took too long.' : 'The checker could not run.',
+      error: timedOut ? 'Timed out after 1000 ms.' : errorDetail(error),
     };
   }
 
   // Read the outcome back as plain data. The host never keeps a live
   // reference to anything the script could have touched.
-  const snapshot = vm.runInContext(
-    '({ score: result.score, comment: result.comment, returned: result.returned })',
-    context
-  );
+  let snapshot;
+  try {
+    snapshot = vm.runInContext(
+      '({ score: result.score, comment: result.comment, returned: result.returned })',
+      context
+    );
+  } catch (error) {
+    return {
+      correct: false,
+      systemError: true,
+      score: 0,
+      comment: 'The checker could not run.',
+      error: errorDetail(error),
+    };
+  }
   return interpret(snapshot);
 }

@@ -6,6 +6,7 @@
 //   GET  /api/territory?action=bootstrap          → { maps, problems, contests, user }
 //   POST /api/territory  { action: 'save-maps',     maps }
 //   POST /api/territory  { action: 'save-problems', problems }
+//   POST /api/territory  { action: 'test-problem', logic, expected, answer }  (admin test, no DB write)
 //   POST /api/territory  { action: 'save-contests', contests }
 //   POST /api/territory  { action: 'save-team', contestId, name, members }
 //   POST /api/territory  { action: 'remove-team', contestId, teamId }
@@ -54,6 +55,7 @@ const MIN_PROBLEM_NO = 1;
 const MAX_PROBLEM_NO = 999;
 const MAX_PROBLEM_TEXT = 5000;
 const MAX_PROBLEM_LOGIC = 10000;
+const MAX_TEST_TEXT = 10000;
 const MAX_NAME_LEN = 60;
 const MAX_CONTESTANT_ID_LEN = 80;
 const MAX_CONTEST_MINUTES = 10080;
@@ -618,6 +620,35 @@ async function handleSaveProblems(req, res, db, user, body) {
     }
     throw err;
   }
+}
+
+async function handleTestProblem(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const logic = typeof body.logic === 'string' ? body.logic : '';
+  const expected = typeof body.expected === 'string' ? body.expected : '';
+  const given = typeof body.answer === 'string' ? body.answer : '';
+  if (logic.length > MAX_PROBLEM_LOGIC) {
+    return res.status(400).json({ success: false, message: 'Logic is too long.' });
+  }
+  if (expected.length > MAX_TEST_TEXT || given.length > MAX_TEST_TEXT) {
+    return res.status(400).json({ success: false, message: 'The test answer is too long.' });
+  }
+
+  if (!logic.trim()) {
+    const hasExpected = Boolean(expected.trim());
+    const correct = hasExpected && answersMatch(expected, given);
+    return res.status(200).json({
+      success: true,
+      correct,
+      systemError: false,
+      score: correct ? 100 : 0,
+      comment: hasExpected ? (correct ? 'AC' : 'WA') : 'No expected answer set.',
+      error: '',
+    });
+  }
+
+  const judged = runProblemLogic(logic, expected, given);
+  return res.status(200).json({ success: true, ...judged });
 }
 
 async function handleSaveContests(req, res, db, user, body) {
@@ -1302,6 +1333,7 @@ export default async function handler(req, res) {
       case 'bootstrap':     return await handleBootstrap(req, res, db, user);
       case 'save-maps':     return await handleSaveMaps(req, res, db, user, body);
       case 'save-problems': return await handleSaveProblems(req, res, db, user, body);
+      case 'test-problem': return await handleTestProblem(req, res, db, user, body);
       case 'save-contests': return await handleSaveContests(req, res, db, user, body);
       case 'join-contest':  return await handleJoinContest(req, res, db, user, body);
       case 'remove-contestant': return await handleRemoveContestant(req, res, db, user, body);

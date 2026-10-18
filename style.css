@@ -1557,6 +1557,124 @@ button[type="submit"],
   overflow-x: auto;
 }
 
+.problem-test-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.problem-test-box h3 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.problem-test-answer-field {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.problem-test-answer-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  resize: vertical;
+}
+
+.problem-test-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#problem-test-run {
+  padding: 8px 14px;
+  border: 1px solid var(--cyan);
+  background: transparent;
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#problem-test-run:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.problem-test-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.8);
+}
+
+.problem-test-badge {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.problem-test-detail {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.problem-test-result[data-result="AC"] {
+  border-color: #3ddc6a;
+  color: #3ddc6a;
+}
+
+.problem-test-result[data-result="AC"] .problem-test-detail {
+  color: #b9f5c9;
+}
+
+.problem-test-result[data-result="WA"] {
+  border-color: #ff9a1a;
+  color: #ffb347;
+}
+
+.problem-test-result[data-result="WA"] .problem-test-detail {
+  color: #ffd39b;
+}
+
+.problem-test-result[data-result="ERROR"] {
+  border-color: #ff5a5a;
+  color: #ff7b7b;
+}
+
+.problem-test-result[data-result="ERROR"] .problem-test-detail {
+  color: #ffb3b3;
+}
+
+.problem-test-result[data-result="RUNNING"] {
+  color: var(--muted);
+}
 .katex {
   color: inherit;
   font-size: 1.05em;
