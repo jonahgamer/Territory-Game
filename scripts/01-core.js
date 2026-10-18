@@ -29,9 +29,16 @@ const sidebarBackdrop = document.querySelector(".sidebar-backdrop");
 const mapsButton = document.querySelector("#maps-button");
 const problemsButton = document.querySelector("#problems-button");
 const competitionsButton = document.querySelector("#competitions-button");
-const creditsLabel = document.querySelector("#credits-label");
+const creditsButton = document.querySelector("#credits-button");
 const tutorialButton = document.querySelector("#tutorial-button");
 const tutorialView = document.querySelector("#tutorial-view");
+const creditsView = document.querySelector("#credits-view");
+const versionForm = document.querySelector("#version-form");
+const versionNameInput = document.querySelector("#version-name");
+const versionMessageInput = document.querySelector("#version-message");
+const versionFormError = document.querySelector("#version-form-error");
+const versionEmpty = document.querySelector("#version-empty");
+const versionList = document.querySelector("#version-list");
 const settingsButton = document.querySelector("#settings-button");
 const settingsView = document.querySelector("#settings-view");
 const studentSettingsView = document.querySelector("#student-settings-view");
@@ -282,6 +289,7 @@ const studentAnswerSuccess = document.querySelector("#student-answer-success");
 let problems = [];
 let maps = [];
 let contests = [];
+let versions = [];
 let session = readStoredSession();
 let bootstrapped = false;
 let openMapId = null;
@@ -329,7 +337,7 @@ let answerOpenMode = readAnswerOpenMode();
 
 // Routing is only enabled on the full single-page app. The split pages in
 // ui2/ keep their own real URLs and are handled by openSplitPage().
-const ROUTED = Boolean(homeView && mapsView && problemsView && competitionsView && settingsView && tutorialView);
+const ROUTED = Boolean(homeView && mapsView && problemsView && competitionsView && settingsView && tutorialView && creditsView);
 let routeApplying = false;
 let routeLast = "";
 
@@ -386,7 +394,7 @@ const _persistContestsDebounced = debounce(() => { persistContestsNow(); }, 600)
 //   #/problems/<type>/<index>
 //   #/contests                     #/contests/<contestId>
 //   #/student                      #/student/<contestId>
-//   #/settings                     #/tutorial
+//   #/settings                     #/tutorial                     #/credits
 //
 // ui2/ pages keep their own real URLs and call openSplitPage() instead.
 
@@ -500,6 +508,7 @@ function routeViewLabel(route) {
   if (route.name === "contests" || route.name === "student") return "Contests";
   if (route.name === "settings") return isContestant() ? "Settings" : "Accounts";
   if (route.name === "tutorial") return "Tutorial";
+  if (route.name === "credits") return "Credits";
   return "Home";
 }
 
@@ -638,6 +647,11 @@ function renderRoute(route) {
       }
       showTutorial();
       return "#/tutorial";
+    }
+
+    case "credits": {
+      showCredits();
+      return "#/credits";
     }
 
     default: {

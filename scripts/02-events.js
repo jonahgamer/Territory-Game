@@ -30,6 +30,7 @@ mapsButton?.addEventListener("click", () => navigateTo("maps"));
 problemsButton?.addEventListener("click", () => navigateTo("problems"));
 competitionsButton?.addEventListener("click", () => navigateTo(isContestant() ? "student" : "contests"));
 tutorialButton?.addEventListener("click", () => navigateTo("tutorial"));
+creditsButton?.addEventListener("click", () => navigateTo("credits"));
 settingsButton?.addEventListener("click", () => navigateTo("settings"));
 accountForm?.addEventListener("submit", createAccount);
 accountList?.addEventListener("click", onAccountListClick);
@@ -40,6 +41,7 @@ accountSearch?.addEventListener("input", () => {
 accountFilters?.addEventListener("click", onAccountFilterClick);
 answerOpenModeChoices?.addEventListener("click", onAnswerModeClick);
 accountButton?.addEventListener("click", logOut);
+versionForm?.addEventListener("submit", addVersion);
 pageToastClose?.addEventListener("click", hidePageToast);
 createContestForm?.addEventListener("submit", createContest);
 contestList?.addEventListener("click", onContestListClick);

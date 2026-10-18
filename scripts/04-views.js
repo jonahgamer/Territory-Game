@@ -490,7 +490,7 @@ function showEditor(mapId, options = {}) {
 }
 
 function hideViews() {
-  for (const view of [homeView, mapsView, problemsView, problemEditorView, problemBatchView, competitionsView, contestView, studentView, studentPlayView, studentSettingsView, editorView, settingsView, tutorialView]) {
+  for (const view of [homeView, mapsView, problemsView, problemEditorView, problemBatchView, competitionsView, contestView, studentView, studentPlayView, studentSettingsView, editorView, settingsView, tutorialView, creditsView]) {
     if (view) view.hidden = true;
   }
 }
@@ -520,7 +520,7 @@ function setMenuOpen(open) {
 }
 
 function setCurrentSection(button) {
-  for (const item of [mapsButton, problemsButton, competitionsButton, tutorialButton, settingsButton]) {
+  for (const item of [mapsButton, problemsButton, competitionsButton, tutorialButton, creditsButton, settingsButton]) {
     item?.removeAttribute("aria-current");
   }
   if (button) button.setAttribute("aria-current", "page");

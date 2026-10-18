@@ -28,7 +28,7 @@
             <li><button id="problems-button" type="button">Problems</button></li>
             <li><button id="competitions-button" type="button">Contests</button></li>
             <li><button id="tutorial-button" type="button">Tutorial</button></li>
-            <li class="section-label" id="credits-label">Credits</li>
+            <li><button id="credits-button" type="button">Credits</button></li>
             <li><button id="settings-button" type="button">Settings</button></li>
           </ul>
         </nav>
@@ -152,6 +152,26 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
   result.score = 0;
   result.comment = "Check the values and try again.";
 }</pre>
+        </section>
+
+        <section id="credits-view" hidden>
+          <p class="eyebrow">Credits</p>
+          <h1>Versions</h1>
+          <p class="lead">Each note is shown exactly as it was typed.</p>
+          <form id="version-form" class="create-map">
+            <label>
+              Version
+              <input id="version-name" class="contest-name" type="text" maxlength="40" required />
+            </label>
+            <label>
+              Message
+              <textarea id="version-message" rows="5" maxlength="4000"></textarea>
+            </label>
+            <button type="submit">Add version</button>
+            <p id="version-form-error" class="form-error" hidden></p>
+          </form>
+          <p id="version-empty">No versions yet.</p>
+          <ol id="version-list" class="version-list" hidden></ol>
         </section>
 
         <section id="home-view">

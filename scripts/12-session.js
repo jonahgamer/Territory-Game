@@ -459,7 +459,6 @@ function applyAccount() {
   const user = session.user;
   if (mapsButton) mapsButton.hidden = contestant;
   if (problemsButton) problemsButton.hidden = contestant;
-  if (creditsLabel) creditsLabel.hidden = contestant;
   if (tutorialButton) tutorialButton.hidden = contestant;
   if (settingsButton) settingsButton.hidden = false;
   if (accountRole) accountRole.textContent = user.role === "admin" ? "Admin" : "Student";

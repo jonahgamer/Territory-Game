@@ -1606,6 +1606,43 @@ button[type="submit"],
   background: rgba(8, 18, 32, 0.72);
 }
 
+.version-list {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  max-width: 40rem;
+}
+
+.version-list li {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.version-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+}
+
+.version-message {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.version-time {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .problem-preview-title {
   margin-bottom: 8px;
   font-family: var(--font-ui);
@@ -1616,7 +1653,7 @@ button[type="submit"],
 }
 
 .problem-preview-content {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-x: auto;

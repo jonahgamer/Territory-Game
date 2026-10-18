@@ -21,6 +21,7 @@ async function bootstrap() {
       }))
       : [];
     contests = Array.isArray(data.contests) ? data.contests.map(loadedContest) : [];
+    versions = Array.isArray(data.versions) ? data.versions.map(loadedVersion) : [];
     if (data.revisions) {
       for (const name of ["maps", "problems", "contests"]) {
         if (Number.isInteger(data.revisions[name])) revisions[name] = data.revisions[name];

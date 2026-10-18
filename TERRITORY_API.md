@@ -42,7 +42,7 @@ Every request needs `Authorization: Bearer <token>`.
 
 Returns the signed-in user, maps, problems, and contests.
 
-Students receive only the contests they are on, the maps for those contests, and the prompts of problems placed on those maps. They receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive every map, problem, answer, and optional `logic` script. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
+Students receive only the contests they are on, the maps for those contests, and the prompts of problems placed on those maps. They receive each problem's prompt, type, and difficulty, and do not receive the answer or the logic. Admins receive every map, problem, answer, and optional `logic` script. Everyone receives `versions`, the Credits notes, as plain text. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
 
 On a 409, the admin UI fetches this response again and opens a field-level diff instead of asking for a page refresh. Each added, deleted, or changed record can keep the local value, the server value, or a per-field mix. Applying the choices saves with the latest server revision.
 
@@ -128,6 +128,10 @@ Setting `banned` to `true` also removes the student from every contest team, so 
 ### `POST { "action": "delete-account", "username": "..." }`
 
 Admin only. Deletes a student account and removes that username from every contest team in the same transaction. An admin cannot delete their own account or another admin.
+
+### `POST { "action": "add-version", "version": "...", "message": "..." }`
+
+Admin only. Adds a Credits note. `version` is at most 40 characters and `message` is at most 4000. The text is stored and shown as plain text. The response includes the newest notes first.
 
 ## Team and territory rules
 
