@@ -73,9 +73,6 @@ const rowsInput = document.querySelector("#map-rows");
 const formError = document.querySelector("#map-form-error");
 const emptyMessage = document.querySelector("#map-empty");
 const mapList = document.querySelector("#map-list");
-const problemCountInMap=document.querySelector("pbct");
-const spawnCountInMap=document.querySelector("spct");
-const wallCountInMap=document.querySelector("wlct");
 const CELL_SIZE = 48;
 const mapCellSize = new WeakMap();
 const pinchBound = new WeakSet();
@@ -166,6 +163,17 @@ const problemNoInput = document.querySelector("#problem-no");
 const nextNumberInput = document.querySelector("#next-number");
 const problemNoError = document.querySelector("#problem-no-error");
 const placeTypeChoices = document.querySelector("#place-type-choices");
+const placeModeChoices = document.querySelector("#place-mode-choices");
+const placeManual = document.querySelector("#place-manual");
+const placePick = document.querySelector("#place-pick");
+const placePickTypeChoices = document.querySelector("#place-pick-types");
+const placePickDifficultyChoices = document.querySelector("#place-pick-difficulties");
+const placePickSourceChoices = document.querySelector("#place-pick-source");
+const placeFixedField = document.querySelector("#place-fixed-field");
+const placeFixedIndex = document.querySelector("#place-fixed-index");
+const placeRangeField = document.querySelector("#place-range-field");
+const placeRangeFrom = document.querySelector("#place-range-from");
+const placeRangeTo = document.querySelector("#place-range-to");
 const problemSectionChoices = document.querySelector("#problem-section-choices");
 const problemSection = document.querySelector("#problem-section");
 const problemSectionTitle = document.querySelector("#problem-section-title");
@@ -302,6 +310,10 @@ let problemDraft = null;
 let pendingProblemDraft = null;
 let problemDirty = false;
 let placeType = "math";
+let placeMode = "manual";
+let placePickSource = "random";
+const placePickTypes = new Set(["math"]);
+const placePickDifficulties = new Set(["easy", "normal", "hard", "insane"]);
 let serverOffsetMs = 0;
 const revisions = { maps: 0, problems: 0, contests: 0 };
 const saveQueues = { maps: Promise.resolve(), problems: Promise.resolve(), contests: Promise.resolve() };
@@ -783,6 +795,10 @@ kindSpawnpoint?.addEventListener("click", () => chooseTool("spawnpoint"));
 kindObstacle?.addEventListener("click", () => chooseTool("obstacle"));
 kindEmpty?.addEventListener("click", () => chooseTool("empty"));
 editorGrid?.addEventListener("pointerdown", startPaint);
+placeModeChoices?.addEventListener("click", onPlaceModeClick);
+placePickTypeChoices?.addEventListener("click", onPlacePickTypeClick);
+placePickDifficultyChoices?.addEventListener("click", onPlacePickDifficultyClick);
+placePickSourceChoices?.addEventListener("click", onPlacePickSourceClick);
 problemNoInput?.addEventListener("input", () => {
   problemNoError.hidden = true;
 });
@@ -2388,8 +2404,16 @@ function applyTool(index, mode) {
   }
 
   if (paintKind === "problem") {
-    const problemNo = readProblemNo(problemNoInput.value);
-    if (problemNo === null) {
+    const picked = placeMode === "pick" ? pickProblemForMap(map) : null;
+    const problemNo = placeMode === "pick" ? picked?.index : readProblemNo(problemNoInput.value);
+    const type = placeMode === "pick" ? picked?.type : placeType;
+    if (placeMode === "pick" && picked?.error) {
+      problemNoError.hidden = false;
+      problemNoError.textContent = picked.error;
+      stopPaint();
+      return;
+    }
+    if (problemNo === null || !type) {
       problemNoError.hidden = false;
       problemNoError.textContent = `Problem no. must be a whole number from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.`;
       stopPaint();
@@ -2399,10 +2423,10 @@ function applyTool(index, mode) {
     problemNoError.hidden = true;
     paintedThisStroke.add(index);
     strokeCount += 1;
-    map.cells[index] = { kind: "problem", problemNo, type: placeType };
+    map.cells[index] = { kind: "problem", problemNo, type };
     paintCell(map, index);
     markMapDirty();
-    if (nextNumberInput.checked && problemNo < MAX_PROBLEM_NO) {
+    if (placeMode !== "pick" && nextNumberInput.checked && problemNo < MAX_PROBLEM_NO) {
       problemNoInput.value = String(problemNo + 1);
     }
     return;
@@ -2446,9 +2470,10 @@ function cellIndexFromPoint(x, y) {
 // ═══════════════════════════════════════════════════════════════════
 
 function mapKindCounts(map) {
-  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0 };
+  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0 };
   for (const cell of map?.cells || []) {
     if (Object.prototype.hasOwnProperty.call(counts, cell.kind)) counts[cell.kind] += 1;
+    if (cell.kind === "problem" && Object.prototype.hasOwnProperty.call(counts, cell.type)) counts[cell.type] += 1;
   }
   return counts;
 }
@@ -2462,6 +2487,10 @@ function renderMapCounts(map) {
   const counts = mapKindCounts(map);
   const entries = [
     ["problem", "Problems", counts.problem],
+    ["math", "Math", counts.math],
+    ["oi", "OI", counts.oi],
+    ["science", "Science", counts.science],
+    ["puzzle", "Puzzle", counts.puzzle],
     ["obstacle", "Obstacles", counts.obstacle],
     ["spawnpoint", "Spawn points", counts.spawnpoint],
     ["empty", "Empty", counts.empty],
@@ -2595,6 +2624,104 @@ function renderPlaceType() {
   for (const button of placeTypeChoices.querySelectorAll("[data-place-type]")) {
     button.setAttribute("aria-pressed", String(button.dataset.placeType === placeType));
   }
+}
+
+function onPlaceModeClick(event) {
+  const button = event.target.closest("[data-place-mode]");
+  if (!button || (button.dataset.placeMode !== "manual" && button.dataset.placeMode !== "pick")) return;
+  placeMode = button.dataset.placeMode;
+  renderPlacePick();
+}
+
+function onPlacePickTypeClick(event) {
+  const button = event.target.closest("[data-pick-type]");
+  if (!button || !typeInfo(button.dataset.pickType)) return;
+  if (placePickTypes.has(button.dataset.pickType)) placePickTypes.delete(button.dataset.pickType);
+  else placePickTypes.add(button.dataset.pickType);
+  renderPlacePick();
+}
+
+function onPlacePickDifficultyClick(event) {
+  const button = event.target.closest("[data-pick-difficulty]");
+  const difficulty = button?.dataset.pickDifficulty;
+  if (!button || !DIFFICULTIES.includes(difficulty)) return;
+  if (placePickDifficulties.has(difficulty)) placePickDifficulties.delete(difficulty);
+  else placePickDifficulties.add(difficulty);
+  renderPlacePick();
+}
+
+function onPlacePickSourceClick(event) {
+  const button = event.target.closest("[data-pick-source]");
+  const source = button?.dataset.pickSource;
+  if (!button || !["random", "fixed", "range"].includes(source)) return;
+  placePickSource = source;
+  renderPlacePick();
+}
+
+function renderPlacePick() {
+  if (placeModeChoices) {
+    for (const button of placeModeChoices.querySelectorAll("[data-place-mode]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.placeMode === placeMode));
+    }
+  }
+  if (placeManual) placeManual.hidden = placeMode !== "manual";
+  if (placePick) placePick.hidden = placeMode !== "pick";
+  if (placePickTypeChoices) {
+    for (const button of placePickTypeChoices.querySelectorAll("[data-pick-type]")) {
+      button.setAttribute("aria-pressed", String(placePickTypes.has(button.dataset.pickType)));
+    }
+  }
+  if (placePickDifficultyChoices) {
+    for (const button of placePickDifficultyChoices.querySelectorAll("[data-pick-difficulty]")) {
+      button.setAttribute("aria-pressed", String(placePickDifficulties.has(button.dataset.pickDifficulty)));
+    }
+  }
+  if (placePickSourceChoices) {
+    for (const button of placePickSourceChoices.querySelectorAll("[data-pick-source]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.pickSource === placePickSource));
+    }
+  }
+  if (placeFixedField) placeFixedField.hidden = placePickSource !== "fixed";
+  if (placeRangeField) placeRangeField.hidden = placePickSource !== "range";
+}
+
+function mapProblemUseCounts(map) {
+  const counts = new Map();
+  for (const cell of map?.cells || []) {
+    if (cell.kind !== "problem") continue;
+    const key = `${cell.type}:${cell.problemNo}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+function pickProblemForMap(map) {
+  if (placePickTypes.size === 0 || placePickDifficulties.size === 0) {
+    return { error: "Choose at least one type and one difficulty." };
+  }
+  let pool = problems.filter((problem) => placePickTypes.has(problem.type) && placePickDifficulties.has(problemDifficulty(problem)));
+  if (placePickSource === "fixed") {
+    const index = readProblemNo(placeFixedIndex?.value);
+    if (index === null) return { error: `Index must be a whole number from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.` };
+    pool = pool.filter((problem) => problem.index === index);
+  } else if (placePickSource === "range") {
+    const from = readProblemNo(placeRangeFrom?.value);
+    const to = readProblemNo(placeRangeTo?.value);
+    if (from === null || to === null) return { error: `The range must use whole numbers from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.` };
+    const low = Math.min(from, to);
+    const high = Math.max(from, to);
+    pool = pool.filter((problem) => problem.index >= low && problem.index <= high);
+  }
+  if (pool.length === 0) return { error: "No saved problem matches those types, difficulties, and indexes." };
+  const uses = mapProblemUseCounts(map);
+  const countOf = (problem) => uses.get(`${problem.type}:${problem.index}`) || 0;
+  const unused = pool.filter((problem) => countOf(problem) === 0);
+  const source = unused.length > 0 ? unused : pool;
+  let lowest = Infinity;
+  for (const problem of source) lowest = Math.min(lowest, countOf(problem));
+  const tied = source.filter((problem) => countOf(problem) === lowest);
+  const chosen = tied[Math.floor(Math.random() * tied.length)];
+  return { type: chosen.type, index: chosen.index };
 }
 // ═══════════════════════════════════════════════════════════════════
 // Problems

@@ -78,14 +78,45 @@
           <button id="kind-empty" type="button" aria-pressed="false">Clear</button>
         </div>
         <div id="problem-options" class="problem-options">
-          <div class="kind-choices place-types" id="place-type-choices">
-            <button type="button" data-place-type="math" aria-pressed="true">Math</button>
-            <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
-            <button type="button" data-place-type="science" aria-pressed="false">Science</button>
-            <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
+          <div class="kind-choices" id="place-mode-choices">
+            <button type="button" data-place-mode="manual" aria-pressed="true">Manual number</button>
+            <button type="button" data-place-mode="pick" aria-pressed="false">Random</button>
           </div>
-          <label id="problem-no-field">Problem no. <input id="problem-no" type="number" min="1" max="999" value="1" /></label>
-          <label class="next-number"><input id="next-number" type="checkbox" checked /> Use the next number for each cell</label>
+          <div id="place-manual">
+            <div class="kind-choices place-types" id="place-type-choices">
+              <button type="button" data-place-type="math" aria-pressed="true">Math</button>
+              <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
+              <button type="button" data-place-type="science" aria-pressed="false">Science</button>
+              <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
+            </div>
+            <label id="problem-no-field">Problem no. <input id="problem-no" type="number" min="1" max="999" value="1" /></label>
+            <label class="next-number"><input id="next-number" type="checkbox" checked /> Use the next number for each cell</label>
+          </div>
+          <div id="place-pick" hidden>
+            <p class="field-note">Each empty cell gets one saved problem. A problem that is not on this map is used first. If every match is already on the map, the one that appears least often is used.</p>
+            <div class="kind-choices" id="place-pick-types">
+              <button type="button" data-pick-type="math" aria-pressed="true">Math</button>
+              <button type="button" data-pick-type="oi" aria-pressed="false">OI</button>
+              <button type="button" data-pick-type="science" aria-pressed="false">Science</button>
+              <button type="button" data-pick-type="puzzle" aria-pressed="false">Puzzle</button>
+            </div>
+            <div class="kind-choices" id="place-pick-difficulties">
+              <button type="button" data-pick-difficulty="easy" aria-pressed="true">Easy</button>
+              <button type="button" data-pick-difficulty="normal" aria-pressed="true">Normal</button>
+              <button type="button" data-pick-difficulty="hard" aria-pressed="true">Hard</button>
+              <button type="button" data-pick-difficulty="insane" aria-pressed="true">Insane</button>
+            </div>
+            <div class="kind-choices" id="place-pick-source">
+              <button type="button" data-pick-source="random" aria-pressed="true">Random</button>
+              <button type="button" data-pick-source="fixed" aria-pressed="false">Fixed index</button>
+              <button type="button" data-pick-source="range" aria-pressed="false">Index range</button>
+            </div>
+            <label id="place-fixed-field" hidden>Index <input id="place-fixed-index" type="number" min="1" max="999" value="1" /></label>
+            <div id="place-range-field" class="place-range" hidden>
+              <label>From <input id="place-range-from" type="number" min="1" max="999" value="1" /></label>
+              <label>To <input id="place-range-to" type="number" min="1" max="999" value="20" /></label>
+            </div>
+          </div>
           <p id="problem-no-error" class="form-error" hidden></p>
         </div>
         <ul class="legend">

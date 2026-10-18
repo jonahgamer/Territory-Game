@@ -141,6 +141,10 @@ kindSpawnpoint?.addEventListener("click", () => chooseTool("spawnpoint"));
 kindObstacle?.addEventListener("click", () => chooseTool("obstacle"));
 kindEmpty?.addEventListener("click", () => chooseTool("empty"));
 editorGrid?.addEventListener("pointerdown", startPaint);
+placeModeChoices?.addEventListener("click", onPlaceModeClick);
+placePickTypeChoices?.addEventListener("click", onPlacePickTypeClick);
+placePickDifficultyChoices?.addEventListener("click", onPlacePickDifficultyClick);
+placePickSourceChoices?.addEventListener("click", onPlacePickSourceClick);
 problemNoInput?.addEventListener("input", () => {
   problemNoError.hidden = true;
 });

@@ -110,8 +110,16 @@ function applyTool(index, mode) {
   }
 
   if (paintKind === "problem") {
-    const problemNo = readProblemNo(problemNoInput.value);
-    if (problemNo === null) {
+    const picked = placeMode === "pick" ? pickProblemForMap(map) : null;
+    const problemNo = placeMode === "pick" ? picked?.index : readProblemNo(problemNoInput.value);
+    const type = placeMode === "pick" ? picked?.type : placeType;
+    if (placeMode === "pick" && picked?.error) {
+      problemNoError.hidden = false;
+      problemNoError.textContent = picked.error;
+      stopPaint();
+      return;
+    }
+    if (problemNo === null || !type) {
       problemNoError.hidden = false;
       problemNoError.textContent = `Problem no. must be a whole number from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.`;
       stopPaint();
@@ -121,10 +129,10 @@ function applyTool(index, mode) {
     problemNoError.hidden = true;
     paintedThisStroke.add(index);
     strokeCount += 1;
-    map.cells[index] = { kind: "problem", problemNo, type: placeType };
+    map.cells[index] = { kind: "problem", problemNo, type };
     paintCell(map, index);
     markMapDirty();
-    if (nextNumberInput.checked && problemNo < MAX_PROBLEM_NO) {
+    if (placeMode !== "pick" && nextNumberInput.checked && problemNo < MAX_PROBLEM_NO) {
       problemNoInput.value = String(problemNo + 1);
     }
     return;
