@@ -916,7 +916,8 @@ button[type="submit"],
 
 .leaderboard {
   margin: 12px 0 0;
-  padding-left: 1.4rem;
+  padding-left: 0;
+  list-style: none;
   font-family: var(--font-ui);
   font-size: 16px;
 }
@@ -1399,7 +1400,292 @@ button[type="submit"],
   top: 6px;
 }
 
+/* ── Account management ─────────────────────────────────────────── */
+
+.account-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 12px;
+  max-width: 40rem;
+  margin: 28px 0 4px;
+}
+
+.account-stat {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.account-stat strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--cyan);
+}
+
+.account-stat span {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.account-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 24px;
+  max-width: 52rem;
+  margin: 0 0 16px;
+}
+
+.account-search {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.account-search input {
+  width: min(20rem, 100%);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.account-filters {
+  margin: 0;
+}
+
+.status-note {
+  margin: 0 0 12px;
+  max-width: 52rem;
+  color: #3ddc6a;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.account-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  max-width: 52rem;
+}
+
+.account-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+  box-shadow: 0 0 24px rgba(62, 224, 255, 0.04);
+}
+
+.account-card.suspended {
+  border-color: rgba(255, 93, 115, 0.55);
+  background: rgba(30, 10, 18, 0.55);
+}
+
+.account-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-card-name {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.account-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.account-badge.role-admin {
+  border-color: #ff9a1a;
+  color: #ff9a1a;
+}
+
+.account-badge.role-student {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.account-badge.status-banned {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.account-card-meta,
+.account-card-teams,
+.account-protected {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.account-card-teams {
+  color: var(--ink);
+}
+
+.team-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 2px 0;
+  border: 1px solid rgba(62, 224, 255, 0.3);
+  background: rgba(62, 224, 255, 0.06);
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+.account-protected {
+  color: #ff9a1a;
+}
+
+.account-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 16px;
+}
+
+.account-field {
+  display: grid;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.account-field input {
+  width: min(15rem, 100%);
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.account-action {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.account-action:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.account-action.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.account-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── Contest teams ──────────────────────────────────────────────── */
+
+.team-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.team-list .team-detail {
+  flex: 1 1 18rem;
+  min-width: 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.team-list li.editing {
+  border-color: var(--cyan);
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(7rem, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.leaderboard-rank {
+  color: var(--muted);
+}
+
+.leaderboard-team {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-stat {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
+  .account-field input,
+  .account-search input {
+    width: 100%;
+  }
+
+  .leaderboard-row {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .leaderboard-stat {
+    grid-column: 2;
+  }
+
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);

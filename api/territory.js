@@ -338,19 +338,22 @@ export function answersMatch(expected, given) {
 
 function buildLeaderboard(contest, map, problems) {
   const claims = cleanClaims(contest?.claims);
+  const spawns = cleanTeamCells(contest?.spawns);
   return cleanTeams(contest?.teams).map((team) => {
     let score = 0;
     let solved = 0;
+    let territory = spawns.some((spawn) => spawn.teamId === team.id) ? 1 : 0;
     for (const claim of claims) {
       if (claim.teamId !== team.id) continue;
+      territory += 1;
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== 'problem') continue;
       const problem = (problems || []).find((item) => item.index === cell.problemNo && item.type === cell.type);
       score += DIFFICULTY_SCORE[problemDifficulty(problem)];
       solved += 1;
     }
-    return { teamId: team.id, name: team.name, score, solved };
-  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    return { teamId: team.id, name: team.name, score, solved, territory };
+  }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
 function contestPayload(contest, map, problems, user) {
@@ -698,6 +701,11 @@ async function handleSaveTeam(req, res, db, user, body) {
   if (!contestId || !name || name.length > MAX_NAME_LEN || rawMembers.length < 1 || rawMembers.length > 5) {
     return res.status(400).json({ success: false, message: 'Enter a team name and 1 to 5 students.' });
   }
+
+  const col = db.collection('contests');
+  const contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+
   const members = [];
   for (const raw of rawMembers) {
     const student = await findStudent(db, raw);
@@ -708,19 +716,38 @@ async function handleSaveTeam(req, res, db, user, body) {
     members.push(student.username);
   }
 
-  const col = db.collection('contests');
-  const contest = await col.findOne({ id: contestId });
-  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
   const teams = cleanTeams(contest.teams);
-  const teamId = cleanId(body.teamId) || crypto.randomUUID();
+  const requestedTeamId = cleanId(body.teamId);
+  const index = requestedTeamId ? teams.findIndex((team) => team.id === requestedTeamId) : -1;
+  if (requestedTeamId && index < 0) {
+    return res.status(404).json({ success: false, message: 'Team not found in this contest.' });
+  }
+  const teamId = requestedTeamId || crypto.randomUUID();
+
+  const duplicateName = teams.find((team) => team.id !== teamId && sameName(team.name, name));
+  if (duplicateName) {
+    return res.status(400).json({ success: false, message: 'Another team in this contest already has that name.' });
+  }
   for (const team of teams) {
     if (team.id === teamId) continue;
     if (team.members.some((member) => members.some((next) => sameName(member, next)))) {
       return res.status(400).json({ success: false, message: 'One of those students is already on a team in this contest.' });
     }
   }
+
+  const map = await loadContestMap(db, contest);
+  const spawnCount = spawnCellIndexes(map).length;
+  if (!map || spawnCount === 0) {
+    return res.status(400).json({ success: false, message: 'This contest map has no spawn points. Add spawn points before creating teams.' });
+  }
+  if (index < 0 && teams.length >= spawnCount) {
+    return res.status(400).json({
+      success: false,
+      message: `This map has ${spawnCount} spawn point${spawnCount === 1 ? '' : 's'}, which is the most teams the contest can start.`,
+    });
+  }
+
   const next = { id: teamId, name, members };
-  const index = teams.findIndex((team) => team.id === teamId);
   if (index >= 0) teams[index] = next;
   else teams.push(next);
   const spawnVotes = cleanSpawnVotes(contest.spawnVotes).filter((vote) => {
@@ -740,7 +767,6 @@ async function handleSaveTeam(req, res, db, user, body) {
     }
   );
   const updated = await col.findOne({ id: contestId });
-  const map = await loadContestMap(db, updated);
   const problems = await db.collection('problems').find({}).toArray();
   return res.status(200).json(contestPayload(updated, map, problems, user));
 }
@@ -754,20 +780,17 @@ async function handleRemoveTeam(req, res, db, user, body) {
   const contest = await col.findOne({ id: contestId });
   if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
   const teams = cleanTeams(contest.teams).filter((team) => team.id !== teamId);
-  await col.updateOne(
-    { id: contestId },
-    {
-      $set: {
-        teams,
-        contestantIds: teams.flatMap((team) => team.members),
-        spawnChoices: cleanTeamCells(contest.spawnChoices).filter((choice) => choice.teamId !== teamId),
-        spawnVotes: cleanSpawnVotes(contest.spawnVotes).filter((vote) => vote.teamId !== teamId),
-        spawns: cleanTeamCells(contest.spawns).filter((spawn) => spawn.teamId !== teamId),
-        claims: cleanClaims(contest.claims).filter((claim) => claim.teamId !== teamId),
-        updatedAt: new Date(),
-      },
-    }
-  );
+  const update = {
+    teams,
+    contestantIds: teams.flatMap((team) => team.members),
+    spawnChoices: cleanTeamCells(contest.spawnChoices).filter((choice) => choice.teamId !== teamId),
+    spawnVotes: cleanSpawnVotes(contest.spawnVotes).filter((vote) => vote.teamId !== teamId),
+    spawns: cleanTeamCells(contest.spawns).filter((spawn) => spawn.teamId !== teamId),
+    claims: cleanClaims(contest.claims).filter((claim) => claim.teamId !== teamId),
+    updatedAt: new Date(),
+  };
+  if (teams.length === 0) update.spawnResolved = false;
+  await col.updateOne({ id: contestId }, { $set: update });
   const updated = await col.findOne({ id: contestId });
   const map = await loadContestMap(db, updated);
   const problems = await db.collection('problems').find({}).toArray();
@@ -908,21 +931,58 @@ function accountIsProtected(record) {
   return record?.role === 'admin' || record?.role === 'root';
 }
 
-function publicAccount(record) {
+function timestampValue(value) {
+  if (value instanceof Date) return value.getTime();
+  const time = Number(value);
+  return Number.isFinite(time) && time > 0 ? time : null;
+}
+
+function publicAccount(record, memberships = []) {
   return {
     username: String(record.username || ''),
     displayName: String(record.displayName || record.username || ''),
     role: accountIsProtected(record) ? 'admin' : 'student',
     banned: record.banned === true,
+    pfp: typeof record.pfp === 'string' ? record.pfp : '',
+    createdAt: timestampValue(record.createdAt),
+    lastLoginAt: timestampValue(record.lastLoginAt),
+    teams: memberships,
   };
+}
+
+function contestMemberships(contests) {
+  const byUsername = new Map();
+  for (const contest of contests) {
+    for (const team of cleanTeams(contest?.teams)) {
+      for (const member of team.members) {
+        const key = String(member || '').trim().toLowerCase();
+        if (!key) continue;
+        if (!byUsername.has(key)) byUsername.set(key, []);
+        byUsername.get(key).push({
+          contestId: String(contest.id || ''),
+          contestName: String(contest.name || ''),
+          teamId: team.id,
+          teamName: team.name,
+        });
+      }
+    }
+  }
+  for (const list of byUsername.values()) {
+    list.sort((a, b) => a.contestName.localeCompare(b.contestName) || a.teamName.localeCompare(b.teamName));
+  }
+  return byUsername;
 }
 
 async function handleListAccounts(req, res, db, user) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
-  const records = await db.collection('users').find({}, { projection: { password: 0 } }).toArray();
+  const [records, contests] = await Promise.all([
+    db.collection('users').find({}, { projection: { password: 0 } }).toArray(),
+    db.collection('contests').find({}).toArray(),
+  ]);
+  const memberships = contestMemberships(contests);
   const accounts = records
     .filter((record) => typeof record.username === 'string' && record.username)
-    .map(publicAccount)
+    .map((record) => publicAccount(record, memberships.get(record.username.toLowerCase()) || []))
     .sort((a, b) => Number(b.role === 'admin') - Number(a.role === 'admin') || a.username.localeCompare(b.username));
   return res.status(200).json({ success: true, accounts });
 }
@@ -956,6 +1016,49 @@ async function handleCreateAccount(req, res, db, user, body) {
   });
   const created = await users.findOne({ username }, { projection: { password: 0 } });
   return res.status(200).json({ success: true, account: publicAccount(created) });
+}
+
+async function removeStudentFromTeams(db, username, mongoSession = null) {
+  const col = db.collection('contests');
+  const findOptions = mongoSession ? { session: mongoSession } : {};
+  const contests = await col.find({}, findOptions).toArray();
+  let changed = 0;
+
+  for (const contest of contests) {
+    const teams = cleanTeams(contest.teams);
+    const nextTeams = [];
+    let touched = false;
+    for (const team of teams) {
+      if (!team.members.some((member) => sameName(member, username))) {
+        nextTeams.push(team);
+        continue;
+      }
+      touched = true;
+      const remaining = team.members.filter((member) => !sameName(member, username));
+      if (remaining.length > 0) nextTeams.push({ ...team, members: remaining });
+    }
+    if (!touched) continue;
+
+    const teamIds = new Set(nextTeams.map((team) => team.id));
+    const spawnVotes = cleanSpawnVotes(contest.spawnVotes).filter((vote) => (
+      teamIds.has(vote.teamId)
+      && nextTeams.some((team) => team.id === vote.teamId && team.members.some((member) => sameName(member, vote.username)))
+    ));
+    const update = {
+      teams: nextTeams,
+      contestantIds: nextTeams.flatMap((team) => team.members),
+      spawnVotes,
+      spawnChoices: agreedSpawnChoices(nextTeams, spawnVotes),
+      spawns: cleanTeamCells(contest.spawns).filter((spawn) => teamIds.has(spawn.teamId)),
+      claims: cleanClaims(contest.claims).filter((claim) => teamIds.has(claim.teamId)),
+      updatedAt: new Date(),
+    };
+    if (nextTeams.length === 0) update.spawnResolved = false;
+    const writeOptions = mongoSession ? { session: mongoSession } : {};
+    await col.updateOne({ id: contest.id }, { $set: update }, writeOptions);
+    changed += 1;
+  }
+  return changed;
 }
 
 async function handleUpdateAccount(req, res, db, user, body) {
@@ -996,9 +1099,20 @@ async function handleUpdateAccount(req, res, db, user, body) {
     return res.status(400).json({ success: false, message: 'Nothing to change.' });
   }
   update.updatedAt = new Date();
-  await users.updateOne({ username }, { $set: update });
+  const removeFromTeams = update.banned === true;
+  const session = getMongoClient().startSession();
+  try {
+    await session.withTransaction(async () => {
+      await users.updateOne({ username }, { $set: update }, { session });
+      if (removeFromTeams) await removeStudentFromTeams(db, username, session);
+    });
+  } finally {
+    await session.endSession();
+  }
   const updated = await users.findOne({ username }, { projection: { password: 0 } });
-  return res.status(200).json({ success: true, account: publicAccount(updated) });
+  const contests = await db.collection('contests').find({}).toArray();
+  const memberships = contestMemberships(contests).get(username.toLowerCase()) || [];
+  return res.status(200).json({ success: true, account: publicAccount(updated, memberships) });
 }
 
 async function handleDeleteAccount(req, res, db, user, body) {
@@ -1014,7 +1128,15 @@ async function handleDeleteAccount(req, res, db, user, body) {
   if (accountIsProtected(record)) {
     return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
   }
-  await users.deleteOne({ username });
+  const session = getMongoClient().startSession();
+  try {
+    await session.withTransaction(async () => {
+      await removeStudentFromTeams(db, username, session);
+      await users.deleteOne({ username }, { session });
+    });
+  } finally {
+    await session.endSession();
+  }
   return res.status(200).json({ success: true });
 }
 
@@ -1055,6 +1177,21 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('[territory] DB connect failed:', err.message);
     return res.status(500).json({ success: false, message: 'Database unavailable' });
+  }
+
+  // A suspended or deleted account loses access on its next request, even if
+  // it still holds a valid JWT.
+  try {
+    const account = await db.collection('users').findOne(
+      { username: user.username },
+      { projection: { banned: 1 } }
+    );
+    if (!account || account.banned === true) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+  } catch (err) {
+    console.error('[territory] account check failed:', err.message);
+    return res.status(500).json({ success: false, message: 'Internal error' });
   }
 
   // Action

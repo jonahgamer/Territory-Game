@@ -44,11 +44,14 @@
         <section id="settings-view" hidden>
           <p class="eyebrow">Settings</p>
           <h1>Accounts</h1>
-          <p class="lead">Add a student here, then use that username on a team. A suspended student cannot sign in.</p>
+          <p class="lead">Create a student account, then add that student to a team on the contest page. Suspending or deleting a student also removes them from contest teams so the rest of the team is not blocked.</p>
+
+          <div id="account-summary" class="account-summary"></div>
+
           <form id="account-form" class="create-map">
             <label>
               Username
-              <input id="account-username" class="contest-name" type="text" maxlength="64" required />
+              <input id="account-username" class="contest-name" type="text" maxlength="64" autocomplete="off" required />
             </label>
             <label>
               Display name
@@ -61,10 +64,24 @@
             <button type="submit">Add student</button>
             <p id="account-form-error" class="form-error" hidden></p>
           </form>
+
           <h2>Accounts</h2>
+          <div class="account-toolbar">
+            <label class="account-search">
+              Search
+              <input id="account-search" type="search" maxlength="60" placeholder="Username or display name" autocomplete="off" />
+            </label>
+            <div class="kind-choices account-filters" id="account-filters" role="group" aria-label="Filter accounts">
+              <button type="button" data-account-filter="all" aria-pressed="true">All</button>
+              <button type="button" data-account-filter="student" aria-pressed="false">Students</button>
+              <button type="button" data-account-filter="admin" aria-pressed="false">Admins</button>
+              <button type="button" data-account-filter="suspended" aria-pressed="false">Suspended</button>
+            </div>
+          </div>
+          <p id="account-status" class="status-note" hidden></p>
           <p id="account-list-error" class="form-error" hidden></p>
           <p id="account-empty">No accounts yet.</p>
-          <ul id="account-list" class="problem-list" hidden></ul>
+          <ul id="account-list" class="account-list" hidden></ul>
         </section>
 
         <section id="tutorial-view" class="tutorial" hidden>
@@ -328,7 +345,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
           <h2>Teams</h2>
-          <p class="field-note">A team has 1 to 5 students. They share one spawn point, one territory, and one score. During spawning they each pick a cell, and the team keeps that cell only when every member has picked the same one. Use at least as many spawn points as teams.</p>
+          <p class="field-note">A team has 1 to 5 students. They share one spawn point, one territory, and one score. During spawning they each pick a cell, and the team keeps that cell only when every member has picked the same one. A map can start at most as many teams as it has spawn points.</p>
           <form id="team-form" class="create-map">
             <label>
               Team name
@@ -338,11 +355,16 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               Students
               <textarea id="team-members" rows="5" maxlength="400" placeholder="One username per line"></textarea>
             </label>
-            <button type="submit">Add team</button>
+            <div class="team-form-actions">
+              <button id="team-submit" type="submit">Add team</button>
+              <button id="team-cancel-edit" class="back-button" type="button" hidden>Cancel edit</button>
+            </div>
+            <p id="team-edit-note" class="field-note" hidden></p>
             <p id="team-form-error" class="form-error" hidden></p>
           </form>
+          <p id="contest-team-note" class="field-note" hidden></p>
           <p id="contestant-empty">No teams yet.</p>
-          <ul id="contestant-list" class="problem-list" hidden></ul>
+          <ul id="contestant-list" class="problem-list team-list" hidden></ul>
           <h2>Leaderboard</h2>
           <ol id="contest-leaderboard" class="leaderboard" hidden></ol>
           <p id="contest-leaderboard-empty" class="field-note">Scores appear after the contest begins.</p>
@@ -375,6 +397,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           </section>
           <p id="student-spawn-note" class="field-note" hidden></p>
           <p id="student-joined" class="field-note" hidden></p>
+          <p id="student-team-summary" class="field-note" hidden></p>
           <h2 id="student-leaderboard-heading" hidden>Leaderboard</h2>
           <ol id="student-leaderboard" class="leaderboard" hidden></ol>
           <div id="student-board" class="student-board" hidden>
