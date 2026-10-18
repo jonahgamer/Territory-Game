@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "node dev-server.mjs",
-    "start": "node dev-server.mjs"
+    "start": "node dev-server.mjs",
+    "build:scripts": "node build-scripts.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

@@ -518,7 +518,12 @@ button[type="submit"],
   letter-spacing: 0;
 }
 
-.map-preview,
+.map-preview {
+  position: relative;
+  display: grid;
+  gap: 2px;
+}
+
 /* Territory connections and claim feedback */
 .editor-grid {
   position: relative;
@@ -998,12 +1003,127 @@ button[type="submit"],
   cursor: default;
 }
 
+/* Team and spawn tables */
+.team-member-table,
+.team-table {
+  width: 100%;
+  max-width: 46rem;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.team-member-table th,
+.team-member-table td,
+.team-table th,
+.team-table td {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.team-member-table th,
+.team-table th {
+  background: rgba(62, 224, 255, 0.08);
+  color: var(--cyan);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.team-member-table .member-status {
+  width: 5rem;
+  text-align: center;
+}
+
+.vote-yes {
+  color: #3ddc6a;
+  font-size: 18px;
+}
+
+.vote-no {
+  color: #ffe14a;
+  font-size: 18px;
+}
+
+.team-color-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--team, #3ee0ff);
+  box-shadow: 0 0 8px var(--team, #3ee0ff);
+  vertical-align: middle;
+}
+
+.team-members-cell {
+  white-space: normal;
+}
+
+.team-member-chip {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  background: rgba(62, 224, 255, 0.06);
+}
+
+.team-roster {
+  margin: 24px 0;
+}
+
+.page-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(36rem, calc(100vw - 40px));
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.98);
+  box-shadow: 0 0 30px rgba(62, 224, 255, 0.18);
+}
+
+.page-toast[data-tone="ok"] {
+  border-color: #3ddc6a;
+}
+
+.page-toast[data-tone="warn"] {
+  border-color: #ff9a1a;
+}
+
+.page-toast p {
+  margin: 0;
+  font-family: var(--font-ui);
+  line-height: 1.45;
+}
+
+.page-toast[data-tone="ok"] p { color: #3ddc6a; }
+.page-toast[data-tone="warn"] p { color: #ffe14a; }
+
+.page-toast button {
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
 .leaderboard {
   margin: 12px 0 0;
   padding-left: 0;
   list-style: none;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+  overflow-x: auto;
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .student-problem form {
@@ -1561,8 +1681,8 @@ button[type="submit"],
 
 #problem-count {
   min-width: 12rem;
-  margin: 0 0 8px auto;
-  text-align: right;
+  margin: 0;
+  text-align: left;
 }
 
 .problem-row {
@@ -1676,6 +1796,63 @@ button[type="submit"],
   margin: 0 0 12px;
 }
 
+/* Batch problem editor */
+.batch-rows {
+  display: grid;
+  gap: 14px;
+  max-width: 56rem;
+  margin: 18px 0;
+}
+
+.batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.batch-row label {
+  display: grid;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.batch-row .batch-index-field input {
+  width: 7rem;
+}
+
+.batch-row .batch-wide {
+  flex: 1 1 100%;
+}
+
+.batch-row input,
+.batch-row textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  resize: vertical;
+}
+
+.batch-row textarea[data-batch-logic] {
+  font-family: var(--font-ui);
+}
+
+.batch-row .account-action {
+  margin-left: 0;
+}
 /* ── Account management ─────────────────────────────────────────── */
 
 .account-summary {
@@ -1926,13 +2103,31 @@ button[type="submit"],
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 2.25rem minmax(7rem, 1fr) auto auto auto;
-  align-items: center;
-  gap: 10px 14px;
+  grid-template-columns: 4rem minmax(10rem, 1fr) 7rem 7rem 8rem;
+  align-items: stretch;
+  min-width: 38rem;
+  border-bottom: 1px solid rgba(62, 224, 255, 0.22);
+}
+
+.leaderboard-row:last-child {
+  border-bottom: 0;
+}
+
+.leaderboard-row > span {
+  padding: 10px 12px;
+}
+
+.leaderboard-head {
+  background: rgba(62, 224, 255, 0.1);
+  color: var(--cyan);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .leaderboard-rank {
   color: var(--muted);
+  text-align: left;
 }
 
 .leaderboard-team {
@@ -1940,12 +2135,20 @@ button[type="submit"],
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 
 .leaderboard-stat {
   color: var(--muted);
   font-size: 14px;
+  text-align: center;
   white-space: nowrap;
+}
+
+.leaderboard-head .leaderboard-stat,
+.leaderboard-head .leaderboard-rank {
+  color: var(--cyan);
+  font-size: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -1973,13 +2176,6 @@ button[type="submit"],
     flex-basis: 100%;
   }
 
-  .leaderboard-row {
-    grid-template-columns: 2rem minmax(0, 1fr);
-  }
-
-  .leaderboard-stat {
-    grid-column: 2;
-  }
 
   .app {
     grid-template-columns: minmax(0, 1fr);

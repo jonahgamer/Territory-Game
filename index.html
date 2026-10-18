@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
   </head>
   <body>
@@ -54,7 +55,7 @@
         <section id="settings-view" hidden>
           <p class="eyebrow">Settings</p>
           <h1>Accounts</h1>
-          <p class="lead">Create a student account, then add that student to a team on the contest page. Suspending or deleting a student also removes them from contest teams so the rest of the team is not blocked.</p>
+          <p class="lead">Create and manage student accounts.</p>
 
           <div id="account-summary" class="account-summary"></div>
 
@@ -163,7 +164,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
         <section id="maps-view" hidden>
           <p class="eyebrow">Problem map</p>
           <h1>Problem map</h1>
-          <p class="lead">Each map is a grid. Choose a name, width, and height, then create it. Open a map to place problems and obstacles.</p>
+
 
           <form id="create-map-form" class="create-map">
             <label>
@@ -190,7 +191,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
         <section id="problems-view" hidden>
           <p class="eyebrow">Problems</p>
           <h1>Problems</h1>
-          <p class="lead">Choose Math, OI, Science, or Puzzle to see those problems. The map shows the tag followed by the index: MO, OI, SCI, or PUZ. Click a problem to edit it.</p>
+
           <div class="kind-choices" id="problem-section-choices">
             <button type="button" data-section="math" aria-pressed="false">Math</button>
             <button type="button" data-section="oi" aria-pressed="false">OI</button>
@@ -202,6 +203,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               <h2 id="problem-section-title"></h2>
               <div class="problem-group-actions">
                 <button id="problem-select-toggle" type="button" aria-pressed="false" hidden>Select</button>
+                <button id="batch-add-problem" class="add-problem" type="button">Batch add</button>
                 <button id="add-problem" class="add-problem" type="button">Add problem</button>
               </div>
             </div>
@@ -302,10 +304,24 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           </form>
         </section>
 
+        <section id="problem-batch-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="batch-back" type="button">Back to problems</button>
+            <div class="editor-toolbar-actions">
+              <button class="save-changes" id="batch-save" type="button">Save batch</button>
+            </div>
+          </div>
+          <p class="eyebrow">Problems</p>
+          <h1 id="batch-title">Batch add</h1>
+          <p id="batch-error" class="form-error" hidden></p>
+          <p class="field-note">Fill in index, statement, and answer. Logic is optional. A new row is added automatically when the last row is complete.</p>
+          <div id="batch-rows" class="batch-rows"></div>
+          <button id="batch-add-row" class="add-problem" type="button">Add row</button>
+        </section>
         <section id="competitions-view" hidden>
           <p class="eyebrow">Competition</p>
           <h1>Competition</h1>
-          <p class="lead" id="competitions-lead">Each contest uses one map. Spawning starts at the start time. Spawn time and the wait after it are part of the duration, and the contest is the time that remains.</p>
+          <p class="lead" id="competitions-lead">Contests, schedules, teams, and scores.</p>
           <form id="create-contest-form" class="create-map">
             <label>
               Name
@@ -383,7 +399,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
           <h2>Teams</h2>
-          <p class="field-note">A team has 1 to 5 students. They share one spawn point, one territory, and one score. During spawning they each pick a cell, and the team keeps that cell only when every member has picked the same one. A map can start at most as many teams as it has spawn points.</p>
+          <p class="field-note">A team has 1 to 5 students and shares one spawn point, territory, and score.</p>
           <form id="team-form" class="create-map">
             <label>
               Team name
@@ -430,8 +446,22 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           <p id="student-play-meta" class="lead"></p>
           <section id="spawn-agreement" class="spawn-agreement" hidden>
             <h2>Spawn agreement</h2>
-            <ul id="spawn-votes"></ul>
+            <table class="team-member-table">
+              <thead>
+                <tr><th>Member</th><th>Vote</th><th>Status</th></tr>
+              </thead>
+              <tbody id="spawn-votes"></tbody>
+            </table>
             <p id="spawn-agreement-note" class="field-note"></p>
+          </section>
+          <section id="team-roster" class="team-roster" hidden>
+            <h2>Teams</h2>
+            <table class="team-table">
+              <thead>
+                <tr><th>Team</th><th>Members</th><th>Spawn point</th></tr>
+              </thead>
+              <tbody id="team-roster-body"></tbody>
+            </table>
           </section>
           <p id="student-spawn-note" class="field-note" hidden></p>
           <p id="student-joined" class="field-note" hidden></p>
@@ -481,7 +511,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             Name
             <input id="map-name-input" type="text" maxlength="60" />
           </label>
-          <p class="lead">Click or drag to place and clear cells. On a phone, pinch the map to zoom and drag with one finger to slide it. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
+
           <div class="kind-choices editor-tools">
             <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
             <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
@@ -527,6 +557,11 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
     </div>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+      <p id="page-toast-message"></p>
+      <button id="page-toast-close" type="button">Close</button>
+    </div>
+    <script src="scripts/batch-problems.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

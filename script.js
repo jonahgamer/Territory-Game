@@ -1,3 +1,7 @@
+// Generated from scripts/*.js by build-scripts.mjs. Edit the source sections, not this file.
+
+// Generated from scripts/*.js by build-scripts.mjs. Edit the source sections, not this file.
+
 // script.js
 // ═══════════════════════════════════════════════════════════════════
 // Territory Game — frontend
@@ -19,7 +23,7 @@ const PROBLEM_TYPES = [
 const DIFFICULTIES = ["easy", "normal", "hard", "insane"];
 const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
 const DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
-const TEAM_COLORS = ["#3ee0ff", "#ff9a1a", "#4d7cff", "#ff4d8d", "#f2f5f8", "#d4a574"];
+const TEAM_COLOR_LIMIT = 256;
 
 const API_BASE = "/api/territory";
 
@@ -59,6 +63,7 @@ const loadError = document.querySelector("#load-error");
 const mapsView = document.querySelector("#maps-view");
 const problemsView = document.querySelector("#problems-view");
 const problemEditorView = document.querySelector("#problem-editor-view");
+const problemBatchView = document.querySelector("#problem-batch-view");
 const competitionsView = document.querySelector("#competitions-view");
 const competitionsLead = document.querySelector("#competitions-lead");
 const contestView = document.querySelector("#contest-view");
@@ -241,6 +246,11 @@ const studentPlayMeta = document.querySelector("#student-play-meta");
 const spawnAgreement = document.querySelector("#spawn-agreement");
 const spawnVoteList = document.querySelector("#spawn-votes");
 const spawnAgreementNote = document.querySelector("#spawn-agreement-note");
+const teamRoster = document.querySelector("#team-roster");
+const teamRosterBody = document.querySelector("#team-roster-body");
+const pageToast = document.querySelector("#page-toast");
+const pageToastMessage = document.querySelector("#page-toast-message");
+const pageToastClose = document.querySelector("#page-toast-close");
 const studentSpawnNote = document.querySelector("#student-spawn-note");
 const studentJoined = document.querySelector("#student-joined");
 const studentTeamSummary = document.querySelector("#student-team-summary");
@@ -301,6 +311,8 @@ let editingTeamId = null;
 let accountFilter = "all";
 let accountQuery = "";
 let accountStatusTimer = null;
+let pageToastTimer = null;
+const spawnAgreementCache = new Map();
 const ANSWER_OPEN_MODE_KEY = "territory-answer-open-mode";
 let answerOpenMode = readAnswerOpenMode();
 
@@ -462,6 +474,7 @@ function routeViewLabel(route) {
     if (route.parts[1] === "problem") return "Problem editor";
     return map ? map.name : "Maps";
   }
+  if (route.name === "problems" && route.parts[1] === "batch") return "Batch add";
   if (route.name === "problems" && route.parts[1]) return "Problem editor";
   if (route.name === "contests" && route.parts[0]) {
     const contest = contests.find((item) => item.id === route.parts[0]);
@@ -553,6 +566,10 @@ function renderRoute(route) {
       const type = route.parts[0];
       if (typeInfo(type)) {
         activeProblemType = type;
+        if (route.parts[1] === "batch") {
+          showProblemBatch(type);
+          return routeHash(["problems", type, "batch"]);
+        }
         const index = Number(route.parts[1]);
         if (Number.isInteger(index)) {
           showProblemEditor(index, type, false);
@@ -622,7 +639,6 @@ function renderRoute(route) {
     }
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Event wiring
 // ═══════════════════════════════════════════════════════════════════
@@ -665,6 +681,7 @@ accountSearch?.addEventListener("input", () => {
 accountFilters?.addEventListener("click", onAccountFilterClick);
 answerOpenModeChoices?.addEventListener("click", onAnswerModeClick);
 accountButton?.addEventListener("click", logOut);
+pageToastClose?.addEventListener("click", hidePageToast);
 createContestForm?.addEventListener("submit", createContest);
 contestList?.addEventListener("click", onContestListClick);
 contestBackButton?.addEventListener("click", () => navigateTo("contests"));
@@ -768,7 +785,6 @@ editorGrid?.addEventListener("pointerdown", startPaint);
 problemNoInput?.addEventListener("input", () => {
   problemNoError.hidden = true;
 });
-
 // ═══════════════════════════════════════════════════════════════════
 // Persistence
 // ═══════════════════════════════════════════════════════════════════
@@ -978,7 +994,6 @@ function saveOpenProblem() {
   }
   updateProblemSaveButton();
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Views
 // ═══════════════════════════════════════════════════════════════════
@@ -1471,11 +1486,24 @@ function showEditor(mapId, options = {}) {
 }
 
 function hideViews() {
-  for (const view of [homeView, mapsView, problemsView, problemEditorView, competitionsView, contestView, studentView, studentPlayView, studentSettingsView, editorView, settingsView, tutorialView]) {
+  for (const view of [homeView, mapsView, problemsView, problemEditorView, problemBatchView, competitionsView, contestView, studentView, studentPlayView, studentSettingsView, editorView, settingsView, tutorialView]) {
     if (view) view.hidden = true;
   }
 }
 
+function showPageToast(message, tone = "warn") {
+  if (!pageToast || !pageToastMessage) return;
+  clearTimeout(pageToastTimer);
+  pageToast.dataset.tone = tone;
+  pageToastMessage.textContent = message;
+  pageToast.hidden = false;
+  pageToastTimer = setTimeout(() => { pageToast.hidden = true; }, 6500);
+}
+
+function hidePageToast() {
+  clearTimeout(pageToastTimer);
+  if (pageToast) pageToast.hidden = true;
+}
 function setMenuOpen(open) {
   const wasOpen = document.body.classList.contains("menu-open");
   document.body.classList.toggle("menu-open", open);
@@ -1493,7 +1521,6 @@ function setCurrentSection(button) {
   }
   if (button) button.setAttribute("aria-current", "page");
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Map CRUD
 // ═══════════════════════════════════════════════════════════════════
@@ -1563,7 +1590,6 @@ function onMapListClick(event) {
   if (ROUTED) navigateTo(["maps", openButton.dataset.openId]);
   else showEditor(openButton.dataset.openId);
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Painting
 // ═══════════════════════════════════════════════════════════════════
@@ -1728,7 +1754,6 @@ function cellIndexFromPoint(x, y) {
   if (!element) return null;
   return cellIndexFromTarget(element);
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Map rendering
 // ═══════════════════════════════════════════════════════════════════
@@ -1833,7 +1858,6 @@ function nextProblemLabel(type) {
   const next = nextProblemNo(type);
   return next === null ? "" : String(next);
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Place type
 // ═══════════════════════════════════════════════════════════════════
@@ -1851,7 +1875,6 @@ function renderPlaceType() {
     button.setAttribute("aria-pressed", String(button.dataset.placeType === placeType));
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Problems
 // ═══════════════════════════════════════════════════════════════════
@@ -3012,7 +3035,6 @@ function renderProblemEditor() {
   // Render HTML preview
   requestAnimationFrame(renderProblemPreview);
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // HTML preview for problem fields
 // ═══════════════════════════════════════════════════════════════════
@@ -3061,7 +3083,6 @@ function renderProblemPreview() {
     setRichText(content, answerHtml);
   }
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════
@@ -3130,7 +3151,6 @@ function readProblemNo(value) {
   }
   return problemNo;
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Session
 // ═══════════════════════════════════════════════════════════════════
@@ -3160,8 +3180,12 @@ function teamForUser(contest, username = contestantId()) {
 }
 
 function teamColor(contest, teamId) {
-  const index = (contest.teams || []).findIndex((team) => team.id === teamId);
-  return TEAM_COLORS[(index < 0 ? 0 : index) % TEAM_COLORS.length];
+  const found = (contest.teams || []).findIndex((team) => team.id === teamId);
+  const slot = (found < 0 ? 0 : found) % TEAM_COLOR_LIMIT;
+  const hue = (slot * 137.508 + 8) % 360;
+  const saturation = 82 + (slot % 3) * 5;
+  const lightness = 58 + (slot % 4) * 5;
+  return `hsl(${hue.toFixed(2)} ${saturation}% ${lightness}%)`;
 }
 
 function teamShort(name) {
@@ -3320,6 +3344,23 @@ function renderLeaderboard(list, empty, contest) {
   if (empty) {
     empty.hidden = rows.length > 0;
     list.hidden = rows.length === 0;
+  }
+  if (rows.length > 0) {
+    const head = document.createElement("li");
+    head.className = "leaderboard-row leaderboard-head";
+    for (const [cls, text] of [
+      ["leaderboard-rank", "Rank"],
+      ["leaderboard-team", "Team"],
+      ["leaderboard-stat", "Score"],
+      ["leaderboard-stat", "Solved"],
+      ["leaderboard-stat", "Territory"],
+    ]) {
+      const cell = document.createElement("span");
+      cell.className = cls;
+      cell.textContent = text;
+      head.append(cell);
+    }
+    list.append(head);
   }
   rows.forEach((row, index) => {
     const item = document.createElement("li");
@@ -3596,7 +3637,6 @@ function logOut() {
   persistSession();
   location.replace("/login.html");
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Contests
 // ═══════════════════════════════════════════════════════════════════
@@ -3904,7 +3944,7 @@ function renderCompetitions() {
   createContestForm.hidden = contestant;
   competitionsLead.textContent = contestant
     ? "Open the contest your team was added to."
-    : "Each contest uses one map. A team of 1 to 5 students agrees on one spawn point, then expands by solving adjacent problems.";
+    : "Contests, schedules, teams, and scores.";
   if (!contestant) {
     fillMapSelect(contestMapSelect, contestMapSelect.value);
     updateContestSpawnNote(contestMapSelect, contestMapNote);
@@ -3999,7 +4039,10 @@ function renderContestTeams(contest, map) {
     const name = document.createElement("span");
     const detail = document.createElement("span");
     name.className = "contest-name-label";
-    name.textContent = team.name;
+    const colorDot = document.createElement("span");
+    colorDot.className = "team-color-dot";
+    colorDot.style.setProperty("--team", teamColor(contest, team.id));
+    name.append(colorDot, team.name);
     detail.className = "team-detail";
     detail.textContent = `${team.members.length} member${team.members.length === 1 ? "" : "s"} · ${team.members.join(" · ")} · ${spawnSummary(contest, map, team.id)}`;
     item.append(name, detail);
@@ -4117,6 +4160,7 @@ function renderStudentPlay() {
   studentTeamSummary.hidden = false;
   studentTeamSummary.textContent = `Members: ${team.members.join(", ")} · Score: ${row?.score ?? 0} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
   writeStudentStatus(contest, phase, map, frozen);
+  renderTeamRoster(contest, map, phase);
   renderLeaderboard(studentLeaderboard, null, contest);
   const showScores = contest.spawnResolved || phase === "live" || phase === "ended" || frozen;
   studentLeaderboard.hidden = !showScores;
@@ -4137,6 +4181,38 @@ function renderStudentPlay() {
   ensureContestClock();
 }
 
+function renderTeamRoster(contest, map, phase) {
+  if (!teamRoster || !teamRosterBody) return;
+  const show = Boolean(map) && (contest.spawnResolved || phase === "ready" || phase === "live" || phase === "ended");
+  teamRoster.hidden = !show;
+  if (!show) return;
+  teamRosterBody.replaceChildren();
+  for (const team of contest.teams || []) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    const dot = document.createElement("span");
+    dot.className = "team-color-dot";
+    dot.style.setProperty("--team", teamColor(contest, team.id));
+    const label = document.createElement("span");
+    label.textContent = team.name;
+    name.append(dot, label);
+    const members = document.createElement("td");
+    members.className = "team-members-cell";
+    for (const member of team.members || []) {
+      const chip = document.createElement("span");
+      chip.className = "team-member-chip";
+      chip.textContent = member;
+      members.append(chip);
+    }
+    const spawn = document.createElement("td");
+    const spawnCell = (contest.spawns || []).find((item) => item.teamId === team.id);
+    spawn.textContent = spawnCell && map.cells[spawnCell.cell]?.kind === "spawnpoint"
+      ? cellPlace(map, spawnCell.cell)
+      : "No spawn point";
+    row.append(name, members, spawn);
+    teamRosterBody.append(row);
+  }
+}
 function renderSpawnAgreement(contest, map, phase) {
   const team = teamForUser(contest);
   const open = Boolean(team && map && phase === "spawn" && !contest.spawnResolved);
@@ -4145,19 +4221,37 @@ function renderSpawnAgreement(contest, map, phase) {
   spawnVoteList.replaceChildren();
   for (const member of team.members) {
     const vote = (contest.spawnVotes || []).find((item) => item.teamId === team.id && sameContestant(item.username, member));
-    const item = document.createElement("li");
-    const who = sameContestant(member, contestantId()) ? `${member} (you)` : member;
-    item.textContent = vote ? `${who} — ${cellPlace(map, vote.cell)}` : `${who} — waiting`;
-    spawnVoteList.append(item);
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = sameContestant(member, contestantId()) ? `${member} (you)` : member;
+    const voteCell = document.createElement("td");
+    voteCell.textContent = vote ? cellPlace(map, vote.cell) : "Waiting";
+    const status = document.createElement("td");
+    status.className = "member-status";
+    const icon = document.createElement("i");
+    icon.className = vote ? "fa-solid fa-circle-check vote-yes" : "fa-solid fa-circle-question vote-no";
+    icon.setAttribute("aria-label", vote ? "Voted" : "Not voted yet");
+    icon.setAttribute("title", vote ? "Voted" : "Not voted yet");
+    status.append(icon);
+    row.append(name, voteCell, status);
+    spawnVoteList.append(row);
   }
   const agreed = (contest.spawnChoices || []).find((choice) => choice.teamId === team.id);
+  const currentCell = Number.isInteger(agreed?.cell) ? agreed.cell : null;
+  const cacheKey = `${contest.id}:${team.id}`;
+  const previousCell = spawnAgreementCache.get(cacheKey);
+  if (previousCell !== undefined && previousCell !== currentCell) {
+    if (currentCell === null) {
+      showPageToast("Not all team members have chosen the same spawn point yet.", "warn");
+    } else {
+      showPageToast(`Spawn point: ${cellPlace(map, currentCell)}`, "ok");
+    }
+  }
+  spawnAgreementCache.set(cacheKey, currentCell);
   spawnAgreementNote.textContent = agreed
-    ? `Your team agrees on ${cellPlace(map, agreed.cell)}.`
-    : team.members.length === 1
-      ? "You are the only member, so the cell you click is the team choice."
-      : "The team choice is saved when every member has picked the same cell. Changing your pick clears the agreement until you match again.";
+    ? `Spawn point: ${cellPlace(map, agreed.cell)}`
+    : "Spawn point: not agreed yet. Every team member must choose the same cell.";
 }
-
 function writeStudentStatus(contest, phase, map, frozen) {
   const mapBit = map ? `${map.name} · ${map.cols} × ${map.rows}` : "The map for this contest has been removed.";
   const team = teamForUser(contest);
@@ -4270,10 +4364,19 @@ async function chooseSpawn(contest, cell) {
   try {
     const data = await apiCall("choose-spawn", { contestId: contest.id, cell });
     applyContestPlayState(contest, data);
+    const map = maps.find((item) => item.id === contest.mapId);
+    const finalSpawn = (contest.spawns || []).find((spawn) => spawn.teamId === team.id);
+    const agreed = (contest.spawnChoices || []).find((choice) => choice.teamId === team.id);
+    const chosenCell = Number.isInteger(finalSpawn?.cell) ? finalSpawn.cell : agreed?.cell;
+    if (map && Number.isInteger(chosenCell)) {
+      showPageToast(`Spawn point: ${cellPlace(map, chosenCell)}`, "ok");
+    } else {
+      showPageToast("Not all team members have chosen the same spawn point yet.", "warn");
+    }
   } catch (error) {
     contest.spawnVotes = previousVotes;
     contest.spawnChoices = previousChoices;
-    alert(error.message);
+    showPageToast(error.message, "warn");
   }
   renderStudentPlay();
 }
@@ -4707,7 +4810,6 @@ function readContestName(value) {
   if (!name || name.length > 60) return null;
   return name;
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Session storage
 // ═══════════════════════════════════════════════════════════════════
@@ -4770,7 +4872,6 @@ function safePfp(value) {
   }
   return "";
 }
-
 // ═══════════════════════════════════════════════════════════════════
 // Bootstrap
 // ═══════════════════════════════════════════════════════════════════
