@@ -1400,6 +1400,184 @@ button[type="submit"],
   top: 6px;
 }
 
+/* ── Problem management ─────────────────────────────────────────── */
+
+#problem-section-choices button[data-count]::after {
+  content: attr(data-count);
+  margin-left: 8px;
+  padding: 1px 5px;
+  border: 1px solid rgba(62, 224, 255, 0.28);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.problem-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 20px;
+  margin: 20px 0 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.55);
+}
+
+.problem-search,
+.problem-sort {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.problem-search input {
+  width: min(22rem, 60vw);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.problem-sort select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.problem-toolbar .kind-choices {
+  margin: 0;
+}
+
+#problem-count {
+  min-width: 12rem;
+  margin: 0 0 8px auto;
+  text-align: right;
+}
+
+.problem-row {
+  align-items: center;
+}
+
+.problem-row .open-problem {
+  gap: 14px;
+}
+
+.problem-key {
+  min-width: 4.5ch;
+  font-family: var(--font-ui);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.problem-key.math { color: #3ee0ff; }
+.problem-key.oi { color: #7d9dff; }
+.problem-key.science { color: #ff9a1a; }
+.problem-key.puzzle { color: #ff7eb6; }
+
+.difficulty-chip {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.difficulty-chip.easy { color: #3ddc6a; }
+.difficulty-chip.normal { color: #ffe14a; }
+.difficulty-chip.hard { color: #ff3b4e; }
+.difficulty-chip.insane { color: #c084fc; }
+
+.problem-usage-chip {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.problem-usage-chip.unused {
+  opacity: 0.55;
+}
+
+.problem-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.problem-row.selecting {
+  cursor: pointer;
+}
+
+.problem-row.selecting .open-problem {
+  cursor: pointer;
+}
+
+.problem-pages {
+  align-items: center;
+}
+
+.problem-pages button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.problem-pages .page-gap {
+  padding: 0 2px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
+
+.problem-save-state {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.problem-save-state[data-state="dirty"] {
+  color: #ffe14a;
+}
+
+.problem-save-state[data-state="saved"] {
+  color: #3ddc6a;
+}
+
+.problem-save-state[data-state="new"] {
+  color: var(--cyan);
+}
+
+.editor-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+#problem-usage {
+  margin: 0 0 12px;
+}
+
 /* ── Account management ─────────────────────────────────────────── */
 
 .account-summary {
@@ -1674,8 +1852,27 @@ button[type="submit"],
 
 @media (max-width: 1100px) {
   .account-field input,
-  .account-search input {
+  .account-search input,
+  .problem-search input {
     width: 100%;
+  }
+
+  .problem-toolbar {
+    align-items: stretch;
+  }
+
+  #problem-count {
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .problem-row-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .problem-row .open-problem {
+    flex-basis: 100%;
   }
 
   .leaderboard-row {

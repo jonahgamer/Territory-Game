@@ -142,7 +142,10 @@ const editorNameInput = document.querySelector("#map-name-input");
 const editorGrid = document.querySelector("#editor-grid");
 const saveMapButton = document.querySelector("#save-map-button");
 const saveProblemButton = document.querySelector("#save-problem-button");
+const saveProblemTopButton = document.querySelector("#save-problem-top");
+const problemSaveState = document.querySelector("#problem-save-state");
 const problemSaveError = document.querySelector("#problem-save-error");
+const problemUsageNote = document.querySelector("#problem-usage");
 const kindProblem = document.querySelector("#kind-problem");
 const mobileHome = document.querySelector("#mobile-home");
 const kindSpawnpoint = document.querySelector("#kind-spawnpoint");
@@ -158,17 +161,23 @@ const problemSection = document.querySelector("#problem-section");
 const problemSectionTitle = document.querySelector("#problem-section-title");
 const addProblemButton = document.querySelector("#add-problem");
 const problemEmpty = document.querySelector("#problem-empty");
+const problemSearch = document.querySelector("#problem-search");
+const problemDifficultyFilterButtons = document.querySelector("#problem-difficulty-filter");
+const problemSort = document.querySelector("#problem-sort");
+const problemCount = document.querySelector("#problem-count");
 const problemPages = document.querySelector("#problem-pages");
 const problemSelectToggle = document.querySelector("#problem-select-toggle");
 const problemBulk = document.querySelector("#problem-bulk");
 const problemSelectPage = document.querySelector("#problem-select-page");
 const problemSelectAll = document.querySelector("#problem-select-all");
+const problemSelectAllLabel = document.querySelector("#problem-select-all-label");
 const problemSelectedCount = document.querySelector("#problem-selected-count");
 const problemBulkDifficulty = document.querySelector("#problem-bulk-difficulty");
 const problemBulkDelete = document.querySelector("#problem-bulk-delete");
 const problemList = document.querySelector("#problem-list");
 const problemBackButton = document.querySelector("#problem-back-button");
 const deleteOpenProblemButton = document.querySelector("#delete-open-problem");
+const duplicateOpenProblemButton = document.querySelector("#duplicate-open-problem");
 const problemEditorTitle = document.querySelector("#problem-editor-title");
 const problemEditorForm = document.querySelector("#problem-editor-form");
 const problemIndexField = document.querySelector("#problem-index-field");
@@ -264,13 +273,17 @@ let editingProblemNo = null;
 let editingProblemType = null;
 let problemReturn = "list";
 let activeProblemType = null;
-let problemRangeStart = 1;
+let problemQuery = "";
+let problemDifficultyFilter = "all";
+let problemSortMode = "index";
+let problemPage = 1;
 const PROBLEM_PAGE_SIZE = 20;
 const selectedProblemKeys = new Set();
 let problemSelectMode = false;
 let mapSnapshot = null;
 let mapDirty = false;
 let problemDraft = null;
+let pendingProblemDraft = null;
 let problemDirty = false;
 let placeType = "math";
 let serverOffsetMs = 0;
@@ -535,7 +548,6 @@ function renderRoute(route) {
       const type = route.parts[0];
       if (typeInfo(type)) {
         activeProblemType = type;
-        problemRangeStart = 1;
         const index = Number(route.parts[1]);
         if (Number.isInteger(index)) {
           showProblemEditor(index, type, false);
@@ -637,6 +649,12 @@ document?.addEventListener("keydown", (event) => {
   }
   setMenuOpen(false);
 });
+document?.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+  if (!problemEditorView || problemEditorView.hidden) return;
+  event.preventDefault();
+  saveOpenProblem();
+});
 mapsButton?.addEventListener("click", () => navigateTo("maps"));
 problemsButton?.addEventListener("click", () => navigateTo("problems"));
 competitionsButton?.addEventListener("click", () => navigateTo(isContestant() ? "student" : "contests"));
@@ -680,6 +698,15 @@ studentAnswerForm?.addEventListener("submit", submitStudentAnswer);
 problemSectionChoices?.addEventListener("click", onProblemSectionClick);
 problemSection?.addEventListener("click", onProblemListClick);
 problemSection?.addEventListener("change", onProblemSelectionChange);
+problemSearch?.addEventListener("input", onProblemSearchInput);
+problemSearch?.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && problemSearch.value) {
+    problemSearch.value = "";
+    onProblemSearchInput();
+  }
+});
+problemDifficultyFilterButtons?.addEventListener("click", onProblemDifficultyFilterClick);
+problemSort?.addEventListener("change", onProblemSortChange);
 problemSelectToggle?.addEventListener("click", toggleProblemSelectMode);
 problemSelectPage?.addEventListener("change", selectProblemPage);
 problemSelectAll?.addEventListener("change", selectAllProblems);
@@ -688,6 +715,7 @@ problemBulkDelete?.addEventListener("click", deleteSelectedProblems);
 placeTypeChoices?.addEventListener("click", onPlaceTypeClick);
 problemBackButton?.addEventListener("click", closeProblemEditor);
 deleteOpenProblemButton?.addEventListener("click", deleteOpenProblem);
+duplicateOpenProblemButton?.addEventListener("click", duplicateCurrentProblem);
 problemEditorForm?.addEventListener("submit", (event) => event.preventDefault());
 problemIndexInput?.addEventListener("change", () => {
   if (problemReturn === "map") return;
@@ -726,6 +754,7 @@ backButton?.addEventListener("click", () => {
 });
 saveMapButton?.addEventListener("click", saveOpenMap);
 saveProblemButton?.addEventListener("click", saveOpenProblem);
+saveProblemTopButton?.addEventListener("click", saveOpenProblem);
 deleteOpenMapButton?.addEventListener("click", deleteOpenMap);
 createForm?.addEventListener("submit", createMap);
 editorNameInput?.addEventListener("input", commitMapName);
@@ -801,8 +830,25 @@ function discardUnsavedMap() {
 }
 
 function updateProblemSaveButton() {
-  if (!saveProblemButton) return;
-  saveProblemButton.disabled = !(problemDraft?.isNew || problemDirty);
+  const saveable = Boolean(problemDraft && (problemDraft.isNew || problemDirty));
+  if (saveProblemButton) saveProblemButton.disabled = !saveable;
+  if (saveProblemTopButton) saveProblemTopButton.disabled = !saveable;
+  if (!problemSaveState) return;
+  if (!problemDraft) {
+    problemSaveState.textContent = "";
+    problemSaveState.dataset.state = "idle";
+    return;
+  }
+  if (problemDirty) {
+    problemSaveState.textContent = "Unsaved changes";
+    problemSaveState.dataset.state = "dirty";
+  } else if (problemDraft.isNew) {
+    problemSaveState.textContent = "New problem — not saved yet";
+    problemSaveState.dataset.state = "new";
+  } else {
+    problemSaveState.textContent = "Saved";
+    problemSaveState.dataset.state = "saved";
+  }
 }
 
 function problemHasUnsavedEdits() {
@@ -1280,7 +1326,7 @@ function showEditor(mapId, options = {}) {
   setCurrentSection(mapsButton);
   if (!options.keepTool) {
     chooseTool("problem");
-    problemNoInput.value = String(nextProblemNo(placeType));
+    problemNoInput.value = nextProblemLabel(placeType);
   }
   problemNoError.hidden = true;
   renderEditor();
@@ -1636,16 +1682,24 @@ function currentMap() {
 }
 
 function nextProblemNo(type) {
-  let max = 0;
+  const used = new Set();
+  for (const problem of problems) {
+    if (problem.type === type) used.add(problem.index);
+  }
   for (const map of maps) {
     for (const cell of map.cells) {
-      if (cell.kind === "problem" && cell.type === type) max = Math.max(max, cell.problemNo);
+      if (cell.kind === "problem" && cell.type === type) used.add(cell.problemNo);
     }
   }
-  for (const problem of problems) {
-    if (problem.type === type) max = Math.max(max, problem.index);
+  for (let index = MIN_PROBLEM_NO; index <= MAX_PROBLEM_NO; index += 1) {
+    if (!used.has(index)) return index;
   }
-  return max >= MAX_PROBLEM_NO ? MIN_PROBLEM_NO : max + 1;
+  return null;
+}
+
+function nextProblemLabel(type) {
+  const next = nextProblemNo(type);
+  return next === null ? "" : String(next);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1657,7 +1711,7 @@ function onPlaceTypeClick(event) {
   if (!button || !typeInfo(button.dataset.placeType)) return;
   placeType = button.dataset.placeType;
   renderPlaceType();
-  if (nextNumberInput.checked) problemNoInput.value = String(nextProblemNo(placeType));
+  if (nextNumberInput.checked) problemNoInput.value = nextProblemLabel(placeType);
 }
 
 function renderPlaceType() {
@@ -1674,11 +1728,62 @@ function onProblemSectionClick(event) {
   const button = event.target.closest("[data-section]");
   if (!button || !typeInfo(button.dataset.section)) return;
   activeProblemType = button.dataset.section;
-  problemRangeStart = 1;
+  problemPage = 1;
+  problemQuery = "";
+  problemDifficultyFilter = "all";
+  problemSortMode = "index";
   problemSelectMode = false;
   selectedProblemKeys.clear();
+  if (problemSearch) problemSearch.value = "";
   if (ROUTED) navigateTo(["problems", button.dataset.section]);
   else renderProblems();
+}
+
+function syncProblemToolbar() {
+  if (problemSearch && problemSearch.value !== problemQuery && document.activeElement !== problemSearch) {
+    problemSearch.value = problemQuery;
+  }
+  if (problemSort) problemSort.value = problemSortMode;
+  if (problemDifficultyFilterButtons) {
+    for (const button of problemDifficultyFilterButtons.querySelectorAll("[data-problem-difficulty-filter]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.problemDifficultyFilter === problemDifficultyFilter));
+    }
+  }
+  if (problemSelectAllLabel) {
+    const filtering = Boolean(problemQuery) || problemDifficultyFilter !== "all";
+    problemSelectAllLabel.textContent = filtering ? "All results" : "All";
+  }
+}
+
+const _applyProblemSearch = debounce(() => {
+  problemQuery = problemSearch?.value.trim() || "";
+  problemPage = 1;
+  selectedProblemKeys.clear();
+  renderProblems();
+}, 150);
+
+function onProblemSearchInput() {
+  _applyProblemSearch();
+}
+
+function onProblemDifficultyFilterClick(event) {
+  const button = event.target.closest("[data-problem-difficulty-filter]");
+  if (!button) return;
+  const next = button.dataset.problemDifficultyFilter;
+  if (next !== "all" && !DIFFICULTIES.includes(next)) return;
+  problemDifficultyFilter = next;
+  problemPage = 1;
+  selectedProblemKeys.clear();
+  renderProblems();
+}
+
+function onProblemSortChange() {
+  const next = problemSort?.value;
+  if (!["index", "index-desc", "difficulty"].includes(next)) return;
+  problemSortMode = next;
+  problemPage = 1;
+  selectedProblemKeys.clear();
+  renderProblems();
 }
 
 function toggleProblemSelectMode() {
@@ -1690,6 +1795,10 @@ function toggleProblemSelectMode() {
 function addProblem(type) {
   const problemType = typeInfo(type) ? type : "math";
   const index = nextProblemNo(problemType);
+  if (index === null) {
+    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(problemType).name} problem indexes are in use.`);
+    return;
+  }
   if (ROUTED) navigateTo(["problems", problemType, String(index)]);
   else showProblemEditor(index, problemType, false);
 }
@@ -1716,10 +1825,19 @@ function onProblemListClick(event) {
     return;
   }
 
-  const rangeButton = event.target.closest("[data-problem-range]");
-  if (rangeButton) {
-    problemRangeStart = Number(rangeButton.dataset.problemRange);
+  const pageButton = event.target.closest("[data-problem-page]");
+  if (pageButton) {
+    if (pageButton.disabled) return;
+    const next = Number(pageButton.dataset.problemPage);
+    if (!Number.isInteger(next)) return;
+    problemPage = next;
     renderProblems();
+    return;
+  }
+
+  const duplicateButton = event.target.closest("[data-duplicate-problem]");
+  if (duplicateButton) {
+    duplicateProblem(Number(duplicateButton.dataset.duplicateProblem), duplicateButton.dataset.duplicateType);
     return;
   }
 
@@ -1729,26 +1847,92 @@ function onProblemListClick(event) {
     return;
   }
 
+  if (problemSelectMode) {
+    const row = event.target.closest(".problem-row");
+    if (row && !event.target.closest(".problem-check")) {
+      const box = row.querySelector("[data-select-problem]");
+      if (box) {
+        box.checked = !box.checked;
+        onProblemSelectionChange({ target: box });
+      }
+      return;
+    }
+  }
+
   const openButton = event.target.closest("[data-open-problem]");
   if (!openButton) return;
   if (ROUTED) navigateTo(["problems", openButton.dataset.openType, openButton.dataset.openProblem]);
   else showProblemEditor(Number(openButton.dataset.openProblem), openButton.dataset.openType, false);
 }
 
+function duplicateProblem(index, type) {
+  const source = findProblem(index, type);
+  if (!source) return;
+  const copyType = typeInfo(type) ? type : "math";
+  const nextIndex = nextProblemNo(copyType);
+  if (nextIndex === null) {
+    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(copyType).name} problem indexes are in use.`);
+    return;
+  }
+  const copy = {
+    index: nextIndex,
+    type: copyType,
+    prompt: source.prompt,
+    answer: source.answer,
+    logic: source.logic || "",
+    difficulty: problemDifficulty(source),
+  };
+  problems.push(copy);
+  problems.sort(compareProblems);
+  persistProblems();
+  if (ROUTED) navigateTo(["problems", copyType, String(nextIndex)]);
+  else showProblemEditor(nextIndex, copyType, false);
+}
+
+function duplicateCurrentProblem() {
+  if (!problemDraft) return;
+  if (problemDraft.isNew || problemDirty) {
+    saveOpenProblem();
+    if (!problemDraft || problemDraft.isNew || problemDirty) return;
+  }
+  const type = problemDraft.type;
+  const nextIndex = nextProblemNo(type);
+  if (nextIndex === null) {
+    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(type).name} problem indexes are in use.`);
+    return;
+  }
+  pendingProblemDraft = {
+    index: nextIndex,
+    type,
+    prompt: problemPrompt.value,
+    answer: problemAnswer.value,
+    logic: problemLogic.value,
+    difficulty: problemDraft.difficulty,
+    isNew: true,
+  };
+  if (ROUTED) navigateTo(["problems", type, String(nextIndex)]);
+  else showProblemEditor(nextIndex, type, false);
+}
 function showProblemEditor(index, type, fromMap) {
   const problemType = typeInfo(type) ? type : "math";
   const existing = findProblem(index, problemType);
-  problemDraft = existing
-    ? {
-      index: existing.index,
-      type: existing.type,
-      prompt: existing.prompt,
-      answer: existing.answer,
-      logic: existing.logic || "",
-      difficulty: problemDifficulty(existing),
-      isNew: false,
-    }
-    : { index, type: problemType, prompt: "", answer: "", logic: "", difficulty: "normal", isNew: true };
+  const pending = pendingProblemDraft;
+  pendingProblemDraft = null;
+  if (pending && pending.index === index && pending.type === problemType) {
+    problemDraft = pending;
+  } else {
+    problemDraft = existing
+      ? {
+        index: existing.index,
+        type: existing.type,
+        prompt: existing.prompt,
+        answer: existing.answer,
+        logic: existing.logic || "",
+        difficulty: problemDifficulty(existing),
+        isNew: false,
+      }
+      : { index, type: problemType, prompt: "", answer: "", logic: "", difficulty: "normal", isNew: true };
+  }
   problemDirty = false;
   stopPaint();
   if (!fromMap) openMapId = null;
@@ -1774,12 +1958,23 @@ function closeProblemEditor() {
   }
   const problem = findProblem(editingProblemNo, editingProblemType);
   const type = problem ? problem.type : editingProblemType;
-  if (problem) {
-    activeProblemType = problem.type;
-    problemRangeStart = problemRangeStartFor(problem.index);
-  }
+  if (problem) revealProblemInList(problem.index, problem.type);
   if (ROUTED) navigateTo(["problems", typeInfo(type) ? type : "math"]);
   else showProblems();
+}
+
+function revealProblemInList(index, type) {
+  if (!typeInfo(type)) return;
+  activeProblemType = type;
+  problemQuery = "";
+  problemDifficultyFilter = "all";
+  problemSortMode = "index";
+  if (problemSearch) problemSearch.value = "";
+  const ordered = problems
+    .filter((problem) => problem.type === type)
+    .sort(compareProblems);
+  const position = ordered.findIndex((problem) => problem.index === index);
+  problemPage = position >= 0 ? Math.floor(position / PROBLEM_PAGE_SIZE) + 1 : 1;
 }
 
 function syncProblemRoute() {
@@ -1971,7 +2166,11 @@ function updateProblemField(field, value) {
 
 function deleteProblem(index, type) {
   const tag = problemTag(index, type);
-  if (!window.confirm(`Delete ${tag}? It will also be cleared from every map.`)) return;
+  const usage = problemUsage(index, type);
+  const where = usage.cells > 0
+    ? `It is placed on ${usage.maps} map${usage.maps === 1 ? "" : "s"} in ${usage.cells} cell${usage.cells === 1 ? "" : "s"}, and those cells will be cleared.`
+    : "It is not placed on any map.";
+  if (!window.confirm(`Delete ${tag}?\n\n${where}`)) return;
   const wasOpen = editingProblemNo === index && editingProblemType === type;
   problems = problems.filter((problem) => !(problem.index === index && problem.type === type));
   for (const map of maps) {
@@ -2013,7 +2212,119 @@ function compareProblems(a, b) {
   return a.index - b.index || a.type.localeCompare(b.type);
 }
 
+function problemUsage(index, type) {
+  let cells = 0;
+  const mapIds = new Set();
+  for (const map of maps) {
+    for (const cell of map.cells) {
+      if (cell.kind === "problem" && cell.problemNo === index && cell.type === type) {
+        cells += 1;
+        mapIds.add(map.id);
+      }
+    }
+  }
+  return { cells, maps: mapIds.size };
+}
+
+function plainProblemText(source) {
+  return String(source || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function problemMatchesFilters(problem) {
+  if (problemDifficultyFilter !== "all" && problemDifficulty(problem) !== problemDifficultyFilter) {
+    return false;
+  }
+  const query = problemQuery.trim().toLowerCase();
+  if (!query) return true;
+  const haystack = [
+    problemTag(problem.index, problem.type),
+    String(problem.index),
+    plainProblemText(problem.prompt),
+    plainProblemText(problem.answer),
+  ].join(" ").toLowerCase();
+  return haystack.includes(query);
+}
+
+function filteredProblems() {
+  const items = problemsOfActiveType().filter(problemMatchesFilters);
+  if (problemSortMode === "index-desc") {
+    items.sort((a, b) => b.index - a.index || a.type.localeCompare(b.type));
+  } else if (problemSortMode === "difficulty") {
+    items.sort((a, b) => (
+      DIFFICULTY_SCORE[problemDifficulty(b)] - DIFFICULTY_SCORE[problemDifficulty(a)]
+      || compareProblems(a, b)
+    ));
+  } else {
+    items.sort(compareProblems);
+  }
+  return items;
+}
+
+function pageNumbers(current, total) {
+  const pages = new Set([1, total]);
+  for (let page = current - 2; page <= current + 2; page += 1) {
+    if (page >= 1 && page <= total) pages.add(page);
+  }
+  const ordered = [...pages].sort((a, b) => a - b);
+  const result = [];
+  let previous = 0;
+  for (const page of ordered) {
+    if (previous && page - previous > 1) result.push("…");
+    result.push(page);
+    previous = page;
+  }
+  return result;
+}
+
+function renderProblemPages(pageCount) {
+  problemPages.replaceChildren();
+  problemPages.hidden = pageCount <= 1;
+  if (pageCount <= 1) return;
+
+  const addButton = (label, page, options = {}) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    if (page !== null) button.dataset.problemPage = String(page);
+    button.textContent = label;
+    if (options.current) button.setAttribute("aria-pressed", "true");
+    if (options.disabled) button.disabled = true;
+    problemPages.append(button);
+  };
+
+  addButton("‹ Prev", problemPage - 1, { disabled: problemPage <= 1 });
+  for (const page of pageNumbers(problemPage, pageCount)) {
+    if (page === "…") {
+      const gap = document.createElement("span");
+      gap.className = "page-gap";
+      gap.textContent = "…";
+      problemPages.append(gap);
+    } else {
+      addButton(String(page), page, { current: page === problemPage });
+    }
+  }
+  addButton("Next ›", problemPage + 1, { disabled: problemPage >= pageCount });
+}
+
+function syncProblemTypeCounts() {
+  if (!problemSectionChoices) return;
+  for (const button of problemSectionChoices.querySelectorAll("[data-section]")) {
+    const type = typeInfo(button.dataset.section);
+    if (!type) continue;
+    const count = problems.filter((problem) => problem.type === type.id).length;
+    button.dataset.count = String(count);
+    button.setAttribute("aria-label", `${type.name}, ${count} problem${count === 1 ? "" : "s"}`);
+  }
+}
+
 function renderProblems() {
+  if (problemSearch) problemQuery = problemSearch.value.trim();
+  syncProblemTypeCounts();
   for (const button of problemSectionChoices.querySelectorAll("[data-section]")) {
     button.setAttribute("aria-pressed", String(button.dataset.section === activeProblemType));
   }
@@ -2024,10 +2335,15 @@ function renderProblems() {
     return;
   }
 
-  const items = problems.filter((problem) => problem.type === type.id);
-  const ranges = [...new Set(items.map((problem) => problemRangeStartFor(problem.index)))].sort((a, b) => a - b);
-  if (!ranges.includes(problemRangeStart)) problemRangeStart = ranges[0] || 1;
-  const visible = items.filter((problem) => problemRangeStartFor(problem.index) === problemRangeStart);
+  syncProblemToolbar();
+  const all = problems.filter((problem) => problem.type === type.id);
+  const matching = filteredProblems();
+  const pageCount = Math.max(1, Math.ceil(matching.length / PROBLEM_PAGE_SIZE));
+  problemPage = Math.min(Math.max(1, problemPage), pageCount);
+  const start = (problemPage - 1) * PROBLEM_PAGE_SIZE;
+  const visible = matching.slice(start, start + PROBLEM_PAGE_SIZE);
+  const filtering = Boolean(problemQuery.trim()) || problemDifficultyFilter !== "all";
+
   problemSection.hidden = false;
   problemSectionTitle.textContent = type.name;
   const tag = document.createElement("span");
@@ -2035,31 +2351,39 @@ function renderProblems() {
   tag.textContent = type.tag;
   problemSectionTitle.append(tag);
   addProblemButton.setAttribute("aria-label", `Add ${type.name} problem`);
-  problemPages.replaceChildren();
-  for (const start of ranges) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.problemRange = String(start);
-    button.textContent = problemRangeLabel(start);
-    button.setAttribute("aria-pressed", String(start === problemRangeStart));
-    problemPages.append(button);
+  renderProblemPages(pageCount);
+
+  if (problemCount) {
+    if (matching.length === 0) {
+      problemCount.textContent = filtering ? `No matches in ${all.length} problem${all.length === 1 ? "" : "s"}` : "No problems yet";
+    } else {
+      const end = Math.min(start + visible.length, matching.length);
+      problemCount.textContent = filtering
+        ? `Showing ${start + 1}–${end} of ${matching.length} matches (${all.length} total)`
+        : `Showing ${start + 1}–${end} of ${matching.length}`;
+    }
   }
-  problemPages.hidden = ranges.length < 2;
-  if (items.length === 0) {
+
+  if (all.length === 0) {
     problemSelectMode = false;
     selectedProblemKeys.clear();
   }
-  problemSelectToggle.hidden = items.length === 0;
+  problemSelectToggle.hidden = all.length === 0;
   problemSelectToggle.setAttribute("aria-pressed", String(problemSelectMode));
   problemSelectToggle.textContent = problemSelectMode ? "Done" : "Select";
-  problemBulk.hidden = !problemSelectMode || items.length === 0;
+  problemBulk.hidden = !problemSelectMode || all.length === 0;
+  if (problemSelectAllLabel) problemSelectAllLabel.textContent = filtering ? "All results" : "All";
+
+  problemEmpty.hidden = matching.length > 0;
+  problemEmpty.textContent = all.length === 0
+    ? `No ${type.name} problems yet.`
+    : "No problems match this search and filter.";
+
   problemList.replaceChildren();
   for (const problem of visible) problemList.append(createProblemEntity(problem));
-  problemEmpty.hidden = items.length > 0;
-  problemEmpty.textContent = `No ${type.name} problems yet.`;
   problemList.hidden = visible.length === 0;
   pruneProblemSelection();
-  syncProblemSelection();
+  syncProblemSelection(matching);
 }
 
 function problemKey(type, index) {
@@ -2082,15 +2406,14 @@ function pruneProblemSelection() {
   }
 }
 
-function syncProblemSelection() {
+function syncProblemSelection(matching = filteredProblems()) {
   const boxes = [...problemList.querySelectorAll("[data-select-problem]")];
   const selectedOnPage = boxes.filter((box) => box.checked).length;
   const chosen = selectedProblems();
-  const all = problemsOfActiveType();
   problemSelectPage.checked = boxes.length > 0 && selectedOnPage === boxes.length;
   problemSelectPage.indeterminate = selectedOnPage > 0 && selectedOnPage < boxes.length;
-  problemSelectAll.checked = all.length > 0 && chosen.length === all.length;
-  problemSelectAll.indeterminate = chosen.length > 0 && chosen.length < all.length;
+  problemSelectAll.checked = matching.length > 0 && chosen.length === matching.length;
+  problemSelectAll.indeterminate = chosen.length > 0 && chosen.length < matching.length;
   problemSelectedCount.textContent = chosen.length === 0 ? "None selected" : `${chosen.length} selected`;
   const idle = chosen.length === 0;
   problemBulkDelete.disabled = idle;
@@ -2117,7 +2440,7 @@ function selectProblemPage() {
 }
 
 function selectAllProblems() {
-  for (const problem of problemsOfActiveType()) {
+  for (const problem of filteredProblems()) {
     const key = problemKey(problem.type, problem.index);
     if (problemSelectAll.checked) selectedProblemKeys.add(key);
     else selectedProblemKeys.delete(key);
@@ -2146,11 +2469,10 @@ function onBulkDifficultyClick(event) {
 function deleteSelectedProblems() {
   const chosen = selectedProblems();
   if (chosen.length === 0) return;
-  const label = chosen.length === 1
-    ? problemTag(chosen[0].index, chosen[0].type)
-    : `${chosen.length} ${typeInfo(activeProblemType).name} problems`;
+  const tags = chosen.slice(0, 8).map((problem) => problemTag(problem.index, problem.type));
+  const tagText = tags.join(", ") + (chosen.length > tags.length ? ` and ${chosen.length - tags.length} more` : "");
   const pronoun = chosen.length === 1 ? "It" : "They";
-  if (!window.confirm(`Delete ${label}? ${pronoun} will also be cleared from every map.`)) return;
+  if (!window.confirm(`Delete ${chosen.length} problem${chosen.length === 1 ? "" : "s"}? ${tagText}.\n\n${pronoun} will also be cleared from every map.`)) return;
   const keys = new Set(chosen.map((problem) => problemKey(problem.type, problem.index)));
   problems = problems.filter((problem) => !keys.has(problemKey(problem.type, problem.index)));
   for (const map of maps) {
@@ -2166,25 +2488,21 @@ function deleteSelectedProblems() {
   renderProblems();
 }
 
-function problemRangeStartFor(index) {
-  const safe = Math.min(MAX_PROBLEM_NO, Math.max(MIN_PROBLEM_NO, index));
-  return Math.floor((safe - 1) / PROBLEM_PAGE_SIZE) * PROBLEM_PAGE_SIZE + 1;
-}
-
-function problemRangeLabel(start) {
-  return `${start}–${Math.min(start + PROBLEM_PAGE_SIZE - 1, MAX_PROBLEM_NO)}`;
-}
-
 function createProblemEntity(problem) {
   const item = document.createElement("li");
   const check = document.createElement("label");
   const checkbox = document.createElement("input");
   const openButton = document.createElement("button");
-  const index = document.createElement("span");
+  const key = document.createElement("span");
+  const difficulty = document.createElement("span");
   const snippet = document.createElement("span");
-  const deleteButton = document.createElement("button");
+  const usage = document.createElement("span");
+  const actions = document.createElement("div");
   const tag = problemTag(problem.index, problem.type);
+  const level = problemDifficulty(problem);
+  const usageInfo = problemUsage(problem.index, problem.type);
 
+  item.className = problemSelectMode ? "problem-row selecting" : "problem-row";
   item.dataset.problemIndex = String(problem.index);
   if (problemSelectMode) {
     check.className = "problem-check";
@@ -2195,27 +2513,60 @@ function createProblemEntity(problem) {
     checkbox.setAttribute("aria-label", `Select ${tag}`);
     check.append(checkbox);
   }
+
   openButton.type = "button";
   openButton.className = "open-problem";
   openButton.dataset.openProblem = String(problem.index);
   openButton.dataset.openType = problem.type;
   openButton.setAttribute("aria-label", `Edit ${tag}`);
-  index.className = "problem-index";
-  index.textContent = `${tag} · ${DIFFICULTY_NAME[problemDifficulty(problem)]}`;
+  key.className = `problem-key ${problem.type}`;
+  key.textContent = tag;
+  difficulty.className = `difficulty-chip ${level}`;
+  difficulty.textContent = DIFFICULTY_NAME[level];
   snippet.className = "problem-snippet";
   snippet.textContent = problemSnippet(problem);
   renderMath(snippet);
-  openButton.append(index, snippet);
+  openButton.append(key, difficulty, snippet);
 
-  deleteButton.type = "button";
-  deleteButton.className = "delete-map";
-  deleteButton.dataset.deleteProblem = String(problem.index);
-  deleteButton.dataset.deleteType = problem.type;
-  deleteButton.textContent = "Delete";
-  deleteButton.setAttribute("aria-label", `Delete ${tag}`);
+  usage.className = usageInfo.cells > 0 ? "problem-usage-chip" : "problem-usage-chip unused";
+  usage.textContent = usageInfo.cells > 0
+    ? `${usageInfo.maps} map${usageInfo.maps === 1 ? "" : "s"} · ${usageInfo.cells} cell${usageInfo.cells === 1 ? "" : "s"}`
+    : "Not placed";
+  usage.setAttribute("aria-label", usageInfo.cells > 0
+    ? `Used on ${usageInfo.maps} map${usageInfo.maps === 1 ? "" : "s"} in ${usageInfo.cells} cell${usageInfo.cells === 1 ? "" : "s"}`
+    : "Not placed on any map");
 
-  if (problemSelectMode) item.append(check);
-  item.append(openButton, deleteButton);
+  if (problemSelectMode) {
+    item.append(check, openButton, usage);
+  } else {
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "account-action";
+    editButton.dataset.openProblem = String(problem.index);
+    editButton.dataset.openType = problem.type;
+    editButton.textContent = "Edit";
+    editButton.setAttribute("aria-label", `Edit ${tag}`);
+
+    const duplicateButton = document.createElement("button");
+    duplicateButton.type = "button";
+    duplicateButton.className = "account-action";
+    duplicateButton.dataset.duplicateProblem = String(problem.index);
+    duplicateButton.dataset.duplicateType = problem.type;
+    duplicateButton.textContent = "Duplicate";
+    duplicateButton.setAttribute("aria-label", `Duplicate ${tag}`);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "account-action danger";
+    deleteButton.dataset.deleteProblem = String(problem.index);
+    deleteButton.dataset.deleteType = problem.type;
+    deleteButton.textContent = "Delete";
+    deleteButton.setAttribute("aria-label", `Delete ${tag}`);
+
+    actions.className = "problem-row-actions";
+    actions.append(editButton, duplicateButton, deleteButton);
+    item.append(openButton, usage, actions);
+  }
   return item;
 }
 
@@ -2300,6 +2651,13 @@ function renderProblemEditor() {
   problemEditorTitle.textContent = tag;
   problemBackButton.textContent = problemReturn === "map" ? "Back to map" : "Back to problems";
   deleteOpenProblemButton.setAttribute("aria-label", `Delete ${tag}`);
+  if (problemUsageNote) {
+    const usage = problemUsage(problem.index, problem.type);
+    problemUsageNote.hidden = false;
+    problemUsageNote.textContent = usage.cells > 0
+      ? `This problem is placed on ${usage.maps} map${usage.maps === 1 ? "" : "s"} in ${usage.cells} cell${usage.cells === 1 ? "" : "s"}. Deleting it also clears those cells.`
+      : "This problem is not placed on any map yet.";
+  }
   const fromMap = problemReturn === "map";
   problemIndexField.hidden = fromMap;
   problemIndexNote.hidden = fromMap;
@@ -2317,6 +2675,7 @@ function renderProblemEditor() {
   problemAnswer.value = problem.answer;
   problemLogic.value = problem.logic || "";
 
+  updateProblemSaveButton();
   // Render HTML preview
   requestAnimationFrame(renderProblemPreview);
 }
