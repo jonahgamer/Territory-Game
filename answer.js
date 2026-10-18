@@ -69,8 +69,12 @@ function escapeStatementText(value) {
     .replace(/>/g, "&gt;");
 }
 
-function buildStatementDocument(source) {
+let activeStatementFrame = null;
+let pendingStatementSubmit = null;
+
+function buildStatementDocument(source, tag = "") {
   const text = String(source || "");
+  const tagText = escapeStatementText(tag);
   const body = containsHtml(text)
     ? text
     : `<pre class="statement-text">${escapeStatementText(text)}</pre>`;
@@ -79,6 +83,7 @@ function buildStatementDocument(source) {
 <style>
   html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }
   body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 20px; line-height: 1.55; }
+  #territory-bridge { display: none; }
   .statement-content { overflow-wrap: anywhere; }
   .statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }
   .statement-content img, .statement-content video,
@@ -132,10 +137,83 @@ function buildStatementDocument(source) {
   window.addEventListener("load", boot);
 })();
 </script>
-</head><body><div class="statement-content">${body}</div></body></html>`;
+</head><body>
+<div id="territory-bridge" aria-hidden="true">
+  <span id="student-problem-tag">${tagText}</span>
+  <form id="student-answer-form"><button type="submit">Submit</button></form>
+  <input id="student-answer" type="text" />
+  <p id="student-answer-error" hidden></p>
+</div>
+<script>
+(function () {
+  var input = document.getElementById("student-answer");
+  var form = document.getElementById("student-answer-form");
+  var err = document.getElementById("student-answer-error");
+  if (!input || !form || !err) return;
+  var answer = "";
+  var readOnly = false;
+  var errorHidden = true;
+  var errorText = "";
+  function post(type, data) {
+    try {
+      var message = { type: type };
+      if (data) for (var key in data) if (Object.prototype.hasOwnProperty.call(data, key)) message[key] = data[key];
+      parent.postMessage(message, "*");
+    } catch (error) {}
+  }
+  Object.defineProperty(input, "value", {
+    get: function () { return answer; },
+    set: function (next) { answer = String(next == null ? "" : next); post("territory-answer-value", { value: answer }); }
+  });
+  var styleProxy = {};
+  Object.defineProperty(styleProxy, "cssText", {
+    get: function () { return input.getAttribute("style") || ""; },
+    set: function (next) {
+      var css = String(next == null ? "" : next);
+      input.setAttribute("style", css);
+      post("territory-answer-style", { cssText: css });
+    }
+  });
+  Object.defineProperty(input, "style", { get: function () { return styleProxy; } });
+  Object.defineProperty(input, "readOnly", {
+    get: function () { return readOnly; },
+    set: function (next) {
+      readOnly = !!next;
+      if (readOnly) input.setAttribute("readonly", "readonly");
+      else input.removeAttribute("readonly");
+      post("territory-answer-readonly", { readOnly: readOnly });
+    }
+  });
+  function postError() { post("territory-answer-error", { hidden: errorHidden, text: errorText }); }
+  Object.defineProperty(err, "hidden", {
+    get: function () { return errorHidden; },
+    set: function (next) { errorHidden = !!next; postError(); }
+  });
+  Object.defineProperty(err, "textContent", {
+    get: function () { return errorText; },
+    set: function (next) { errorText = String(next == null ? "" : next); postError(); }
+  });
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.type !== "territory-before-submit") return;
+    var blocked = false;
+    var button = form.querySelector("button");
+    if (button) {
+      var click = new MouseEvent("click", { bubbles: true, cancelable: true, view: window });
+      button.dispatchEvent(click);
+      blocked = click.defaultPrevented;
+    }
+    post("territory-submit-result", { id: data.id, blocked: blocked, message: errorHidden ? "" : errorText });
+  });
+})();
+</script>
+<div class="statement-content">${body}</div>
+</body></html>`;
 }
 
-function setRichText(element, source) {
+// Problem HTML runs in a sandboxed iframe. It may use its own scripts and the
+// hidden answer bridge, but it cannot reach the parent page or close button.
+function setRichText(element, source, options = {}) {
   const text = String(source || "");
   element.replaceChildren();
   element.classList.add("rich-html", "isolated-statement");
@@ -144,19 +222,73 @@ function setRichText(element, source) {
   frame.setAttribute("sandbox", "allow-scripts");
   frame.setAttribute("title", "Problem statement");
   frame.style.height = "120px";
-  frame.srcdoc = buildStatementDocument(text);
+  frame.srcdoc = buildStatementDocument(text, options.tag || "");
   element.append(frame);
   if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
+  return frame;
+}
+
+function approveStatementSubmit() {
+  const frame = activeStatementFrame;
+  if (!frame || !frame.contentWindow) return Promise.resolve({ blocked: false, message: "" });
+  if (pendingStatementSubmit) {
+    clearTimeout(pendingStatementSubmit.timer);
+    pendingStatementSubmit.resolve({ blocked: false, message: "" });
+    pendingStatementSubmit = null;
+  }
+  return new Promise((resolve) => {
+    const id = `statement-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const timer = setTimeout(() => {
+      if (pendingStatementSubmit && pendingStatementSubmit.id === id) {
+        pendingStatementSubmit = null;
+        resolve({ blocked: false, message: "" });
+      }
+    }, 300);
+    pendingStatementSubmit = {
+      id,
+      timer,
+      resolve: (result) => { clearTimeout(timer); resolve(result); },
+    };
+    try {
+      frame.contentWindow.postMessage({ type: "territory-before-submit", id }, "*");
+    } catch (error) {
+      clearTimeout(timer);
+      pendingStatementSubmit = null;
+      resolve({ blocked: false, message: "" });
+    }
+  });
 }
 
 window.addEventListener("message", (event) => {
   const data = event.data;
-  if (!data || data.type !== "territory-statement-height") return;
+  if (!data || typeof data.type !== "string") return;
   const frame = statementFrames.get(event.source);
   if (!frame) return;
-  const height = Number(data.height);
-  if (!Number.isFinite(height)) return;
-  frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height)))}px`;
+  if (data.type === "territory-statement-height") {
+    const height = Number(data.height);
+    if (!Number.isFinite(height)) return;
+    frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height)))}px`;
+    return;
+  }
+  if (frame !== activeStatementFrame) return;
+  if (data.type === "territory-answer-value" && answer) {
+    answer.value = String(data.value == null ? "" : data.value);
+  } else if (data.type === "territory-answer-style" && answer) {
+    answer.style.cssText = String(data.cssText == null ? "" : data.cssText);
+  } else if (data.type === "territory-answer-readonly" && answer) {
+    answer.readOnly = data.readOnly === true;
+  } else if (data.type === "territory-answer-error" && error) {
+    error.hidden = data.hidden === true;
+    error.textContent = String(data.text == null ? "" : data.text);
+  } else if (data.type === "territory-submit-result" && pendingStatementSubmit && pendingStatementSubmit.id === data.id) {
+    const pending = pendingStatementSubmit;
+    pendingStatementSubmit = null;
+    clearTimeout(pending.timer);
+    pending.resolve({
+      blocked: data.blocked === true,
+      message: String(data.message == null ? "" : data.message),
+    });
+  }
 });
 function showStatus(message) {
   status.hidden = false;
@@ -195,11 +327,8 @@ async function loadProblem() {
   const points = DIFFICULTY_SCORE[difficulty];
   title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
   
-  if (problem?.prompt?.trim()) {
-    setRichText(prompt, problem.prompt);
-  } else {
-    setRichText(prompt, "This problem has no text yet.");
-  }
+  const promptText = problem?.prompt?.trim() ? problem.prompt : "This problem has no text yet.";
+  activeStatementFrame = setRichText(prompt, promptText, { tag: title.textContent });
   
   // 脚本执行完后，将焦点放到输入框上（如果它还可见的话）
   if (answer.offsetParent !== null) {
@@ -211,7 +340,20 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   error.hidden = true;
   const button = form.querySelector("button");
+  if (button.disabled) return;
+  const label = button.textContent;
   button.disabled = true;
+  button.textContent = "Checking...";
+
+  const approval = await approveStatementSubmit();
+  if (approval.blocked) {
+    button.disabled = false;
+    button.textContent = label;
+    error.hidden = false;
+    error.textContent = approval.message || "Finish the problem before submitting.";
+    return;
+  }
+
   try {
     await api("solve", { contestId, cell: cellIndex, answer: answer.value });
     form.hidden = true;
@@ -220,6 +362,7 @@ form.addEventListener("submit", async (event) => {
     error.hidden = false;
     error.textContent = failure.message;
     button.disabled = false;
+    button.textContent = label;
   }
 });
 
