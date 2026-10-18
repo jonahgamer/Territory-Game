@@ -74,7 +74,7 @@ function addProblem(type) {
   const problemType = typeInfo(type) ? type : "math";
   const index = nextProblemNo(problemType);
   if (index === null) {
-    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(problemType).name} problem indexes are in use.`);
+    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(problemType).name} problem indexes are in use.`, "warn");
     return;
   }
   if (ROUTED) navigateTo(["problems", problemType, String(index)]);
@@ -149,7 +149,7 @@ function duplicateProblem(index, type) {
   const copyType = typeInfo(type) ? type : "math";
   const nextIndex = nextProblemNo(copyType);
   if (nextIndex === null) {
-    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(copyType).name} problem indexes are in use.`);
+    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(copyType).name} problem indexes are in use.`, "warn");
     return;
   }
   const copy = {
@@ -176,7 +176,7 @@ function duplicateCurrentProblem() {
   const type = problemDraft.type;
   const nextIndex = nextProblemNo(type);
   if (nextIndex === null) {
-    window.alert(`All ${MAX_PROBLEM_NO} ${typeInfo(type).name} problem indexes are in use.`);
+    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(type).name} problem indexes are in use.`, "warn");
     return;
   }
   pendingProblemDraft = {

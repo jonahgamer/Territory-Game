@@ -149,6 +149,7 @@ function paintCell(map, index) {
   button.className = cellClassName(cell, "grid-cell");
   button.textContent = cellText(cell);
   button.setAttribute("aria-label", cellLabel(cell, row, column));
+  renderMapCounts(map);
 }
 
 function cellIndexFromTarget(target) {

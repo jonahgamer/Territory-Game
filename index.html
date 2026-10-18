@@ -507,6 +507,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           <p class="eyebrow">Problem map</p>
           <h1 id="editor-title"></h1>
           <p id="editor-size" class="field-note"></p>
+          <div id="map-counts" class="map-counts" aria-live="polite"></div>
           <label class="map-name-field">
             Name
             <input id="map-name-input" type="text" maxlength="60" />
@@ -547,6 +548,11 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             <li><span class="swatch spawnpoint"></span>Spawn point</li>
             <li><span class="swatch obstacle"></span>Obstacle</li>
             <li><span class="swatch empty"></span>Empty</li>
+          </ul>
+          <ul class="legend">
+            <li>Problems count: <span id="pbct"></span></li>
+            <li>Spawns count:<span id="spct"></span></li>
+            <li>Wall count:<span id="wlct"></span></li>
           </ul>
           <div class="grid-scroll">
             <div id="editor-grid" class="editor-grid"></div>

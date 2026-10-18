@@ -1,6 +1,6 @@
 # Frontend source sections
 
-`script.js` in the project root is generated. Edit these files instead, then run:
+`script.js` in the project root is generated from 16 numbered sections. Edit these files instead, then run:
 
 ```bash
 npm run build:scripts

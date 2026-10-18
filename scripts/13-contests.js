@@ -288,7 +288,7 @@ async function onContestantListClick(event) {
     applyContestPlayState(contest, data);
   } catch (error) {
     Object.assign(contest, previous);
-    alert(error.message);
+    showPageToast(error.message, "warn");
   }
   renderContest();
 }

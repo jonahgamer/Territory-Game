@@ -2,14 +2,21 @@
 // Persistence
 // ═══════════════════════════════════════════════════════════════════
 
-function handleSaveError(error) {
+function handleSaveError(error, collection) {
   console.error("[save]", error);
   const conflict = Number(error?.status) === 409 || /changed in another tab/i.test(error?.message || "");
-  if (conflict && !saveConflictShown) {
-    saveConflictShown = true;
-    window.alert("Another tab changed this data. Reload the page before saving again.");
-    setTimeout(() => { saveConflictShown = false; }, 8000);
+  if (collection === "maps") {
+    mapDirty = true;
+    updateMapSaveButton();
+  } else if (collection === "problems") {
+    problemDirty = true;
+    updateProblemSaveButton();
   }
+  if (conflict) {
+    if (!saveConflictActive) openSaveConflict(collection);
+    return;
+  }
+  showPageToast(error?.message || "Could not save changes.", "warn");
 }
 
 function queueSave(name, task) {
@@ -24,13 +31,14 @@ function noteRevision(name, data) {
 
 async function persistMapsNow() {
   if (!bootstrapped || !isAdmin()) return null;
+  if (saveConflictActive) return null;
   return queueSave("maps", async () => {
     try {
       const data = await apiCall("save-maps", { maps, revision: revisions.maps });
       noteRevision("maps", data);
       return data;
     } catch (error) {
-      handleSaveError(error);
+      handleSaveError(error, "maps");
       return null;
     }
   });
@@ -38,13 +46,14 @@ async function persistMapsNow() {
 
 async function persistProblemsNow() {
   if (!bootstrapped || !isAdmin()) return null;
+  if (saveConflictActive) return null;
   return queueSave("problems", async () => {
     try {
       const data = await apiCall("save-problems", { problems, revision: revisions.problems });
       noteRevision("problems", data);
       return data;
     } catch (error) {
-      handleSaveError(error);
+      handleSaveError(error, "problems");
       return null;
     }
   });
@@ -53,13 +62,14 @@ async function persistProblemsNow() {
 async function persistContestsNow() {
   if (!bootstrapped || !isAdmin()) return null;
   if (contests.some((contest) => !contestSchedule(contest))) return null;
+  if (saveConflictActive) return null;
   return queueSave("contests", async () => {
     try {
       const data = await apiCall("save-contests", { contests, revision: revisions.contests });
       noteRevision("contests", data);
       return data;
     } catch (error) {
-      handleSaveError(error);
+      handleSaveError(error, "contests");
       return null;
     }
   });
@@ -86,13 +96,14 @@ async function saveContestsNow() {
   if (contests.some((contest) => !contestSchedule(contest))) {
     throw new Error("Finish the contest schedule before adding a team.");
   }
+  if (saveConflictActive) return null;
   return queueSave("contests", async () => {
     try {
       const data = await apiCall("save-contests", { contests, revision: revisions.contests });
       noteRevision("contests", data);
       return data;
     } catch (error) {
-      handleSaveError(error);
+      handleSaveError(error, "contests");
       throw error;
     }
   });

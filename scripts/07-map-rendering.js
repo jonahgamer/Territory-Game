@@ -2,6 +2,39 @@
 // Map rendering
 // ═══════════════════════════════════════════════════════════════════
 
+function mapKindCounts(map) {
+  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0 };
+  for (const cell of map?.cells || []) {
+    if (Object.prototype.hasOwnProperty.call(counts, cell.kind)) counts[cell.kind] += 1;
+  }
+  return counts;
+}
+
+function renderMapCounts(map) {
+  if (!editorCounts) return;
+  if (!map) {
+    editorCounts.replaceChildren();
+    return;
+  }
+  const counts = mapKindCounts(map);
+  const entries = [
+    ["problem", "Problems", counts.problem],
+    ["obstacle", "Obstacles", counts.obstacle],
+    ["spawnpoint", "Spawn points", counts.spawnpoint],
+    ["empty", "Empty", counts.empty],
+  ];
+  editorCounts.replaceChildren();
+  for (const [kind, label, value] of entries) {
+    const item = document.createElement("span");
+    item.className = `map-count map-count-${kind}`;
+    const name = document.createElement("span");
+    name.textContent = label;
+    const count = document.createElement("strong");
+    count.textContent = String(value);
+    item.append(name, count);
+    editorCounts.append(item);
+  }
+}
 function renderMaps() {
   mapList.replaceChildren();
   emptyMessage.hidden = maps.length > 0;
@@ -40,6 +73,7 @@ function renderEditor() {
 
   editorTitle.textContent = map.name;
   editorSize.textContent = `${map.cols} × ${map.rows}`;
+  renderMapCounts(map);
   editorNameInput.value = map.name;
   deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);
