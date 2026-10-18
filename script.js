@@ -4162,7 +4162,7 @@ function renderStudentPlay() {
   writeStudentStatus(contest, phase, map, frozen);
   renderTeamRoster(contest, map, phase);
   renderLeaderboard(studentLeaderboard, null, contest);
-  const showScores = contest.spawnResolved || phase === "live" || phase === "ended" || frozen;
+  const showScores = phase === "live" || phase === "ended" || frozen;
   studentLeaderboard.hidden = !showScores;
   studentLeaderboardHeading.hidden = !showScores;
   studentLeaderboardHeading.textContent = frozen || phase === "ended" ? "Leaderboard" : "Scores";
@@ -4183,35 +4183,34 @@ function renderStudentPlay() {
 
 function renderTeamRoster(contest, map, phase) {
   if (!teamRoster || !teamRosterBody) return;
-  const show = Boolean(map) && (contest.spawnResolved || phase === "ready" || phase === "live" || phase === "ended");
+  const team = teamForUser(contest);
+  const show = Boolean(team && map) && (phase === "ready" || (phase === "spawn" && contest.spawnResolved));
   teamRoster.hidden = !show;
   if (!show) return;
   teamRosterBody.replaceChildren();
-  for (const team of contest.teams || []) {
-    const row = document.createElement("tr");
-    const name = document.createElement("td");
-    const dot = document.createElement("span");
-    dot.className = "team-color-dot";
-    dot.style.setProperty("--team", teamColor(contest, team.id));
-    const label = document.createElement("span");
-    label.textContent = team.name;
-    name.append(dot, label);
-    const members = document.createElement("td");
-    members.className = "team-members-cell";
-    for (const member of team.members || []) {
-      const chip = document.createElement("span");
-      chip.className = "team-member-chip";
-      chip.textContent = member;
-      members.append(chip);
-    }
-    const spawn = document.createElement("td");
-    const spawnCell = (contest.spawns || []).find((item) => item.teamId === team.id);
-    spawn.textContent = spawnCell && map.cells[spawnCell.cell]?.kind === "spawnpoint"
-      ? cellPlace(map, spawnCell.cell)
-      : "No spawn point";
-    row.append(name, members, spawn);
-    teamRosterBody.append(row);
+  const row = document.createElement("tr");
+  const name = document.createElement("td");
+  const dot = document.createElement("span");
+  dot.className = "team-color-dot";
+  dot.style.setProperty("--team", teamColor(contest, team.id));
+  const label = document.createElement("span");
+  label.textContent = team.name;
+  name.append(dot, label);
+  const members = document.createElement("td");
+  members.className = "team-members-cell";
+  for (const member of team.members || []) {
+    const chip = document.createElement("span");
+    chip.className = "team-member-chip";
+    chip.textContent = member;
+    members.append(chip);
   }
+  const spawn = document.createElement("td");
+  const spawnCell = (contest.spawns || []).find((item) => item.teamId === team.id);
+  spawn.textContent = spawnCell && map.cells[spawnCell.cell]?.kind === "spawnpoint"
+    ? cellPlace(map, spawnCell.cell)
+    : "No spawn point";
+  row.append(name, members, spawn);
+  teamRosterBody.append(row);
 }
 function renderSpawnAgreement(contest, map, phase) {
   const team = teamForUser(contest);
