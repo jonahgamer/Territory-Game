@@ -1288,7 +1288,7 @@ button[type="submit"],
 
 #student-problem-prompt {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-x: auto;
@@ -1653,7 +1653,7 @@ button[type="submit"],
 }
 
 .problem-preview-content {
-  font-size: 10px;
+  font-size: 16px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-x: auto;

@@ -84,9 +84,10 @@ function buildStatementDocument(source, tag = "") {
 <link rel="stylesheet" href="${STATEMENT_KATEX_CSS}" crossorigin="anonymous">
 <style>
   html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }
-  body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 20px; line-height: 1.55; }
+  body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }
   #territory-bridge { display: none; }
-  .statement-content { overflow-wrap: anywhere; }
+  .statement-content { overflow-wrap: anywhere; font-size: 16px; }
+  .katex { font-size: 1em; }
   .statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }
   .statement-content img, .statement-content video,
   .statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }
