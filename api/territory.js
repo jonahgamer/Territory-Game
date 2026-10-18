@@ -444,7 +444,7 @@ function collectUnique(raw, normalize, keyOf, label) {
   const seen = new Set();
   for (const item of raw) {
     const normalized = normalize(item);
-    if (!normalized) return rejectList(label);
+    // if (!normalized) return rejectList(label);
     const key = keyOf(normalized);
     if (seen.has(key)) return { error: `${label} contains a duplicate` };
     seen.add(key);
