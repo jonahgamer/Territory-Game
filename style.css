@@ -1120,8 +1120,14 @@ button[type="submit"],
 
 .isolated-statement {
   display: block;
-  contain: content;
-  isolation: isolate;
+}
+
+.statement-frame {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  border: 0;
+  background: #081220;
 }
 #student-problem-prompt.rich-html,
 .problem-preview-content.rich-html {

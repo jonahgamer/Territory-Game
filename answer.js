@@ -57,70 +57,107 @@ function containsHtml(source) {
 }
 
 
-const STATEMENT_STYLE = `
-  :host { display: block; }
-  .statement-content { font: inherit; line-height: 1.55; overflow-wrap: anywhere; }
-  .statement-content img,
-  .statement-content video,
-  .statement-content canvas,
-  .statement-content svg { max-width: 100%; height: auto; }
-  .statement-content table { max-width: 100%; border-collapse: collapse; }
-  .statement-content pre { overflow: auto; white-space: pre-wrap; }
-  .statement-content a { color: #3ee0ff; }
-`;
+const STATEMENT_KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+const STATEMENT_KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
+const STATEMENT_AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
+const statementFrames = new WeakMap();
 
-function sanitizeProblemFragment(source) {
-  const template = document.createElement("template");
-  template.innerHTML = source;
-  template.content
-    .querySelectorAll("script, style, iframe, object, embed, base, meta, link, form, template, frame, frameset, applet")
-    .forEach((node) => node.remove());
-  for (const element of template.content.querySelectorAll("*")) {
-    for (const attr of [...element.attributes]) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith("on") || name === "srcdoc" || name === "autofocus") {
-        element.removeAttribute(attr.name);
-        continue;
-      }
-      if (["href", "xlink:href", "src", "action", "formaction"].includes(name) && value.startsWith("javascript:")) {
-        element.removeAttribute(attr.name);
-        continue;
-      }
-      if (name === "style" && value.includes("javascript:")) element.removeAttribute(attr.name);
-    }
-    if (element.tagName.toUpperCase() === "A" || element.tagName.toUpperCase() === "AREA") element.removeAttribute("href");
+function escapeStatementText(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function buildStatementDocument(source) {
+  const text = String(source || "");
+  const body = containsHtml(text)
+    ? text
+    : `<pre class="statement-text">${escapeStatementText(text)}</pre>`;
+  return `<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="${STATEMENT_KATEX_CSS}" crossorigin="anonymous">
+<style>
+  html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }
+  body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 20px; line-height: 1.55; }
+  .statement-content { overflow-wrap: anywhere; }
+  .statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }
+  .statement-content img, .statement-content video,
+  .statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }
+  .statement-content table { max-width: 100%; border-collapse: collapse; }
+  .statement-content a { color: #3ee0ff; }
+</style>
+<script src="${STATEMENT_KATEX_JS}" crossorigin="anonymous"></script>
+<script src="${STATEMENT_AUTO_RENDER_JS}" crossorigin="anonymous"></script>
+<script>
+(function () {
+  function report() {
+    try {
+      const height = Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+      );
+      parent.postMessage({ type: "territory-statement-height", height: height }, "*");
+    } catch (error) {}
   }
-  return template.content;
+  function renderMath() {
+    if (typeof renderMathInElement !== "function") return;
+    try {
+      renderMathInElement(document.querySelector(".statement-content"), {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\\\[", right: "\\\\]", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\\\(", right: "\\\\)", display: false }
+        ],
+        throwOnError: false,
+        strict: "ignore"
+      });
+    } catch (error) {}
+  }
+  let booted = false;
+  function boot() {
+    if (booted) return;
+    booted = true;
+    renderMath();
+    report();
+    try {
+      if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement);
+    } catch (error) {}
+    try {
+      new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+    } catch (error) {}
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+  window.addEventListener("load", boot);
+})();
+</script>
+</head><body><div class="statement-content">${body}</div></body></html>`;
 }
 
 function setRichText(element, source) {
   const text = String(source || "");
   element.replaceChildren();
   element.classList.add("rich-html", "isolated-statement");
-  element.style.contain = "content";
-  element.style.isolation = "isolate";
-  const root = element.shadowRoot || element.attachShadow({ mode: "open" });
-  root.replaceChildren();
-  if (!text.trim()) return;
-
-  const base = document.createElement("style");
-  base.textContent = STATEMENT_STYLE;
-  root.append(base);
-  for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-    if (link.href && /katex/i.test(link.href)) root.append(link.cloneNode(true));
-  }
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "statement-content";
-  const hasHtml = containsHtml(text);
-  wrapper.style.whiteSpace = hasHtml ? "normal" : "pre-wrap";
-  if (hasHtml) wrapper.append(sanitizeProblemFragment(text));
-  else wrapper.textContent = text;
-  root.append(wrapper);
-  renderMath(wrapper);
+  const frame = document.createElement("iframe");
+  frame.className = "statement-frame";
+  frame.setAttribute("sandbox", "allow-scripts");
+  frame.setAttribute("title", "Problem statement");
+  frame.style.height = "120px";
+  frame.srcdoc = buildStatementDocument(text);
+  element.append(frame);
+  if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
 }
 
+window.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data || data.type !== "territory-statement-height") return;
+  const frame = statementFrames.get(event.source);
+  if (!frame) return;
+  const height = Number(data.height);
+  if (!Number.isFinite(height)) return;
+  frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height)))}px`;
+});
 function showStatus(message) {
   status.hidden = false;
   status.textContent = message;

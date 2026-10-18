@@ -296,7 +296,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               Logic
               <textarea id="problem-logic" rows="8" spellcheck="false"></textarea>
             </label>
-            <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. HTML in the problem is shown in an isolated statement. Scripts, event handlers, stylesheets, and links are removed so they cannot change the answer box or close the problem. The answer is the exact text a student types. Logic is optional JavaScript. It can read answer and expected, then set result.score from 0 to 100 and result.comment. A score of 100 is correct. Leave logic empty to compare the answer as text.</p>
+            <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. HTML in the problem is shown in an isolated statement frame. Its scripts can run inside that frame, but they cannot change the answer box or close the problem. The answer is the exact text a student types. Logic is optional JavaScript. It can read answer and expected, then set result.score from 0 to 100 and result.comment. A score of 100 is correct. Leave logic empty to compare the answer as text.</p>
             <p id="problem-save-error" class="form-error" hidden></p>
             <button id="save-problem-button" class="save-changes" type="button">Save problem</button>
           </form>
