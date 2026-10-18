@@ -53,7 +53,7 @@ const MIN_MAP_SIZE = 1;
 const MAX_MAP_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
 const MAX_PROBLEM_NO = 999;
-const MAX_PROBLEM_TEXT = 5000;
+const MAX_PROBLEM_TEXT = 50000;
 const MAX_PROBLEM_LOGIC = 10000;
 const MAX_TEST_TEXT = 10000;
 const MAX_NAME_LEN = 60;
@@ -444,7 +444,7 @@ function collectUnique(raw, normalize, keyOf, label) {
   const seen = new Set();
   for (const item of raw) {
     const normalized = normalize(item);
-    // if (!normalized) return rejectList(label);
+    if (!normalized) return rejectList(label);
     const key = keyOf(normalized);
     if (seen.has(key)) return { error: `${label} contains a duplicate` };
     seen.add(key);
