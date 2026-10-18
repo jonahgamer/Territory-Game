@@ -527,15 +527,34 @@ async function handleBootstrap(req, res, db, user) {
     }
   }
   const now = Date.now();
+  const admin = isAdmin(user);
+  const sourceContests = admin
+    ? storedContests
+    : storedContests.filter((contest) => teamForUser(contest, user.username));
   const contests = [];
-  for (const contest of storedContests) {
+  for (const contest of sourceContests) {
     const map = maps.find((item) => item.id === contest.mapId) || null;
     contests.push(await maybeResolveSpawns(db, contest, map, now));
   }
 
-  const admin = isAdmin(user);
-  const cleanMaps = maps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
-  const cleanProblems = problems.map(p => {
+  const mapIds = admin ? null : new Set(contests.map((contest) => contest.mapId));
+  const sourceMaps = admin ? maps : maps.filter((map) => mapIds.has(map.id));
+  const neededProblems = admin ? null : new Set();
+  if (neededProblems) {
+    for (const map of sourceMaps) {
+      for (const cell of map.cells || []) {
+        if (cell?.kind === 'problem' && PROBLEM_TYPES.includes(cell.type) && Number.isInteger(cell.problemNo)) {
+          neededProblems.add(`${cell.type}:${cell.problemNo}`);
+        }
+      }
+    }
+  }
+  const sourceProblems = admin
+    ? problems
+    : problems.filter((problem) => neededProblems.has(`${problem.type}:${problem.index}`));
+
+  const cleanMaps = sourceMaps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
+  const cleanProblems = sourceProblems.map(p => {
     const problem = {
       index: p.index,
       type: p.type,

@@ -45,6 +45,8 @@ async function api(action, body) {
 
 function renderMath(element) {
   if (!element || typeof renderMathInElement !== "function") return;
+  const text = element.textContent || "";
+  if (!text.includes("$") && !text.includes("\\")) return;
   try {
     renderMathInElement(element, { delimiters: MATH_DELIMITERS, throwOnError: false, strict: "ignore" });
   } catch (error) {

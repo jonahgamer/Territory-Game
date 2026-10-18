@@ -1,5 +1,3 @@
-// Generated from scripts/*.js by build-scripts.mjs. Edit the source sections, not this file.
-
 // script.js
 // ═══════════════════════════════════════════════════════════════════
 // Territory Game — frontend
