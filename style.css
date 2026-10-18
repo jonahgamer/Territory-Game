@@ -1653,7 +1653,7 @@ button[type="submit"],
 }
 
 .problem-preview-content {
-  font-size: 14px;
+  font-size: 10px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-x: auto;
