@@ -21,6 +21,40 @@
         font-family: var(--font-ui);
         font-size: 13px;
       }
+      /* Difficulty accent on the card. */
+      .practice-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-left-width: 6px;
+        background: #101820;
+        color: var(--ink);
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .practice-card.easy   { border-left-color: #3ddc6a; }
+      .practice-card.normal { border-left-color: #ffe14a; }
+      .practice-card.hard   { border-left-color: #ff3b4e; }
+      .practice-card.insane { border-left-color: #c084fc; }
+      .practice-card:hover { outline: 2px solid var(--cyan); outline-offset: -4px; }
+      .practice-card .tag {
+        font-family: var(--font-ui);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: .04em;
+      }
+      .practice-card .preview {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+      }
     </style>
   </head>
   <body>
@@ -87,19 +121,22 @@
           link.href = "/testing/problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
           link.target = "_blank";
           link.rel = "noopener";
-          link.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;text-decoration:none;cursor:pointer;";
-          link.setAttribute("aria-label", "Open " + tagOf(problem) + " in a new tab");
+          // Difficulty is carried by the card border color (class), matching
+          // the legend swatches in style.css.
+          link.className = "practice-card " + level;
+          link.setAttribute("aria-label", tagOf(problem) + ", " + DIFFICULTY_NAME[level] + ", open in a new tab");
 
           var tag = document.createElement("span");
-          tag.style.cssText = "font-family:var(--font-ui);font-size:18px;font-weight:700;letter-spacing:.04em;";
+          tag.className = "tag";
           tag.textContent = tagOf(problem);
 
+          // Reuse the shared difficulty chip styling from style.css.
           var diff = document.createElement("span");
-          diff.style.cssText = "align-self:flex-start;padding:2px 7px;border:1px solid currentColor;font-family:var(--font-ui);font-size:11px;letter-spacing:.08em;text-transform:uppercase;";
+          diff.className = "difficulty-chip " + level;
           diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
 
           var preview = document.createElement("span");
-          preview.style.cssText = "font-family:var(--font-ui);font-size:13px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;";
+          preview.className = "preview";
           preview.textContent = plainText(problem.prompt) || "(empty)";
 
           link.append(tag, diff, preview);
