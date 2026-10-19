@@ -23,7 +23,7 @@ const HEIGHT = {
 };
 
 const RAMP = [
-  { h: 0.0, c: "#1e2430" }, // slightly lighter base so shadows read
+  { h: 0.0, c: "#1e2430" },
   { h: 1.0, c: "#4caf50" },
   { h: 2.0, c: "#ff9800" },
   { h: 3.0, c: "#f44336" },
@@ -40,14 +40,23 @@ const LEGEND = [
   ["Empty",    "#1e2430"],
 ];
 
-// ── Fake‑3D tuning ──────────────────────────────────────────
-const MAX_LIFT_PX = 22;   // how far the "top" of the tallest tile is offset
-const SIDE_RATIO  = 1.0;  // side extent = lift * SIDE_RATIO (1.0 = 45° bevel)
-const OFFSET_X    = 0;    // optional global shift of the top faces
+// ── Fake‑3D tuning (85° camera pitch = 5° off straight‑down) ─
+// At 85° we're almost looking straight down, so:
+//  - the top face barely shifts (small lift)
+//  - the side faces are squashed vertically (cos(85°) ≈ 0.087)
+//  - the drop shadow is short and mostly straight down
+const CAMERA_PITCH_DEG = 85;
+const COS_PITCH        = Math.cos(CAMERA_PITCH_DEG * Math.PI / 180); // ≈ 0.087
+
+const MAX_LIFT_PX   = 18;                    // raw 3‑D height at the tallest
+const VISIBLE_LIFT  = MAX_LIFT_PX * (1 - COS_PITCH); // ≈ 16.4px — top face offset
+const SIDE_HEIGHT   = MAX_LIFT_PX * COS_PITCH;       // ≈ 1.6px — squashed side band
+const SHADOW_BLUR   = 6;
+const SHADOW_OFFSET = 3;
 
 const CONTOUR_LEVELS = [0.5, 1.5, 2.5, 3.5];
 
-// ── Height field + smoothing (unchanged logic) ──────────────
+// ── Height field + smoothing (unchanged) ───────────────────
 function buildHeightField(map, findProblem) {
   const { cols, rows, cells } = map;
   const n = rows * cols;
@@ -186,9 +195,9 @@ async function run() {
   layoutMapGrid(gridEl, map.cols, map.rows);
   gridEl.replaceChildren();
   gridEl.style.gap = "0";
-  gridEl.style.padding = "40px 32px 60px";
+  gridEl.style.padding = `${VISIBLE_LIFT + 8}px ${VISIBLE_LIFT + 8}px 32px`;
   gridEl.style.background =
-    "radial-gradient(ellipse at 50% 30%, #1a2233 0%, #0b0f14 75%)";
+    "radial-gradient(ellipse at 50% 25%, #1a2233 0%, #0b0f14 78%)";
   gridEl.style.borderRadius = "10px";
   gridEl.style.overflow = "hidden";
 
@@ -200,61 +209,56 @@ async function run() {
     const h = height[i];
     const k = kind[i];
     const colour = heightToColour(h);
-    const lift = (Math.max(0, Math.min(4, h)) / 4) * MAX_LIFT_PX;
-    const side = lift * SIDE_RATIO;
 
-    // The wrapper occupies the cell's footprint and does not move.
+    // Normalised height in 0…1
+    const t = Math.max(0, Math.min(1, h / 4));
+
+    // At 85° pitch the top face barely shifts up, and the side band
+    // is squashed to a thin strip. Both scale linearly with height.
+    const lift = t * VISIBLE_LIFT;          // top-face upward offset
+    const side = t * SIDE_HEIGHT;           // squashed side band
+
+    // Wrapper keeps the ground footprint fixed.
     const wrap = document.createElement("div");
     wrap.className = "grid-cell difficulty-cell";
     wrap.style.position = "relative";
     wrap.style.aspectRatio = "1 / 1";
 
-    // The "base" is the tile's footprint on the ground — stays put.
-    // It's drawn dark so the sides reading down to it create the illusion.
+    // Base — the dark footprint on the floor. Barely visible at 85°,
+    // but it grounds tall cells and gives them a hairline edge.
     const base = document.createElement("div");
     base.style.position = "absolute";
     base.style.inset = "0";
-    base.style.background = shade(colour, -0.55);
-    base.style.borderRadius = "3px";
+    base.style.background = shade(colour, -0.6);
+    base.style.borderRadius = "2px";
     wrap.appendChild(base);
 
-    // Sides: two CSS gradients that fake the left and bottom faces.
-    // They're rectangles anchored to the base and reaching up‑left to
-    // the top face. Because the top is offset (-lift, -lift), the visible
-    // side area is a strip of width `side` along the left and bottom edges.
-    if (side > 0.5) {
-      // Left side — gradient from top‑face colour to base colour.
-      const leftFace = document.createElement("div");
-      leftFace.style.position = "absolute";
-      leftFace.style.left = "0";
-      leftFace.style.top = `${-lift}px`;
-      leftFace.style.width = `${side}px`;
-      leftFace.style.height = `calc(100% + ${lift}px)`;
-      leftFace.style.background = `linear-gradient(to right, ${shade(colour, -0.28)}, ${shade(colour, -0.5)})`;
-      leftFace.style.borderRadius = "3px 0 0 3px";
-      wrap.appendChild(leftFace);
-
-      // Bottom side — gradient from top‑face colour to base colour.
-      const bottomFace = document.createElement("div");
-      bottomFace.style.position = "absolute";
-      bottomFace.style.left = `${-lift}px`;
-      bottomFace.style.bottom = "0";
-      bottomFace.style.width = `calc(100% + ${lift}px)`;
-      bottomFace.style.height = `${side}px`;
-      bottomFace.style.background = `linear-gradient(to bottom, ${shade(colour, -0.2)}, ${shade(colour, -0.45)})`;
-      bottomFace.style.borderRadius = "0 0 3px 3px";
-      wrap.appendChild(bottomFace);
+    // Side band — a single thin strip along the bottom edge, matching
+    // what you'd actually see of a vertical wall at 85° pitch (just the
+    // near edge). Its height is `side` px, starting at the top face's
+    // bottom edge and reaching down to the base.
+    if (side > 0.3) {
+      const sideBand = document.createElement("div");
+      sideBand.style.position = "absolute";
+      sideBand.style.left = `${-lift}px`;
+      sideBand.style.right = `${-lift}px`;
+      sideBand.style.top = `calc(100% - ${side}px - ${lift}px)`;
+      sideBand.style.height = `${side}px`;
+      sideBand.style.background =
+        `linear-gradient(to bottom, ${shade(colour, -0.3)}, ${shade(colour, -0.6)})`;
+      sideBand.style.borderRadius = "0 0 2px 2px";
+      wrap.appendChild(sideBand);
     }
 
-    // Top face — the visible "lid". Offset up‑left by `lift`, which is
-    // what makes the tile look raised: the sides above fill the gap.
+    // Top face — the visible lid. Shifts up (and slightly left) by `lift`,
+    // which is what makes the cell read as a raised plate.
     const top = document.createElement("div");
     top.style.position = "absolute";
-    top.style.left = `${-lift + OFFSET_X}px`;
+    top.style.left = `${-lift}px`;
     top.style.top = `${-lift}px`;
     top.style.width = "100%";
     top.style.height = "100%";
-    top.style.borderRadius = "3px";
+    top.style.borderRadius = "2px";
     top.style.background = colour;
     top.style.display = "flex";
     top.style.alignItems = "center";
@@ -263,18 +267,21 @@ async function run() {
     top.style.fontSize = "0.72rem";
     top.style.color = "#fff";
     top.style.textShadow = "0 1px 2px rgba(0,0,0,0.85)";
+
+    // Shadow is short and mostly straight down at 85° — this is the
+    // single biggest cue that the plates are lifted.
     top.style.boxShadow =
-      `0 ${Math.max(2, side * 0.9)}px ${Math.max(4, side * 1.4)}px rgba(0,0,0,0.55), ` +
-      `inset 0 1px 0 rgba(255,255,255,0.12)`;
+      `0 ${SHADOW_OFFSET + side * 0.6}px ${SHADOW_BLUR + side * 0.8}px rgba(0,0,0,0.55), ` +
+      `inset 0 1px 0 rgba(255,255,255,0.1)`;
     top.style.transition = "top 120ms ease-out, left 120ms ease-out, box-shadow 120ms ease-out";
     top.style.zIndex = "2";
 
     // Contour lines on the top face.
     for (const s of contourSides(height, map.cols, map.rows, i)) {
-      if (s === "top")    top.style.boxShadow += ", inset 0 3px 0 rgba(0,0,0,0.6)";
-      if (s === "bottom") top.style.boxShadow += ", inset 0 -3px 0 rgba(0,0,0,0.6)";
-      if (s === "left")   top.style.boxShadow += ", inset 3px 0 0 rgba(0,0,0,0.6)";
-      if (s === "right")  top.style.boxShadow += ", inset -3px 0 0 rgba(0,0,0,0.6)";
+      if (s === "top")    top.style.boxShadow += ", inset 0 2px 0 rgba(0,0,0,0.6)";
+      if (s === "bottom") top.style.boxShadow += ", inset 0 -2px 0 rgba(0,0,0,0.6)";
+      if (s === "left")   top.style.boxShadow += ", inset 2px 0 0 rgba(0,0,0,0.6)";
+      if (s === "right")  top.style.boxShadow += ", inset -2px 0 0 rgba(0,0,0,0.6)";
     }
 
     if (cell && cell.kind === "problem") {
@@ -288,25 +295,26 @@ async function run() {
 
     wrap.appendChild(top);
     gridEl.appendChild(wrap);
-    tiles.push({ wrap, top, base, lift, side });
+    tiles.push({ wrap, top, lift, side });
   }
 
-  // Hover: pop the top face up another few px and deepen the shadow.
+  // Hover: raise the top face another couple of px. Small movement,
+  // because at 85° we don't want a big pop — just a subtle confirmation.
   tiles.forEach(({ wrap, top, lift, side }) => {
     wrap.addEventListener("mouseenter", () => {
-      top.style.left = `${-lift - 4 + OFFSET_X}px`;
-      top.style.top = `${-lift - 4}px`;
+      top.style.left = `${-lift - 2}px`;
+      top.style.top = `${-lift - 2}px`;
       top.style.boxShadow =
-        `0 ${Math.max(4, side * 1.3)}px ${Math.max(8, side * 2)}px rgba(0,0,0,0.7), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.18)`;
+        `0 ${SHADOW_OFFSET + 2 + side * 0.6}px ${SHADOW_BLUR + 2 + side * 0.8}px rgba(0,0,0,0.7), ` +
+        `inset 0 1px 0 rgba(255,255,255,0.15)`;
       wrap.style.zIndex = "5";
     });
     wrap.addEventListener("mouseleave", () => {
-      top.style.left = `${-lift + OFFSET_X}px`;
+      top.style.left = `${-lift}px`;
       top.style.top = `${-lift}px`;
       top.style.boxShadow =
-        `0 ${Math.max(2, side * 0.9)}px ${Math.max(4, side * 1.4)}px rgba(0,0,0,0.55), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.12)`;
+        `0 ${SHADOW_OFFSET + side * 0.6}px ${SHADOW_BLUR + side * 0.8}px rgba(0,0,0,0.55), ` +
+        `inset 0 1px 0 rgba(255,255,255,0.1)`;
       wrap.style.zIndex = "";
     });
   });
