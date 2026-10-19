@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Map viewer · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+  <style>
+    /* View-only specific overrides */
+    .viewer-badge {
+      display: inline-block;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      color: #f5d76e;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      padding: 2px 12px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .viewer-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .viewer-toolbar .back-button {
+      margin-right: auto;
+    }
+
+    .map-info-panel {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin: 16px 0 20px;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+    }
+
+    .map-info-panel .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .map-info-panel .info-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    .map-info-panel .info-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e0e0e0;
+    }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin: 12px 0 18px;
+      align-items: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    .legend-swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+    }
+
+    .legend-swatch.spawn {
+      background: #4ade80;
+      border-color: #22c55e;
+      border-radius: 50%;
+    }
+
+    .legend-swatch.obstacle {
+      background: #78716c;
+      border-color: #57534e;
+    }
+
+    .legend-swatch.problem {
+      background: #3b82f6;
+      border-color: #2563eb;
+    }
+
+    .legend-swatch.diff-easy {
+      background: #22c55e;
+      border-color: #16a34a;
+    }
+
+    .legend-swatch.diff-normal {
+      background: #eab308;
+      border-color: #ca8a04;
+    }
+
+    .legend-swatch.diff-hard {
+      background: #f97316;
+      border-color: #ea580c;
+    }
+
+    .legend-swatch.diff-insane {
+      background: #ef4444;
+      border-color: #dc2626;
+    }
+
+    /* Difficulty-based cell coloring (viewer only) */
+    #editor-grid .cell.difficulty-easy {
+      background: #22c55e !important;
+      border-color: #16a34a !important;
+    }
+
+    #editor-grid .cell.difficulty-normal {
+      background: #eab308 !important;
+      border-color: #ca8a04 !important;
+    }
+
+    #editor-grid .cell.difficulty-hard {
+      background: #f97316 !important;
+      border-color: #ea580c !important;
+    }
+
+    #editor-grid .cell.difficulty-insane {
+      background: #ef4444 !important;
+      border-color: #dc2626 !important;
+    }
+
+    #editor-grid .cell.difficulty-unknown {
+      background: #6b7280 !important;
+      border-color: #4b5563 !important;
+    }
+
+    #editor-grid .cell.spawn-cell {
+      background: #4ade80 !important;
+      border-color: #22c55e !important;
+      border-radius: 50% !important;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+    }
+
+    #editor-grid .cell.obstacle-cell {
+      background: #78716c !important;
+      border-color: #57534e !important;
+    }
+
+    #editor-grid .cell.spawn-cell::after {
+      content: '';
+      display: block;
+      width: 8px;
+      height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      margin: auto;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #editor-grid .cell.obstacle-cell::after {
+      content: '';
+      display: block;
+      width: 60%;
+      height: 60%;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 2px;
+      margin: auto;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+
+    #editor-grid .cell {
+      position: relative;
+    }
+
+    .no-edit-note {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.35);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <p id="load-error" class="form-error" hidden></p>
+
+      <!-- View-only toolbar: no save/delete -->
+      <div class="editor-toolbar viewer-toolbar">
+        <a class="back-button" href="/admin/maps.html">Back to maps</a>
+        <div class="editor-toolbar-actions">
+          <span class="viewer-badge"><i class="fa-solid fa-eye" style="margin-right: 4px;"></i> View only</span>
+        </div>
+      </div>
+
+      <p class="eyebrow">Map viewer</p>
+      <h1 id="editor-title"></h1>
+      <p class="lead" id="editor-size"></p>
+
+      <!-- Map info: difficulty summary, spawns, obstacles -->
+      <div class="map-info-panel" id="map-info-panel">
+        <div class="info-item">
+          <span class="info-label">Difficulty</span>
+          <span class="info-value" id="viewer-difficulty">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Spawn points</span>
+          <span class="info-value" id="viewer-spawn-count">0</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Obstacles</span>
+          <span class="info-value" id="viewer-obstacle-count">0</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Problems placed</span>
+          <span class="info-value" id="viewer-problem-count">0</span>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend-row" id="viewer-legend">
+        <div class="legend-item"><span class="legend-swatch spawn"></span> Spawn point</div>
+        <div class="legend-item"><span class="legend-swatch obstacle"></span> Obstacle</div>
+        <div class="legend-item"><span class="legend-swatch diff-easy"></span> Easy</div>
+        <div class="legend-item"><span class="legend-swatch diff-normal"></span> Normal</div>
+        <div class="legend-item"><span class="legend-swatch diff-hard"></span> Hard</div>
+        <div class="legend-item"><span class="legend-swatch diff-insane"></span> Insane</div>
+        <div class="legend-item"><span class="legend-swatch problem"></span> Problem (difficulty unknown)</div>
+      </div>
+
+      <p class="no-edit-note"><i class="fa-solid fa-lock"></i> Read-only view — problem types and IDs are hidden.</p>
+
+      <!-- Grid (same id as editor so JS can target it, but no editing controls) -->
+      <div class="grid-scroll"><div id="editor-grid" class="editor-grid"></div></div>
+    </main>
+  </div>
+
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+
+  <!-- Viewer script: loads map data, renders grid with difficulty/spawn/obstacle colors -->
+  <script type="module">
+    // ------------------------------------------------------------------
+    // Map viewer — read-only render
+    // Fetches map data from the API (or uses a sample if not available),
+    // then renders the grid with difficulty colours, spawns, obstacles.
+    // No editing, no problem type/ID display.
+    // ------------------------------------------------------------------
+
+    const gridEl = document.getElementById('editor-grid');
+    const titleEl = document.getElementById('editor-title');
+    const sizeEl = document.getElementById('editor-size');
+    const difficultyEl = document.getElementById('viewer-difficulty');
+    const spawnCountEl = document.getElementById('viewer-spawn-count');
+    const obstacleCountEl = document.getElementById('viewer-obstacle-count');
+    const problemCountEl = document.getElementById('viewer-problem-count');
+    const loadErrorEl = document.getElementById('load-error');
+    const pageToast = document.getElementById('page-toast');
+    const pageToastMessage = document.getElementById('page-toast-message');
+    const pageToastClose = document.getElementById('page-toast-close');
+
+    // ------------------------------------------------------------------
+    // Toast helper
+    // ------------------------------------------------------------------
+    function showToast(msg) {
+      pageToastMessage.textContent = msg;
+      pageToast.hidden = false;
+      clearTimeout(pageToast._hideTimer);
+      pageToast._hideTimer = setTimeout(() => { pageToast.hidden = true; }, 4000);
+    }
+    pageToastClose?.addEventListener('click', () => { pageToast.hidden = true; });
+
+    // ------------------------------------------------------------------
+    // Extract map ID from URL
+    // ------------------------------------------------------------------
+    function getMapId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('id') || params.get('map') || null;
+    }
+
+    // ------------------------------------------------------------------
+    // Fetch map data
+    // ------------------------------------------------------------------
+    async function fetchMapData(mapId) {
+      if (!mapId) throw new Error('No map ID provided in URL. Use ?id=...');
+
+      // Try common API endpoints (adjust to match your backend)
+      const endpoints = [
+        `/api/admin/maps/${mapId}`,
+        `/api/maps/${mapId}`,
+        `/admin/maps/${mapId}.json`,
+        `/maps/${mapId}.json`
+      ];
+
+      let lastErr = null;
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url, { headers: { Accept: 'application/json' } });
+          if (!res.ok) { lastErr = new Error(`HTTP ${res.status} for ${url}`); continue; }
+          const data = await res.json();
+          return normalizeMapData(data, mapId);
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error('Could not fetch map data.');
+    }
+
+    // ------------------------------------------------------------------
+    // Normalize whatever shape the API returns into a common structure:
+    // { id, name, width, height, cells: [ { row, col, type, difficulty, spawn, obstacle } ] }
+    // ------------------------------------------------------------------
+    function normalizeMapData(raw, fallbackId) {
+      // If raw already has a rows/cols/cells structure
+      const width = raw.width || raw.cols || raw.columns || raw.w || 20;
+      const height = raw.height || raw.rows || raw.r || 15;
+
+      const cells = [];
+      // Try to extract cells from common formats
+      if (Array.isArray(raw.cells)) {
+        for (const c of raw.cells) {
+          cells.push({
+            row: c.row ?? c.y ?? 0,
+            col: c.col ?? c.x ?? 0,
+            type: c.type ?? c.kind ?? 'empty',
+            difficulty: c.difficulty ?? c.diff ?? null,
+            spawn: c.spawn === true || c.type === 'spawnpoint' || c.kind === 'spawnpoint',
+            obstacle: c.obstacle === true || c.type === 'obstacle' || c.kind === 'obstacle',
+            problemNo: c.problemNo ?? c.problem_no ?? c.id ?? null,
+            problemType: c.problemType ?? c.problem_type ?? null,
+          });
+        }
+      } else if (Array.isArray(raw.grid)) {
+        // grid is 2D array of cell objects or strings
+        for (let r = 0; r < raw.grid.length; r++) {
+          const row = raw.grid[r];
+          if (!Array.isArray(row)) continue;
+          for (let c = 0; c < row.length; c++) {
+            const val = row[c];
+            if (val == null) continue;
+            if (typeof val === 'string') {
+              // 'spawn' | 'obstacle' | 'problem' | 'empty' or difficulty name
+              const isSpawn = val === 'spawn' || val === 'spawnpoint' || val === 'S';
+              const isObstacle = val === 'obstacle' || val === 'O' || val === 'X';
+              const isProblem = !isSpawn && !isObstacle && val !== 'empty' && val !== '.';
+              let diff = null;
+              if (['easy','normal','hard','insane'].includes(val.toLowerCase())) diff = val.toLowerCase();
+              cells.push({
+                row: r, col: c,
+                type: isSpawn ? 'spawnpoint' : isObstacle ? 'obstacle' : isProblem ? 'problem' : 'empty',
+                difficulty: diff,
+                spawn: isSpawn,
+                obstacle: isObstacle,
+                problemNo: null,
+                problemType: null,
+              });
+            } else if (typeof val === 'object') {
+              // cell object
+              const type = val.type ?? val.kind ?? (val.spawn ? 'spawnpoint' : val.obstacle ? 'obstacle' : val.problem ? 'problem' : 'empty');
+              cells.push({
+                row: r, col: c,
+                type,
+                difficulty: val.difficulty ?? val.diff ?? null,
+                spawn: val.spawn === true || type === 'spawnpoint',
+                obstacle: val.obstacle === true || type === 'obstacle',
+                problemNo: val.problemNo ?? val.problem_no ?? val.id ?? null,
+                problemType: val.problemType ?? val.problem_type ?? null,
+              });
+            }
+          }
+        }
+      } else if (Array.isArray(raw.tiles)) {
+        for (const t of raw.tiles) {
+          cells.push({
+            row: t.row ?? t.y ?? 0,
+            col: t.col ?? t.x ?? 0,
+            type: t.type ?? t.kind ?? 'empty',
+            difficulty: t.difficulty ?? t.diff ?? null,
+            spawn: t.spawn === true || t.type === 'spawnpoint' || t.kind === 'spawnpoint',
+            obstacle: t.obstacle === true || t.type === 'obstacle' || t.kind === 'obstacle',
+            problemNo: t.problemNo ?? t.problem_no ?? t.id ?? null,
+            problemType: t.problemType ?? t.problem_type ?? null,
+          });
+        }
+      }
+
+      // If no cells found, try to derive from a flat array of problems/spawns
+      if (cells.length === 0 && raw.problems && Array.isArray(raw.problems)) {
+        for (const p of raw.problems) {
+          cells.push({
+            row: p.row ?? p.y ?? 0,
+            col: p.col ?? p.x ?? 0,
+            type: 'problem',
+            difficulty: p.difficulty ?? p.diff ?? null,
+            spawn: false, obstacle: false,
+            problemNo: p.no ?? p.id ?? null,
+            problemType: p.type ?? p.problemType ?? null,
+          });
+        }
+      }
+      if (raw.spawns && Array.isArray(raw.spawns)) {
+        for (const s of raw.spawns) {
+          cells.push({
+            row: s.row ?? s.y ?? 0,
+            col: s.col ?? s.x ?? 0,
+            type: 'spawnpoint',
+            difficulty: null,
+            spawn: true, obstacle: false,
+            problemNo: null, problemType: null,
+          });
+        }
+      }
+      if (raw.obstacles && Array.isArray(raw.obstacles)) {
+        for (const o of raw.obstacles) {
+          cells.push({
+            row: o.row ?? o.y ?? 0,
+            col: o.col ?? o.x ?? 0,
+            type: 'obstacle',
+            difficulty: null,
+            spawn: false, obstacle: true,
+            problemNo: null, problemType: null,
+          });
+        }
+      }
+
+      // Deduplicate by row,col (last one wins, but prefer spawn/obstacle over empty)
+      const map = new Map();
+      for (const c of cells) {
+        const key = `${c.row},${c.col}`;
+        const existing = map.get(key);
+        if (!existing) { map.set(key, c); continue; }
+        // Priority: spawn > obstacle > problem > empty
+        const priority = (x) => x.spawn ? 3 : x.obstacle ? 2 : x.type === 'problem' ? 1 : 0;
+        if (priority(c) > priority(existing)) map.set(key, c);
+        else if (priority(c) === priority(existing) && c.difficulty && !existing.difficulty) map.set(key, c);
+      }
+
+      const finalCells = Array.from(map.values());
+
+      return {
+        id: raw.id || fallbackId,
+        name: raw.name || raw.title || 'Untitled map',
+        width,
+        height,
+        cells: finalCells,
+        raw,
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // Render
+    // ------------------------------------------------------------------
+    function renderMap(map) {
+      titleEl.textContent = map.name;
+      sizeEl.textContent = `${map.width} × ${map.height} cells`;
+
+      // Stats
+      const spawns = map.cells.filter(c => c.spawn);
+      const obstacles = map.cells.filter(c => c.obstacle);
+      const problems = map.cells.filter(c => c.type === 'problem' && !c.spawn && !c.obstacle);
+
+      spawnCountEl.textContent = spawns.length;
+      obstacleCountEl.textContent = obstacles.length;
+      problemCountEl.textContent = problems.length;
+
+      // Difficulty summary: compute "dominant" or list all unique
+      const diffCounts = {};
+      for (const p of problems) {
+        const d = p.difficulty || 'unknown';
+        diffCounts[d] = (diffCounts[d] || 0) + 1;
+      }
+      const diffKeys = Object.keys(diffCounts);
+      if (diffKeys.length === 0) {
+        difficultyEl.textContent = '—';
+      } else if (diffKeys.length === 1) {
+        difficultyEl.textContent = diffKeys[0].charAt(0).toUpperCase() + diffKeys[0].slice(1);
+      } else {
+        // Show as "Mixed (easy:3, hard:2 ...)" or just dominant
+        const sorted = diffKeys.sort((a,b) => (diffCounts[b] - diffCounts[a]));
+        const dominant = sorted[0];
+        const total = problems.length;
+        if (diffCounts[dominant] / total > 0.6) {
+          difficultyEl.textContent = dominant.charAt(0).toUpperCase() + dominant.slice(1) + ' (mostly)';
+        } else {
+          difficultyEl.textContent = 'Mixed';
+        }
+      }
+
+      // Build grid
+      gridEl.innerHTML = '';
+      gridEl.style.setProperty('--cols', map.width);
+      gridEl.style.setProperty('--rows', map.height);
+      // Ensure grid has display grid
+      gridEl.style.display = 'grid';
+      gridEl.style.gridTemplateColumns = `repeat(${map.width}, 1fr)`;
+
+      // Create a lookup by row,col
+      const lookup = new Map();
+      for (const c of map.cells) {
+        lookup.set(`${c.row},${c.col}`, c);
+      }
+
+      for (let r = 0; r < map.height; r++) {
+        for (let c = 0; c < map.width; c++) {
+          const cellData = lookup.get(`${r},${c}`) || { row: r, col: c, type: 'empty', spawn: false, obstacle: false, difficulty: null };
+          const div = document.createElement('div');
+          div.className = 'cell';
+          div.dataset.row = r;
+          div.dataset.col = c;
+
+          // Apply classes
+          if (cellData.spawn) {
+            div.classList.add('spawn-cell');
+          } else if (cellData.obstacle) {
+            div.classList.add('obstacle-cell');
+          } else if (cellData.type === 'problem') {
+            // Difficulty class
+            const d = (cellData.difficulty || '').toLowerCase();
+            if (['easy','normal','hard','insane'].includes(d)) {
+              div.classList.add(`difficulty-${d}`);
+            } else {
+              div.classList.add('difficulty-unknown');
+            }
+            // No problem type/ID shown
+          } else {
+            // empty
+            div.classList.add('cell-empty');
+          }
+
+          // Tooltip (title attribute) — show only difficulty / spawn / obstacle
+          if (cellData.spawn) {
+            div.title = 'Spawn point';
+          } else if (cellData.obstacle) {
+            div.title = 'Obstacle';
+          } else if (cellData.type === 'problem') {
+            const d = cellData.difficulty ? cellData.difficulty.charAt(0).toUpperCase() + cellData.difficulty.slice(1) : 'Unknown';
+            div.title = `Problem (difficulty: ${d})`;
+          } else {
+            div.title = 'Empty';
+          }
+
+          gridEl.appendChild(div);
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Init
+    // ------------------------------------------------------------------
+    async function init() {
+      const mapId = getMapId();
+      if (!mapId) {
+        // Show sample map so the viewer isn't empty
+        loadErrorEl.hidden = true;
+        const sampleMap = createSampleMap();
+        renderMap(sampleMap);
+        showToast('No map ID in URL — showing sample map. Add ?id=... to view a real map.');
+        return;
+      }
+
+      try {
+        loadErrorEl.hidden = true;
+        const map = await fetchMapData(mapId);
+        renderMap(map);
+      } catch (err) {
+        console.warn('Failed to load map:', err);
+        loadErrorEl.hidden = false;
+        loadErrorEl.textContent = `Could not load map (${err.message}). Showing sample map.`;
+        const sampleMap = createSampleMap();
+        renderMap(sampleMap);
+        showToast('Using sample map — API unavailable.');
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Sample map for fallback / demonstration
+    // ------------------------------------------------------------------
+    function createSampleMap() {
+      const width = 18;
+      const height = 12;
+      const cells = [];
+
+      // Spawn points
+      cells.push({ row: 0, col: 0, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
+      cells.push({ row: 0, col: 17, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
+      cells.push({ row: 11, col: 0, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
+      cells.push({ row: 11, col: 17, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
+
+      // Obstacles (a few scattered)
+      const obstaclePositions = [
+        [2,3],[2,4],[2,5],[3,3],[3,5],[4,3],[4,4],[4,5],
+        [7,8],[7,9],[7,10],[8,8],[8,10],[9,8],[9,9],[9,10],
+        [5,12],[6,12],[7,12],[5,13],[6,13],[7,13],
+      ];
+      for (const [r,c] of obstaclePositions) {
+        if (r < height && c < width) {
+          cells.push({ row: r, col: c, type: 'obstacle', spawn: false, obstacle: true, difficulty: null });
+        }
+      }
+
+      // Problems with various difficulties
+      const difficulties = ['easy','easy','easy','normal','normal','hard','hard','insane'];
+      let idx = 0;
+      for (let r = 0; r < height; r++) {
+        for (let c = 0; c < width; c++) {
+          // Skip if spawn or obstacle already there
+          if (cells.some(x => x.row === r && x.col === c)) continue;
+          // Only place problems on some cells (checkerboard-ish with randomness)
+          if ((r * 3 + c * 7) % 5 === 0 && Math.random() > 0.3) {
+            const diff = difficulties[idx % difficulties.length];
+            idx++;
+            cells.push({
+              row: r, col: c,
+              type: 'problem',
+              spawn: false, obstacle: false,
+              difficulty: diff,
+              // problemNo and problemType intentionally omitted — viewer doesn't show them
+            });
+          }
+        }
+      }
+
+      return {
+        id: 'sample',
+        name: 'Sample Territory Map',
+        width,
+        height,
+        cells,
+      };
+    }
+
+    // Run
+    init();
+
+    // Mobile menu toggle (same as editor, for consistency)
+    const menuButton = document.getElementById('menu-button');
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.querySelector('.sidebar-backdrop');
+    if (menuButton && sidebar) {
+      menuButton.addEventListener('click', () => {
+        const expanded = menuButton.getAttribute('aria-expanded') === 'true';
+        menuButton.setAttribute('aria-expanded', String(!expanded));
+        sidebar.classList.toggle('open');
+        if (backdrop) backdrop.hidden = expanded;
+      });
+    }
+    backdrop?.addEventListener('click', () => {
+      sidebar?.classList.remove('open');
+      menuButton?.setAttribute('aria-expanded', 'false');
+      if (backdrop) backdrop.hidden = true;
+    });
+  </script>
+</body>
+</html>
