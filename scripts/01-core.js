@@ -92,27 +92,18 @@ function mapUsesPinch() {
   return window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1100px)").matches;
 }
 
-function heightFitCell(scroll, rows) {
-  const rowsN = Math.max(rows, 1);
-  const gap = 2;
-  const top = scroll ? scroll.getBoundingClientRect().top : 0;
-  const next = scroll?.nextElementSibling;
-  const below = next && !next.hidden ? next.offsetHeight + 16 : 0;
-  const pad = 20 + below;
-  const space = top >= 0 && top < window.innerHeight - 140
-    ? window.innerHeight - top - pad
-    : window.innerHeight - 28;
-  const fit = Math.floor((Math.max(120, space) - gap * (rowsN - 1)) / rowsN);
-  return Math.max(1, Math.min(CELL_SIZE, fit));
+function cellSizeLimits(scroll) {
+  const width = Math.max(scroll?.clientWidth || 0, 240);
+  const height = Math.max(window.innerHeight || 0, 240);
+  const close = Math.min(width, height) / 6;
+  return { min: 28, max: Math.max(CELL_SIZE, close) };
 }
 
 function layoutMapGrid(grid, cols, rows) {
   const scroll = grid.closest(".grid-scroll");
-  const cap = scroll ? heightFitCell(scroll, rows) : CELL_SIZE;
-  let size = cap;
+  let size = CELL_SIZE;
   if (scroll && mapUsesPinch()) {
-    const saved = mapCellSize.get(grid);
-    size = Math.min(cap, Math.max(12, saved ?? cap));
+    size = mapCellSize.get(grid) || CELL_SIZE;
     mapCellSize.set(grid, size);
     ensurePinch(grid);
   }
@@ -139,8 +130,8 @@ function ensurePinch(grid) {
     event.preventDefault();
     const cols = Number(grid.dataset.cols) || 1;
     const rows = Number(grid.dataset.rows) || 1;
-    const cap = heightFitCell(scroll, rows);
-    const next = Math.min(cap, Math.max(12, startSize * (distance(event.touches) / startDistance)));
+    const limits = cellSizeLimits(scroll);
+    const next = Math.min(limits.max, Math.max(limits.min, startSize * (distance(event.touches) / startDistance)));
     mapCellSize.set(grid, next);
     const px = `${next}px`;
     grid.style.setProperty("--cell", px);

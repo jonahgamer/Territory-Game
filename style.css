@@ -21,7 +21,6 @@
 body {
   margin: 0;
   min-height: 100vh;
-  overflow-x: hidden;
   font-family: var(--font-ui);
   color: var(--ink);
   background:
@@ -253,8 +252,6 @@ nav button[aria-current="page"] {
 
 main {
   min-width: 0;
-  max-width: 100%;
-  overflow-x: clip;
   padding: 56px 64px;
 }
 
@@ -904,10 +901,7 @@ button[type="submit"],
 
 .grid-scroll {
   margin-top: 28px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: 100%;
-  overscroll-behavior-x: contain;
+  overflow: visible;
 }
 
 .editor-grid {
