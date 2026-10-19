@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
     <style>
-      /* Mobile-first layout for the practice problem page. */
       html, body { min-height: 100%; }
       body {
         margin: 0;
@@ -23,6 +22,23 @@
         margin: 0 auto;
         padding: 16px 12px 24px;
       }
+      .practice-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 0 12px;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--cyan);
+        font-family: var(--font-ui);
+        font-size: 14px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .practice-back:hover { border-color: var(--cyan); }
       .practice-answer h1 {
         margin: 0 0 12px;
         font-size: 22px;
@@ -38,7 +54,6 @@
         border: 0;
         background: #081220;
       }
-      /* Sticky submit bar so it is always reachable on a phone. */
       .practice-submit-bar {
         position: fixed;
         left: 0;
@@ -59,7 +74,7 @@
         background: rgba(4, 12, 22, 0.95);
         color: var(--ink);
         font: inherit;
-        font-size: 16px; /* prevents iOS zoom on focus */
+        font-size: 16px;
         border-radius: 4px;
       }
       .practice-submit-bar button {
@@ -80,7 +95,6 @@
         margin: 0;
         text-align: center;
       }
-      /* Hide the answer row for puzzle problems that take over the input. */
       .practice-submit-bar.puzzle input { display: none; }
       @media (min-width: 720px) {
         .practice-submit-bar {
@@ -100,6 +114,7 @@
   </head>
   <body>
     <main class="practice-answer">
+      <button id="practice-back" class="practice-back" type="button">← Back</button>
       <p id="answer-status" class="form-error" hidden></p>
       <h1 id="student-problem-tag"></h1>
       <div id="student-problem-prompt"></div>
@@ -109,6 +124,17 @@
         <p id="student-answer-error" class="form-error" hidden></p>
       </form>
     </main>
+
+    <script>
+      (function () {
+        var back = document.getElementById("practice-back");
+        back.addEventListener("click", function () {
+          // Prefer browser history when there is any, otherwise go to the list.
+          if (window.history.length > 1) window.history.back();
+          else window.location.href = "/testing/index.html";
+        });
+      })();
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
@@ -353,7 +379,6 @@
             answer.value = String(data.value == null ? "" : data.value);
           } else if (data.type === "territory-answer-style") {
             answer.style.cssText = String(data.cssText == null ? "" : data.cssText);
-            // Puzzle statements hide the answer input; reflect that on the bar.
             form.classList.toggle("puzzle", /display\s*:\s*none/.test(answer.style.cssText));
           } else if (data.type === "territory-answer-readonly") {
             answer.readOnly = data.readOnly === true;
