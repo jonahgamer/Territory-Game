@@ -470,25 +470,51 @@
       var imgUrl = json.results && json.results[0] && json.results[0].url;
       if (!imgUrl) return;
 
-      // Simple popup overlay
+      // Dark backdrop
       var overlay = document.createElement("div");
       overlay.setAttribute("style",
         "position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.85);" +
-        "display:flex;align-items:center;justify-content:center;cursor:pointer;"
+        "display:flex;align-items:center;justify-content:center;"
       );
-      overlay.addEventListener("click", function () {
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      });
 
-      // Image size controlled via inline style (max 80vw / 80vh, keeps aspect ratio)
+      // Framed popup container
+      var popup = document.createElement("div");
+      popup.setAttribute("style",
+        "position:relative;background:#081220;border:2px solid #3ee0ff;" +
+        "border-radius:6px;padding:12px;box-shadow:0 0 24px rgba(62,224,255,0.35);" +
+        "max-width:90vw;max-height:90vh;display:flex;align-items:center;justify-content:center;"
+      );
+
+      // Image (size controlled, fits inside the frame)
       var img = document.createElement("img");
       img.src = imgUrl;
       img.alt = "";
       img.setAttribute("style",
-        "max-width:80vw;max-height:80vh;width:auto;height:auto;display:block;"
+        "max-width:80vw;max-height:78vh;width:auto;height:auto;display:block;border-radius:4px;"
       );
 
-      overlay.appendChild(img);
+      // Close button
+      var closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "×";
+      closeBtn.setAttribute("aria-label", "Close");
+      closeBtn.setAttribute("style",
+        "position:absolute;top:-14px;right:-14px;width:32px;height:32px;" +
+        "border:2px solid #3ee0ff;border-radius:50%;background:#081220;" +
+        "color:#3ee0ff;font-size:20px;line-height:1;cursor:pointer;padding:0;"
+      );
+
+      function close() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+      closeBtn.addEventListener("click", close);
+      overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) close(); // click on backdrop only
+      });
+
+      popup.appendChild(img);
+      popup.appendChild(closeBtn);
+      overlay.appendChild(popup);
       document.body.appendChild(overlay);
     })
     .catch(function () {});
