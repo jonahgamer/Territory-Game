@@ -16,45 +16,39 @@ const modeEl   = document.getElementById("map-mode-text");
 const legendEl = document.getElementById("difficulty-legend");
 const errorEl  = document.getElementById("load-error");
 
-// ── Difficulty ↔ numeric elevation ───────────────────────────
+// ── Elevation table ─────────────────────────────────────────
 const HEIGHT = {
-  easy:    1,
-  normal:  2,
-  hard:    3,
-  insane:  4,
-  unknown: 0.5,
-  empty:   0,
-  obstacle:2,
-  spawnpoint:1,
+  easy: 1, normal: 2, hard: 3, insane: 4,
+  unknown: 0.5, empty: 0, obstacle: 2, spawnpoint: 1,
 };
 
-// Colour ramp sampled continuously between the difficulty stops.
-// These are the *endpoints* of the ramp — intermediate heights are
-// interpolated, giving smooth topographic banding.
+// Colour ramp — interpolated continuously across smoothed height.
 const RAMP = [
-  { h: 0.0, c: "#101820" }, // empty / low ground — very dark
-  { h: 1.0, c: "#4caf50" }, // easy — green
-  { h: 2.0, c: "#ff9800" }, // normal — orange
-  { h: 3.0, c: "#f44336" }, // hard — red
-  { h: 4.0, c: "#9c27b0" }, // insane — purple
+  { h: 0.0, c: "#101820" },
+  { h: 1.0, c: "#4caf50" },
+  { h: 2.0, c: "#ff9800" },
+  { h: 3.0, c: "#f44336" },
+  { h: 4.0, c: "#9c27b0" },
 ];
 
-// Legend swatches (discrete labels for readability).
 const LEGEND = [
-  ["Easy",       "#4caf50"],
-  ["Normal",     "#ff9800"],
-  ["Hard",       "#f44336"],
-  ["Insane",     "#9c27b0"],
-  ["Obstacle",   "#2c2c3a"],
-  ["Spawn",      "#0a7ea4"],
-  ["Empty",      "#101820"],
+  ["Easy",     "#4caf50"],
+  ["Normal",   "#ff9800"],
+  ["Hard",     "#f44336"],
+  ["Insane",   "#9c27b0"],
+  ["Obstacle", "#2c2c3a"],
+  ["Spawn",    "#0a7ea4"],
+  ["Empty",    "#101820"],
 ];
 
-// ── Height field + smoothing ─────────────────────────────────
-// Same idea as before: same‑kind neighbours pull harder, so equal‑
-// difficulty regions stay flat and boundaries ramp. But now we ALSO
-// run a couple of extra box‑blur passes so the whole field reads as
-// continuous terrain instead of a single step.
+const CONTOUR_LEVELS = [0.5, 1.5, 2.5, 3.5];
+
+// 3‑D tuning
+const MAX_LIFT_PX   = 42;    // tallest tile rises this many px
+const TILT_DEG      = 55;    // X‑rotation of the whole grid
+const TILE_GAP_PX   = 1;     // tiny gap so edges read as cells
+
+// ── Height field + smoothing (same as topo version) ─────────
 function buildHeightField(map, findProblem) {
   const { cols, rows, cells } = map;
   const n = rows * cols;
@@ -63,7 +57,7 @@ function buildHeightField(map, findProblem) {
 
   for (let i = 0; i < n; i++) {
     const cell = cells[i];
-    if (!cell) { raw[i] = HEIGHT.empty; kindOf[i] = "empty"; continue; }
+    if (!cell) { raw[i] = HEIGHT.empty; continue; }
     if (cell.kind === "obstacle")   { raw[i] = HEIGHT.obstacle;   kindOf[i] = "obstacle"; continue; }
     if (cell.kind === "spawnpoint") { raw[i] = HEIGHT.spawnpoint; kindOf[i] = "spawnpoint"; continue; }
     if (cell.kind === "empty")      { raw[i] = HEIGHT.empty;      kindOf[i] = "empty"; continue; }
@@ -78,7 +72,7 @@ function buildHeightField(map, findProblem) {
     kindOf[i] = "unknown";
   }
 
-  // Pass 1 — kind‑weighted neighbour average (preserves bands).
+  // Kind‑weighted pass to preserve bands.
   const pass1 = new Float32Array(n);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -98,8 +92,7 @@ function buildHeightField(map, findProblem) {
     }
   }
 
-  // Pass 2 — plain box blur (8 neighbours + self), repeated twice.
-  // This is what turns stepped bands into smooth slopes.
+  // Box blur ×2 for smooth slopes.
   let field = pass1;
   for (let iter = 0; iter < 2; iter++) {
     const next = new Float32Array(n);
@@ -124,7 +117,7 @@ function buildHeightField(map, findProblem) {
   return { height: field, kind: kindOf };
 }
 
-// ── Colour ramp interpolation ────────────────────────────────
+// ── Colour ramp ─────────────────────────────────────────────
 function heightToColour(h) {
   const clamped = Math.max(0, Math.min(4, h));
   for (let i = 0; i < RAMP.length - 1; i++) {
@@ -147,23 +140,23 @@ function mixHex(a, b, t) {
   return "#" + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
 }
 
-// ── Contour detection ────────────────────────────────────────
-// A cell edge is a "contour" when the two adjacent cells straddle
-// one of the half‑step elevations (0.5, 1.5, 2.5, 3.5). We render
-// the contour as a border segment on the higher side.
-const CONTOUR_LEVELS = [0.5, 1.5, 2.5, 3.5];
+function shade(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+  const f = (v) => Math.max(0, Math.min(255, Math.round(v + amount * 255)));
+  return "#" + ((1 << 24) | (f(r) << 16) | (f(g) << 8) | f(b)).toString(16).slice(1);
+}
 
+// ── Contour edge detection ──────────────────────────────────
 function contourSides(height, cols, rows, i) {
   const r = Math.floor(i / cols), c = i % cols;
   const h = height[i];
-  const sides = []; // { side: "top"|"right"|"bottom"|"left", level }
+  const sides = [];
   const check = (ni, side) => {
     const nh = height[ni];
     for (const lvl of CONTOUR_LEVELS) {
-      // Contour at this level exists if h and nh are on opposite sides.
       if ((h < lvl && nh >= lvl) || (h >= lvl && nh < lvl)) {
-        sides.push({ side, level: lvl });
-        return;
+        sides.push(side); return;
       }
     }
   };
@@ -174,6 +167,7 @@ function contourSides(height, cols, rows, i) {
   return sides;
 }
 
+// ── Render ──────────────────────────────────────────────────
 async function run() {
   if (!mapId) throw new Error("No map selected.");
   const data = await loadBootstrap();
@@ -190,77 +184,145 @@ async function run() {
 
   const { height, kind } = buildHeightField(map, findProblem);
 
+  // Grid wrapper: tilt the whole scene so heights go "up" the page.
   layoutMapGrid(gridEl, map.cols, map.rows);
   gridEl.replaceChildren();
-  gridEl.style.gap = "0";          // topographic maps are seamless
-  gridEl.style.padding = "8px";
-  gridEl.style.background = "#0b0f14";
-  gridEl.style.borderRadius = "8px";
+  gridEl.style.gap = `${TILE_GAP_PX}px`;
+  gridEl.style.padding = "0";
+  gridEl.style.background = "transparent";
+  gridEl.style.perspective = "1400px";
+  gridEl.style.transformStyle = "preserve-3d";
+  // Wrap the grid in a tilted container so transforms stay inside it.
+  let scene = gridEl.parentElement;
+  if (!scene || !scene.classList.contains("scene-3d")) {
+    scene = document.createElement("div");
+    scene.className = "scene-3d";
+    gridEl.parentNode.insertBefore(scene, gridEl);
+    scene.appendChild(gridEl);
+  }
+  scene.style.perspective = "1400px";
+  scene.style.transformStyle = "preserve-3d";
+  scene.style.padding = "80px 24px 140px";
+  scene.style.overflow = "hidden";
+  scene.style.background =
+    "radial-gradient(ellipse at 50% 20%, #1a2233 0%, #0b0f14 70%)";
+  scene.style.borderRadius = "10px";
+  gridEl.style.transform = `rotateX(${TILT_DEG}deg)`;
+  gridEl.style.transformOrigin = "50% 50%";
+  gridEl.style.transformStyle = "preserve-3d";
 
-  const cells = [];
+  const tiles = [];
   for (let i = 0; i < map.rows * map.cols; i++) {
     const cell = map.cells[i];
     const row = Math.floor(i / map.cols) + 1;
     const column = (i % map.cols) + 1;
     const h = height[i];
     const k = kind[i];
+    const colour = heightToColour(h);
+    const lift = (Math.max(0, Math.min(4, h)) / 4) * MAX_LIFT_PX;
 
+    // Outer wrapper: sits on the tilted plane, provides perspective for the tile.
+    const wrap = document.createElement("div");
+    wrap.className = "grid-cell difficulty-cell";
+    wrap.style.position = "relative";
+    wrap.style.aspectRatio = "1 / 1";
+    wrap.style.transformStyle = "preserve-3d";
+    wrap.style.perspective = "600px";
+
+    // Tile: translated up by `lift` so it floats above the plane.
     const tile = document.createElement("div");
-    tile.className = "grid-cell difficulty-cell";
-    tile.style.position = "relative";
-    tile.style.aspectRatio = "1 / 1";
-    tile.style.background = heightToColour(h);
-    tile.style.display = "flex";
-    tile.style.alignItems = "center";
-    tile.style.justifyContent = "center";
-    tile.style.fontFamily = '"Share Tech Mono", monospace';
-    tile.style.fontSize = "0.72rem";
-    tile.style.color = "#fff";
-    tile.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
-    tile.style.boxSizing = "border-box";
+    tile.style.position = "absolute";
+    tile.style.inset = "0";
+    tile.style.transformStyle = "preserve-3d";
+    tile.style.transform = `translateZ(${lift}px)`;
+    tile.style.transition = "transform 140ms ease-out";
 
-    // Problem number on problem cells (still read‑only).
+    // Top face
+    const top = document.createElement("div");
+    top.style.position = "absolute";
+    top.style.inset = "0";
+    top.style.borderRadius = "3px";
+    top.style.background = colour;
+    top.style.display = "flex";
+    top.style.alignItems = "center";
+    top.style.justifyContent = "center";
+    top.style.fontFamily = '"Share Tech Mono", monospace';
+    top.style.fontSize = "0.72rem";
+    top.style.color = "#fff";
+    top.style.textShadow = "0 1px 2px rgba(0,0,0,0.85)";
+    top.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,0.06)";
+    top.style.backfaceVisibility = "hidden";
+
+    // Contour edges → dark inset line on the boundary side
+    for (const side of contourSides(height, map.cols, map.rows, i)) {
+      const line = "inset 0 0 0 2px rgba(0,0,0,0.55)";
+      if (side === "top")    top.style.boxShadow += ", inset 0 3px 0 rgba(0,0,0,0.6)";
+      if (side === "bottom") top.style.boxShadow += ", inset 0 -3px 0 rgba(0,0,0,0.6)";
+      if (side === "left")   top.style.boxShadow += ", inset 3px 0 0 rgba(0,0,0,0.6)";
+      if (side === "right")  top.style.boxShadow += ", inset -3px 0 0 rgba(0,0,0,0.6)";
+    }
+
     if (cell && cell.kind === "problem") {
-      tile.textContent = String(cell.problemNo);
+      top.textContent = String(cell.problemNo);
     } else if (k === "obstacle") {
-      tile.textContent = "▨";
+      top.style.background =
+        "repeating-linear-gradient(45deg, #2c2c3a 0 6px, #3a3a4c 6px 12px)";
     } else if (k === "spawnpoint") {
-      tile.textContent = "★";
+      top.textContent = "★";
     }
 
-    tile.title = labelFor(cell, k, row, column, findProblem, h);
+    tile.appendChild(top);
 
-    // Contour lines — draw an inset shadow on the boundary edges.
-    const sides = contourSides(height, map.cols, map.rows, i);
-    for (const { side } of sides) {
-      const shadow = "0 0 0 1.5px rgba(0,0,0,0.55) inset";
-      if (side === "top")    tile.style.boxShadow = (tile.style.boxShadow || "") + (tile.style.boxShadow ? ", " : "") + "inset 0 2px 0 rgba(0,0,0,0.55)";
-      if (side === "bottom") tile.style.boxShadow = (tile.style.boxShadow || "") + (tile.style.boxShadow ? ", " : "") + "inset 0 -2px 0 rgba(0,0,0,0.55)";
-      if (side === "left")   tile.style.boxShadow = (tile.style.boxShadow || "") + (tile.style.boxShadow ? ", " : "") + "inset 2px 0 0 rgba(0,0,0,0.55)";
-      if (side === "right")  tile.style.boxShadow = (tile.style.boxShadow || "") + (tile.style.boxShadow ? ", " : "") + "inset -2px 0 0 rgba(0,0,0,0.55)";
+    // Extruded sides: only build visible walls (front + right, since the
+    // grid is tilted down‑and‑toward the viewer). Lift determines wall height.
+    if (lift > 1) {
+      const wallColour = shade(colour, -0.4);
+      const leftColour = shade(colour, -0.28);
+
+      // Front wall (facing viewer, i.e. bottom edge of the tile)
+      const front = document.createElement("div");
+      front.style.position = "absolute";
+      front.style.left = "0";
+      front.style.right = "0";
+      front.style.top = "100%";
+      front.style.height = `${lift}px`;
+      front.style.background = wallColour;
+      front.style.transformOrigin = "top";
+      front.style.transform = "rotateX(-90deg)";
+      front.style.borderRadius = "0 0 3px 3px";
+      tile.appendChild(front);
+
+      // Left wall (only seen when tile is lifted; helps depth read)
+      const left = document.createElement("div");
+      left.style.position = "absolute";
+      left.style.top = "0";
+      left.style.bottom = "0";
+      left.style.right = "100%";
+      left.style.width = `${lift}px`;
+      left.style.background = leftColour;
+      left.style.transformOrigin = "right";
+      left.style.transform = "rotateY(-90deg)";
+      tile.appendChild(left);
     }
 
-    gridEl.append(tile);
-    cells.push(tile);
+    wrap.appendChild(tile);
+    gridEl.appendChild(wrap);
+    tiles.push({ wrap, tile, lift });
   }
 
-  // Optional: draw a hairline grid over the whole thing so individual
-  // cells are still identifiable. Remove if you want pure contour.
-  gridEl.style.backgroundImage =
-    "linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px)," +
-    "linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)";
-  gridEl.style.backgroundSize = `calc(100% / ${map.cols}) calc(100% / ${map.rows})`;
+  // Hover: raise the tile 10px more, bring it forward.
+  tiles.forEach(({ wrap, tile, lift }) => {
+    wrap.addEventListener("mouseenter", () => {
+      tile.style.transform = `translateZ(${lift + 10}px)`;
+      wrap.style.zIndex = "5";
+    });
+    wrap.addEventListener("mouseleave", () => {
+      tile.style.transform = `translateZ(${lift}px)`;
+      wrap.style.zIndex = "";
+    });
+  });
 
   renderLegend();
-}
-
-function labelFor(cell, kind, row, column, findProblem, h) {
-  const base = cell
-    ? cell.kind === "problem"
-      ? `${cell.type} #${cell.problemNo} — ${problemDifficulty(findProblem(cell.problemNo, cell.type)) || "unknown"}`
-      : cell.kind
-    : "empty";
-  return `${base} (r${row} c${column}) · elevation ${h.toFixed(2)}`;
 }
 
 function renderLegend() {
