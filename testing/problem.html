@@ -2,24 +2,109 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Problem · Practice</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+    <style>
+      /* Mobile-first layout for the practice problem page. */
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        padding: 0;
+        padding-bottom: calc(96px + env(safe-area-inset-bottom));
+        background: #060910;
+      }
+      .practice-answer {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 16px 12px 24px;
+      }
+      .practice-answer h1 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        line-height: 1.3;
+      }
+      #student-problem-prompt {
+        margin: 0 0 16px;
+        overflow-x: auto;
+      }
+      #student-problem-prompt .statement-frame {
+        width: 100%;
+        min-height: 60px;
+        border: 0;
+        background: #081220;
+      }
+      /* Sticky submit bar so it is always reachable on a phone. */
+      .practice-submit-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        background: rgba(6, 9, 16, 0.96);
+        border-top: 1px solid var(--line);
+      }
+      .practice-submit-bar input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        background: rgba(4, 12, 22, 0.95);
+        color: var(--ink);
+        font: inherit;
+        font-size: 16px; /* prevents iOS zoom on focus */
+        border-radius: 4px;
+      }
+      .practice-submit-bar button {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--cyan);
+        background: rgba(62, 224, 255, 0.14);
+        color: var(--cyan);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .practice-submit-bar button:disabled { opacity: 0.5; cursor: wait; }
+      .practice-submit-bar #student-answer-error {
+        margin: 0;
+        text-align: center;
+      }
+      /* Hide the answer row for puzzle problems that take over the input. */
+      .practice-submit-bar.puzzle input { display: none; }
+      @media (min-width: 720px) {
+        .practice-submit-bar {
+          position: static;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-items: center;
+          background: transparent;
+          border-top: 0;
+          padding: 16px 0 0;
+        }
+        .practice-submit-bar input { flex: 1 1 16rem; width: auto; }
+        .practice-submit-bar button { width: auto; }
+        body { padding-bottom: 24px; }
+      }
+    </style>
   </head>
   <body>
-    <main class="answer-page">
+    <main class="practice-answer">
       <p id="answer-status" class="form-error" hidden></p>
       <h1 id="student-problem-tag"></h1>
       <div id="student-problem-prompt"></div>
-      <form id="student-answer-form">
-        <label>
-          Answer
-          <input id="student-answer" type="text" maxlength="5000" />
-        </label>
+      <form id="student-answer-form" class="practice-submit-bar">
+        <input id="student-answer" type="text" maxlength="5000" aria-label="Answer" />
         <button type="submit">Submit</button>
         <p id="student-answer-error" class="form-error" hidden></p>
       </form>
@@ -75,6 +160,7 @@
             ? text
             : '<pre class="statement-text">' + escapeStatementText(text) + "</pre>";
           return '<!doctype html><html><head><meta charset="utf-8">'
+            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             + '<link rel="stylesheet" href="' + STATEMENT_KATEX_CSS + '" crossorigin="anonymous">'
             + '<style>'
             + "html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }"
@@ -267,6 +353,8 @@
             answer.value = String(data.value == null ? "" : data.value);
           } else if (data.type === "territory-answer-style") {
             answer.style.cssText = String(data.cssText == null ? "" : data.cssText);
+            // Puzzle statements hide the answer input; reflect that on the bar.
+            form.classList.toggle("puzzle", /display\s*:\s*none/.test(answer.style.cssText));
           } else if (data.type === "territory-answer-readonly") {
             answer.readOnly = data.readOnly === true;
           } else if (data.type === "territory-answer-error") {
