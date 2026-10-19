@@ -1002,7 +1002,7 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 14px;
+  font-size: 10px;
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -1016,7 +1016,7 @@ button[type="submit"],
   width: 100%;
   max-width: 100%;
   line-height: 1;
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 700;
   pointer-events: none;
 }
