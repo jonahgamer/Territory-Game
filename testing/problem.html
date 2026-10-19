@@ -460,19 +460,39 @@
               error.hidden = false;
               error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
             } else if (data.correct) {
-              error.hidden = false;
-              error.style.color = "#3ddc6a";
-              error.textContent = "Accepted";
-              fetch("https://nekos.best/api/v2/neko")
+  error.hidden = false;
+  error.style.color = "#3ddc6a";
+  error.textContent = "Accepted";
+
+  fetch("https://nekos.best/api/v2/neko")
     .then(function (r) { return r.json(); })
     .then(function (json) {
       var imgUrl = json.results && json.results[0] && json.results[0].url;
-      if (imgUrl) {
-        error.insertAdjacentHTML("beforeend", '<br><img src="' + imgUrl + '" alt="">');
-      }
+      if (!imgUrl) return;
+
+      // Simple popup overlay
+      var overlay = document.createElement("div");
+      overlay.setAttribute("style",
+        "position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.85);" +
+        "display:flex;align-items:center;justify-content:center;cursor:pointer;"
+      );
+      overlay.addEventListener("click", function () {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      });
+
+      // Image size controlled via inline style (max 80vw / 80vh, keeps aspect ratio)
+      var img = document.createElement("img");
+      img.src = imgUrl;
+      img.alt = "";
+      img.setAttribute("style",
+        "max-width:80vw;max-height:80vh;width:auto;height:auto;display:block;"
+      );
+
+      overlay.appendChild(img);
+      document.body.appendChild(overlay);
     })
     .catch(function () {});
-            } else {
+} else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
             }
