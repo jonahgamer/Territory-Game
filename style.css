@@ -7,6 +7,7 @@
 }
 
 :root {
+  --ui-zoom: 0.88;
   --void: #060910;
   --ink: #d7f6ff;
   --muted: #7f9eb0;
@@ -19,9 +20,9 @@
 }
 
 body {
-  zoom: 0.88;
+  zoom: var(--ui-zoom);
   margin: 0;
-  min-height: calc(100vh / 0.88);
+  min-height: calc(100vh / var(--ui-zoom));
   font-family: var(--font-ui);
   color: var(--ink);
   background:
@@ -56,7 +57,7 @@ body::before {
 .app {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: calc(100vh / var(--ui-zoom));
 }
 
 .mobile-bar,
@@ -67,7 +68,7 @@ body::before {
 .sidebar {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh / var(--ui-zoom));
   position: sticky;
   top: 0;
   padding: 32px 20px 20px;
@@ -213,7 +214,7 @@ nav button[aria-current="page"] {
 }
 
 .login-screen {
-  min-height: 100vh;
+  min-height: calc(100vh / var(--ui-zoom));
   display: grid;
   place-items: center;
   padding: 32px 20px;
@@ -999,14 +1000,14 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
 .cell-label,
 .cell-label span {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.05;
 }
 
@@ -2566,8 +2567,8 @@ button[type="submit"],
     left: 0;
     left: -105%;
     width: min(280px, 86vw);
-    height: 100vh;
-    height: 100dvh;
+    height: calc(100vh / var(--ui-zoom));
+    height: calc(100dvh / var(--ui-zoom));
     transition: left 0.2s ease;
     overflow: auto;
   }
