@@ -22,32 +22,44 @@ const HEIGHT = {
   unknown: 0.5, empty: 0, obstacle: 2, spawnpoint: 1,
 };
 
-// ── Hypsometric palette — vivid, high‑contrast ─────────────
-// Low → high: deep forest green → bright green → gold → orange
-//             → crimson → magenta → pure white peaks
-const RAMP = [
-  { h: 0.0, c: "#0d5c2c" }, // lowland — deep forest green
-  { h: 0.7, c: "#2ecc40" }, // low hills — vivid green
-  { h: 1.4, c: "#a8e832" }, // upland — bright lime
-  { h: 2.0, c: "#ffd400" }, // plateau — pure gold
-  { h: 2.6, c: "#ff8c00" }, // foothills — vivid orange
-  { h: 3.2, c: "#e8003c" }, // mountains — crimson
-  { h: 3.7, c: "#c000d0" }, // high mountains — magenta
-  { h: 4.0, c: "#ffffff" }, // peaks — pure white
-];
+// ── Flat, maximally‑distinct difficulty colours ────────────
+// Green → Yellow → Red → White: four primaries chosen so that
+// even adjacent bands have huge hue/value separation.
+const BAND_COLOURS = {
+  easy:   "#00e676", // vivid emerald green
+  normal: "#ffea00", // vivid pure yellow
+  hard:   "#ff1744", // vivid crimson red
+  insane: "#ffffff", // pure white
+  empty:  "#0d2818", // very dark forest — clearly below easy
+};
 
-// Legend swatches — one per difficulty band.
 const LEGEND = [
-  ["Easy (low)",     "#2ecc40"],
-  ["Normal (mid)",   "#ffd400"],
-  ["Hard (high)",    "#e8003c"],
-  ["Insane (peak)",  "#ffffff"],
-  ["Obstacle",       "#2c2c3a"],
-  ["Spawn",          "#0a7ea4"],
-  ["Empty",          "#0d5c2c"],
+  ["Easy",     BAND_COLOURS.easy],
+  ["Normal",   BAND_COLOURS.normal],
+  ["Hard",     BAND_COLOURS.hard],
+  ["Insane",   BAND_COLOURS.insane],
+  ["Obstacle", "#2c2c3a"],
+  ["Spawn",    "#0a7ea4"],
+  ["Empty",    BAND_COLOURS.empty],
 ];
 
-const CONTOUR_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5];
+// Band boundaries: smoothed height → difficulty band.
+//   < 0.75         → empty
+//   0.75 – 1.75    → easy
+//   1.75 – 2.75    → normal
+//   2.75 – 3.75    → hard
+//   ≥ 3.75         → insane
+function bandFor(h) {
+  if (h < 0.75) return "empty";
+  if (h < 1.75) return "easy";
+  if (h < 2.75) return "normal";
+  if (h < 3.75) return "hard";
+  return "insane";
+}
+
+// Contour lines are drawn at the band boundaries, so they line up
+// exactly with the colour changes.
+const CONTOUR_LEVELS = [0.75, 1.75, 2.75, 3.75];
 
 // ── Height field + smoothing (unchanged) ───────────────────
 function buildHeightField(map, findProblem) {
@@ -118,30 +130,6 @@ function buildHeightField(map, findProblem) {
   return { height: field, kind: kindOf };
 }
 
-// ── Continuous hypsometric colour ──────────────────────────
-function heightToColour(h) {
-  const clamped = Math.max(0, Math.min(4, h));
-  for (let i = 0; i < RAMP.length - 1; i++) {
-    const a = RAMP[i], b = RAMP[i + 1];
-    if (clamped >= a.h && clamped <= b.h) {
-      const t = (clamped - a.h) / (b.h - a.h);
-      return mixHex(a.c, b.c, t);
-    }
-  }
-  return RAMP[RAMP.length - 1].c;
-}
-
-function mixHex(a, b, t) {
-  const na = parseInt(a.slice(1), 16), nb = parseInt(b.slice(1), 16);
-  const ar = (na >> 16) & 0xff, ag = (na >> 8) & 0xff, ab = na & 0xff;
-  const br = (nb >> 16) & 0xff, bg = (nb >> 8) & 0xff, bb = nb & 0xff;
-  return "#" + ((1 << 24)
-    | (Math.round(ar + (br - ar) * t) << 16)
-    | (Math.round(ag + (bg - ag) * t) << 8)
-    | Math.round(ab + (bb - ab) * t)
-  ).toString(16).slice(1);
-}
-
 // Contrast text on light vs dark backgrounds.
 function textColourFor(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -201,7 +189,10 @@ async function run() {
     const column = (i % map.cols) + 1;
     const h = height[i];
     const k = kind[i];
-    const colour = heightToColour(h);
+    const band = bandFor(h);
+
+    // Snap to the flat difficulty colour — no interpolation.
+    let colour = BAND_COLOURS[band] || BAND_COLOURS.empty;
 
     const tile = document.createElement("div");
     tile.className = "grid-cell difficulty-cell";
@@ -213,15 +204,22 @@ async function run() {
     tile.style.justifyContent = "center";
     tile.style.fontFamily = '"Share Tech Mono", monospace';
     tile.style.fontSize = "0.72rem";
+    tile.style.fontWeight = "700";
     tile.style.color = textColourFor(colour);
     tile.style.boxSizing = "border-box";
 
-    // Contour lines — dark inset borders on elevation boundaries.
-    for (const s of contourSides(height, map.cols, map.rows, i)) {
-      if (s === "top")    tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 2px 0 rgba(0,0,0,0.45)";
-      if (s === "bottom") tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 -2px 0 rgba(0,0,0,0.45)";
-      if (s === "left")   tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 2px 0 0 rgba(0,0,0,0.45)";
-      if (s === "right")  tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset -2px 0 0 rgba(0,0,0,0.45)";
+    // Contour lines at band boundaries — thicker and darker so they
+    // visually reinforce the hard colour transition.
+    const sides = contourSides(height, map.cols, map.rows, i);
+    if (sides.length > 0) {
+      const shadows = [];
+      for (const s of sides) {
+        if (s === "top")    shadows.push("inset 0 2px 0 rgba(0,0,0,0.65)");
+        if (s === "bottom") shadows.push("inset 0 -2px 0 rgba(0,0,0,0.65)");
+        if (s === "left")   shadows.push("inset 2px 0 0 rgba(0,0,0,0.65)");
+        if (s === "right")  shadows.push("inset -2px 0 0 rgba(0,0,0,0.65)");
+      }
+      tile.style.boxShadow = shadows.join(", ");
     }
 
     if (cell && cell.kind === "problem") {
@@ -236,26 +234,26 @@ async function run() {
       tile.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
     }
 
-    tile.title = labelFor(cell, k, row, column, findProblem, h);
+    tile.title = labelFor(cell, k, row, column, findProblem, h, band);
     gridEl.appendChild(tile);
   }
 
   // Faint hairline grid so cells remain countable.
   gridEl.style.backgroundImage =
-    "linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px)," +
-    "linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)";
+    "linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px)," +
+    "linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)";
   gridEl.style.backgroundSize = `calc(100% / ${map.cols}) calc(100% / ${map.rows})`;
 
   renderLegend();
 }
 
-function labelFor(cell, kind, row, column, findProblem, h) {
+function labelFor(cell, kind, row, column, findProblem, h, band) {
   const base = cell
     ? cell.kind === "problem"
       ? `${cell.type} #${cell.problemNo} — ${problemDifficulty(findProblem(cell.problemNo, cell.type)) || "unknown"}`
       : cell.kind
     : "empty";
-  return `${base} (r${row} c${column}) · elevation ${h.toFixed(2)}`;
+  return `${base} (r${row} c${column}) · band ${band} · elevation ${h.toFixed(2)}`;
 }
 
 function renderLegend() {
@@ -270,7 +268,7 @@ function renderLegend() {
     sw.style.height = "16px";
     sw.style.borderRadius = "3px";
     sw.style.background = colour;
-    sw.style.border = "1px solid rgba(0,0,0,0.3)";
+    sw.style.border = "1px solid rgba(0,0,0,0.4)";
     span.append(sw, document.createTextNode(label));
     legendEl.append(span);
   }
