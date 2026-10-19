@@ -7,11 +7,7 @@ import { el, renderList } from "../shared/dom.js";
 import { MIN_SIZE, MAX_SIZE } from "../shared/constants.js";
 import { mapMode, emptyCells } from "../shared/map-render.js";
 
-if (requireAdmin()) {
-  initNav("maps");
-  bindToastClose();
-  run();
-}
+
 
 let state = { maps: [], revisions: { maps: 0 }, newMode: "official" };
 
@@ -130,4 +126,9 @@ async function onCreateMap(event) {
     formError.hidden = false;
     formError.textContent = err.message || "Could not save the new map.";
   }
+}
+if (requireAdmin()) {
+  initNav("maps");
+  bindToastClose();
+  run();
 }

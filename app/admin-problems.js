@@ -10,11 +10,7 @@ import {
 } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 
-if (requireAdmin()) {
-  initNav("problems");
-  bindToastClose();
-  run();
-}
+
 
 const state = {
   problems: [],
@@ -453,4 +449,9 @@ async function persistMaps() {
     showPageToast(err.message || "Could not save maps.", "warn");
     return false;
   }
+}
+if (requireAdmin()) {
+  initNav("problems");
+  bindToastClose();
+  run();
 }

@@ -6,39 +6,25 @@ import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import {
-  layoutMapGrid, mapMode, cellClassName, cellText, cellLabel, renderMapCounts, emptyCells,
-} from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, cellClassName, cellText, cellLabel, renderMapCounts } from "../shared/map-render.js";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js";
 
-if (requireAdmin()) {
-  initNav("maps");
-  bindToastClose();
-  run().catch((err) => {
-    const loadError = document.querySelector("#load-error");
-    if (loadError) {
-      loadError.hidden = false;
-      loadError.textContent = err.message || "Could not open the map.";
-    }
-  });
-}
-
+// ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 const mapId = params.get("map");
+
 const mapEl = document.querySelector("#editor-grid");
 const titleEl = document.querySelector("#editor-title");
 const sizeEl = document.querySelector("#editor-size");
 const countsEl = document.querySelector("#map-counts");
-const nameInput = document.querySelector("#editor-name-input") || document.querySelector("#map-name-input");
+const nameInput = document.querySelector("#map-name-input");
 const saveButton = document.querySelector("#save-map-button");
 const deleteButton = document.querySelector("#delete-open-map");
 
-let state = {
-  maps: [],
-  problems: [],
-  revisions: { maps: 0, problems: 0 },
-  current: null,
-  dirty: false,
+// ── 状态 ─────────────────────────────────────────────────
+const state = {
+  maps: [], problems: [], revisions: { maps: 0, problems: 0 },
+  current: null, dirty: false,
   paintKind: "problem",
   placeType: "math",
   placeMode: "manual",
@@ -47,6 +33,7 @@ let state = {
   placePickDifficulties: new Set(["easy", "normal", "hard", "insane"]),
 };
 
+// ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!mapId) throw new Error("No map selected.");
   const data = await loadBootstrap();
@@ -63,11 +50,9 @@ async function run() {
   renderMode();
   chooseTool("problem");
   renderGrid();
-  syncPlaceType();
   if (state.current.mode === "testing") {
     document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']").forEach((b) => { b.hidden = false; });
   }
-
   bindEvents();
   updateSaveButton();
 }
@@ -91,7 +76,6 @@ function bindEvents() {
     renderMode();
     syncPlaceType();
   });
-
   document.querySelector("#place-mode-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-place-mode]");
     if (!btn) return;
@@ -132,7 +116,6 @@ function bindEvents() {
     state.placePickSource = s;
     renderPlaceMode();
   });
-
   nameInput?.addEventListener("input", () => {
     const name = nameInput.value.trim();
     if (!name || name.length > 60) return;
@@ -140,10 +123,8 @@ function bindEvents() {
     titleEl.textContent = name;
     markDirty();
   });
-
   saveButton?.addEventListener("click", save);
   deleteButton?.addEventListener("click", deleteMap);
-
   mapEl?.addEventListener("pointerdown", startPaint);
 }
 
@@ -160,8 +141,7 @@ function renderMode() {
   for (const btn of document.querySelectorAll("[data-map-mode]")) {
     btn.setAttribute("aria-pressed", String(btn.dataset.mapMode === mapMode(state.current)));
   }
-  const editorView = document.querySelector("#editor-grid");
-  if (editorView) editorView.dataset.mapMode = mapMode(state.current);
+  if (mapEl) mapEl.dataset.mapMode = mapMode(state.current);
   syncPlaceType();
 }
 
@@ -235,14 +215,8 @@ function paintCell(index) {
   renderMapCounts(countsEl, map);
 }
 
-function markDirty() {
-  state.dirty = true;
-  updateSaveButton();
-}
-
-function updateSaveButton() {
-  if (saveButton) saveButton.disabled = !state.dirty;
-}
+function markDirty() { state.dirty = true; updateSaveButton(); }
+function updateSaveButton() { if (saveButton) saveButton.disabled = !state.dirty; }
 
 function nextProblemNo(type) {
   const used = new Set();
@@ -303,8 +277,6 @@ function pickProblemForMap(map) {
   return { type: chosen.type, index: chosen.index };
 }
 
-// ── Painting (pointer events) ─────────────────────────────────────
-
 let painting = false;
 let paintedThisStroke = new Set();
 let strokeCount = 0;
@@ -315,11 +287,7 @@ function startPaint(event) {
   if (!cell) return;
   const index = Number(cell.dataset.index);
   if (!Number.isInteger(index)) return;
-
-  if (window.matchMedia("(pointer: coarse)").matches && event.pointerType === "touch") {
-    return;
-  }
-
+  if (window.matchMedia("(pointer: coarse)").matches && event.pointerType === "touch") return;
   event.preventDefault();
   painting = true;
   strokeCount = 0;
@@ -350,7 +318,6 @@ function stopPaint() {
   window.removeEventListener("pointerup", stopPaint);
   window.removeEventListener("pointercancel", stopPaint);
   if (openNo) {
-    // 保存后跳转到题目编辑器
     save().then((ok) => {
       if (ok) location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(openNo.type)}&index=${openNo.index}&from=map&map=${encodeURIComponent(state.current.id)}`);
     });
@@ -369,7 +336,6 @@ function applyTool(index, mode) {
     pendingProblemOpen = { index: cell.problemNo, type: cell.type };
     return;
   }
-
   if (mode === "toggle" && cell.kind !== "empty") {
     paintedThisStroke.add(index);
     strokeCount += 1;
@@ -378,13 +344,11 @@ function applyTool(index, mode) {
     markDirty();
     return;
   }
-
   if (state.paintKind === "problem") {
     const picked = state.placeMode === "pick" ? pickProblemForMap(map) : null;
     const problemNo = state.placeMode === "pick" ? picked?.index : readProblemNo(document.querySelector("#problem-no")?.value);
     const type = state.placeMode === "pick" ? picked?.type : state.placeType;
     const errorEl = document.querySelector("#problem-no-error");
-
     if (type === "testing" && mapMode(map) !== "testing") {
       if (errorEl) { errorEl.hidden = false; errorEl.textContent = "Testing problems can only be placed on a testing map."; }
       stopPaint();
@@ -400,7 +364,6 @@ function applyTool(index, mode) {
       stopPaint();
       return;
     }
-
     if (errorEl) errorEl.hidden = true;
     paintedThisStroke.add(index);
     strokeCount += 1;
@@ -413,7 +376,6 @@ function applyTool(index, mode) {
     }
     return;
   }
-
   paintedThisStroke.add(index);
   strokeCount += 1;
   if (state.paintKind === "spawnpoint") map.cells[index] = { kind: "spawnpoint" };
@@ -422,8 +384,6 @@ function applyTool(index, mode) {
   paintCell(index);
   markDirty();
 }
-
-// ── Save / delete ─────────────────────────────────────────────────
 
 async function save() {
   if (!state.dirty || isSaveConflictActive()) return false;
@@ -454,8 +414,8 @@ async function save() {
           renderGrid();
         },
         persist: async () => {
-          const data = await api.saveMaps(state.maps, state.revisions.maps);
-          state.revisions.maps = data.revision;
+          const d = await api.saveMaps(state.maps, state.revisions.maps);
+          state.revisions.maps = d.revision;
           state.dirty = false;
           updateSaveButton();
           return true;
@@ -482,4 +442,14 @@ async function deleteMap() {
     state.maps = previous;
     showPageToast(err.message || "Could not delete the map.", "warn");
   }
+}
+
+// ── 启动（最后） ─────────────────────────────────────────
+if (requireAdmin()) {
+  initNav("maps");
+  bindToastClose();
+  run().catch((err) => {
+    const le = document.querySelector("#load-error");
+    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the map."; }
+  });
 }

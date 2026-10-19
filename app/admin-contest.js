@@ -14,14 +14,7 @@ import { DIFFICULTY_SCORE, DIFFICULTY_NAME } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 import { mapMode } from "../shared/map-render.js";
 
-if (requireAdmin()) {
-  initNav("contests");
-  bindToastClose();
-  run().catch((err) => {
-    const le = document.querySelector("#load-error");
-    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the contest."; }
-  });
-}
+
 
 const contestId = new URLSearchParams(location.search).get("id") || "";
 const state = {
@@ -446,4 +439,12 @@ async function onTeamListClick(event) {
   if (edit) { const team = state.current.teams.find((t) => t.id === edit.dataset.editTeam); if (team) beginEdit(team); return; }
   const remove = event.target.closest("[data-remove-team]");
   if (remove) { const team = state.current.teams.find((t) => t.id === remove.dataset.removeTeam); if (team) removeTeam(team); }
+}
+if (requireAdmin()) {
+  initNav("contests");
+  bindToastClose();
+  run().catch((err) => {
+    const le = document.querySelector("#load-error");
+    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the contest."; }
+  });
 }

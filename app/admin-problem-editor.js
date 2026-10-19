@@ -4,35 +4,18 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadBootstrap } from "../shared/data.js";
 import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
-import {
-  MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME,
-} from "../shared/constants.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 import { createStatementView } from "../shared/statement.js";
 
-if (requireAdmin()) {
-  initNav("problems");
-  bindToastClose();
-  run().catch((err) => {
-    const le = document.querySelector("#load-error");
-    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the problem."; }
-  });
-}
-
+// ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 const index = Number(params.get("index"));
 const type = params.get("type");
 const fromMap = params.get("from") === "map";
 const mapId = params.get("map");
 
-const state = {
-  problems: [],
-  maps: [],
-  revisions: { problems: 0, maps: 0 },
-  draft: null,
-  dirty: false,
-};
-
+// ── DOM ─────────────────────────────────────────────────
 const form = document.querySelector("#problem-editor-form");
 const titleEl = document.querySelector("#problem-editor-title");
 const indexInput = document.querySelector("#problem-index-input");
@@ -46,11 +29,21 @@ const saveBtn = document.querySelector("#save-problem-button");
 const saveTop = document.querySelector("#save-problem-top");
 const usageEl = document.querySelector("#problem-usage");
 
+// ── 状态 ─────────────────────────────────────────────────
+const state = {
+  problems: [],
+  maps: [],
+  revisions: { problems: 0, maps: 0 },
+  draft: null,
+  dirty: false,
+};
+
+// ── Preview ─────────────────────────────────────────────
 const previewEl = document.createElement("div");
 previewEl.className = "problem-preview";
 form.appendChild(previewEl);
-const statementView = createStatementView(previewEl, {});
 
+// ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!Number.isInteger(index) || !typeInfo(type)) throw new Error("Invalid problem link.");
   const data = await loadBootstrap();
@@ -441,4 +434,14 @@ function nextProblemNo(pType) {
     if (!used.has(i)) return i;
   }
   return null;
+}
+
+// ── 启动（最后） ─────────────────────────────────────────
+if (requireAdmin()) {
+  initNav("problems");
+  bindToastClose();
+  run().catch((err) => {
+    const le = document.querySelector("#load-error");
+    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the problem."; }
+  });
 }

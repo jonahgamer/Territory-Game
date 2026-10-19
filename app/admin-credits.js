@@ -6,11 +6,7 @@ import { api } from "../shared/api.js";
 import { el, renderList } from "../shared/dom.js";
 import { formatContestTime } from "../shared/contest-time.js";
 
-if (requireAdmin()) {
-  initNav("credits");
-  bindToastClose();
-  run();
-}
+
 
 const state = { versions: [] };
 
@@ -60,4 +56,9 @@ async function addVersion(event) {
   } catch (err) {
     formError.hidden = false; formError.textContent = err.message;
   }
+}
+if (requireAdmin()) {
+  initNav("credits");
+  bindToastClose();
+  run();
 }

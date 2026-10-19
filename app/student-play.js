@@ -6,31 +6,24 @@ import { api } from "../shared/api.js";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime,
-  formatContestTime,
 } from "../shared/contest-time.js";
 import { teamForUser, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
 import { layoutMapGrid, cellClassName, cellText, cellLabel } from "../shared/map-render.js";
 import { DIFFICULTY_NAME, DIFFICULTY_SCORE, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { createStatementView } from "../shared/statement.js";
 
-if (requireContestant()) {
-  initNav("contests");
-  bindToastClose();
-  run().catch((err) => {
-    const le = document.querySelector("#load-error");
-    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the contest."; }
-  });
-}
-
+// ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
 
+// ── 状态 ─────────────────────────────────────────────────
 const state = {
   maps: [], problems: [], contest: null,
   selectedCell: null, syncAt: 0, clock: null, lastMouse: Date.now(),
   phase: "", frozen: false, spawnCache: new Map(),
 };
 
+// ── Statement view ───────────────────────────────────────
 const statement = createStatementView(document.querySelector("#student-problem-prompt"), {
   onAnswerValue: (v) => { document.querySelector("#student-answer").value = v; },
   onAnswerStyle: (css) => { document.querySelector("#student-answer").style.cssText = css; },
@@ -41,6 +34,7 @@ const statement = createStatementView(document.querySelector("#student-problem-p
   },
 });
 
+// ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!contestId) throw new Error("No contest selected.");
   const data = await loadBootstrap();
@@ -49,7 +43,6 @@ async function run() {
   state.contest = data.contests.find((c) => c.id === contestId) || null;
   if (!state.contest) throw new Error("Contest not found.");
   if (!teamForUser(state.contest)) throw new Error("You are not on a team in this contest.");
-
   bindEvents();
   render();
   startClock();
@@ -108,7 +101,6 @@ function render() {
     paintClock();
     return;
   }
-
   renderGrid(contest, map, phase, frozen, team);
   renderSpawnAgreement(contest, map, phase);
   paintClock();
@@ -120,7 +112,6 @@ function writeStatus(contest, phase, map, frozen) {
   const score = buildLeaderboard(contest, map).find((r) => r.teamId === team?.id);
   const scoreBit = score ? ` ${team.name} has ${score.score} point${score.score === 1 ? "" : "s"}.` : "";
   document.querySelector("#student-play-meta").textContent = `${mapBit}. ${phaseSentence(contest, phase, frozen)}${scoreBit}`;
-
   const note = document.querySelector("#student-spawn-note");
   if (!map) { note.hidden = true; return; }
   note.hidden = false;
@@ -215,8 +206,7 @@ function renderGrid(contest, map, phase, frozen, team) {
   grid.replaceChildren();
 
   const choosing = phase === "spawn" && !contest.spawnResolved;
-  map.cells.forEach((rawCell, index) => {
-    const cell = rawCell;
+  map.cells.forEach((cell, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.index = String(index);
@@ -505,4 +495,14 @@ async function syncContest() {
     applyPlayState(data);
     render();
   } catch {}
+}
+
+// ── 启动（最后） ─────────────────────────────────────────
+if (requireContestant()) {
+  initNav("contests");
+  bindToastClose();
+  run().catch((err) => {
+    const le = document.querySelector("#load-error");
+    if (le) { le.hidden = false; le.textContent = err.message || "Could not open the contest."; }
+  });
 }

@@ -7,14 +7,7 @@ import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo } from "../shared/difficulty.js";
 
-if (requireAdmin()) {
-  initNav("problems");
-  bindToastClose();
-  run().catch((err) => {
-    const le = document.querySelector("#load-error");
-    if (le) { le.hidden = false; le.textContent = err.message; }
-  });
-}
+
 
 const params = new URLSearchParams(location.search);
 const type = typeInfo(params.get("type")) ? params.get("type") : "math";
@@ -183,4 +176,12 @@ async function saveAll() {
   } catch (err) {
     showError(err.message || "Could not save.");
   }
+}
+if (requireAdmin()) {
+  initNav("problems");
+  bindToastClose();
+  run().catch((err) => {
+    const le = document.querySelector("#load-error");
+    if (le) { le.hidden = false; le.textContent = err.message; }
+  });
 }
