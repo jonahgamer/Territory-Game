@@ -22,32 +22,39 @@ const HEIGHT = {
   unknown: 0.5, empty: 0, obstacle: 2, spawnpoint: 1,
 };
 
-// ── Hypsometric palette (real topographic map colours) ─────
-// Low → high: dark green → green → yellow → tan → brown → white
-const RAMP = [
-  { h: 0.0, c: "#2b6b3a" }, // lowland — deep green
-  { h: 0.8, c: "#4a8f4e" }, // low hills — green
-  { h: 1.5, c: "#8bbf5a" }, // upland — olive green
-  { h: 2.0, c: "#d6c94a" }, // plateau — yellow
-  { h: 2.6, c: "#c9a15a" }, // foothills — tan
-  { h: 3.2, c: "#a0673c" }, // mountains — brown
-  { h: 3.8, c: "#e8e2d8" }, // high mountains — off‑white
-  { h: 4.0, c: "#ffffff" }, // peaks — white
-];
+// ── Difficulty colours ──────────────────────────────────────
+const DIFFICULTY_COLOURS = {
+  easy:   "#4caf50", // green
+  normal: "#ffd54f", // yellow
+  hard:   "#e53935", // red
+  insane: "#f5f5f5", // white (slightly off‑white so red/green contrast reads)
+};
 
-// Legend swatches — pick representative stops from the ramp.
 const LEGEND = [
-  ["Low",       "#2b6b3a"],
-  ["Hills",     "#4a8f4e"],
-  ["Upland",    "#8bbf5a"],
-  ["Plateau",   "#d6c94a"],
-  ["Foothills", "#c9a15a"],
-  ["Mountains", "#a0673c"],
-  ["High",      "#e8e2d8"],
-  ["Peak",      "#ffffff"],
+  ["Easy",     DIFFICULTY_COLOURS.easy],
+  ["Normal",   DIFFICULTY_COLOURS.normal],
+  ["Hard",     DIFFICULTY_COLOURS.hard],
+  ["Insane",   DIFFICULTY_COLOURS.insane],
+  ["Obstacle", "#2c2c3a"],
+  ["Spawn",    "#0a7ea4"],
+  ["Empty",    "#1e2430"],
 ];
 
-const CONTOUR_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5];
+// Bucket boundaries: smoothed height → difficulty band.
+//   < 0.75         → empty / low ground (dark base)
+//   0.75 – 1.75    → easy    (green)
+//   1.75 – 2.75    → normal  (yellow)
+//   2.75 – 3.75    → hard    (red)
+//   ≥ 3.75         → insane  (white)
+function bandFor(h) {
+  if (h < 0.75) return "empty";
+  if (h < 1.75) return "easy";
+  if (h < 2.75) return "normal";
+  if (h < 3.75) return "hard";
+  return "insane";
+}
+
+const CONTOUR_LEVELS = [0.75, 1.75, 2.75, 3.75];
 
 // ── Height field + smoothing (unchanged) ───────────────────
 function buildHeightField(map, findProblem) {
@@ -118,30 +125,6 @@ function buildHeightField(map, findProblem) {
   return { height: field, kind: kindOf };
 }
 
-// ── Continuous hypsometric colour ──────────────────────────
-function heightToColour(h) {
-  const clamped = Math.max(0, Math.min(4, h));
-  for (let i = 0; i < RAMP.length - 1; i++) {
-    const a = RAMP[i], b = RAMP[i + 1];
-    if (clamped >= a.h && clamped <= b.h) {
-      const t = (clamped - a.h) / (b.h - a.h);
-      return mixHex(a.c, b.c, t);
-    }
-  }
-  return RAMP[RAMP.length - 1].c;
-}
-
-function mixHex(a, b, t) {
-  const na = parseInt(a.slice(1), 16), nb = parseInt(b.slice(1), 16);
-  const ar = (na >> 16) & 0xff, ag = (na >> 8) & 0xff, ab = na & 0xff;
-  const br = (nb >> 16) & 0xff, bg = (nb >> 8) & 0xff, bb = nb & 0xff;
-  return "#" + ((1 << 24)
-    | (Math.round(ar + (br - ar) * t) << 16)
-    | (Math.round(ag + (bg - ag) * t) << 8)
-    | Math.round(ab + (bb - ab) * t)
-  ).toString(16).slice(1);
-}
-
 // Contrast text on light vs dark backgrounds.
 function textColourFor(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -201,7 +184,11 @@ async function run() {
     const column = (i % map.cols) + 1;
     const h = height[i];
     const k = kind[i];
-    const colour = heightToColour(h);
+    const band = bandFor(h);
+
+    // Snap to the discrete difficulty colour.
+    let colour = DIFFICULTY_COLOURS[band] || "#1e2430";
+    if (band === "empty") colour = "#1e2430";
 
     const tile = document.createElement("div");
     tile.className = "grid-cell difficulty-cell";
@@ -214,12 +201,10 @@ async function run() {
     tile.style.fontFamily = '"Share Tech Mono", monospace';
     tile.style.fontSize = "0.72rem";
     tile.style.color = textColourFor(colour);
-    tile.style.textShadow = "none";
     tile.style.boxSizing = "border-box";
 
-    // Contour lines — dark inset borders on the boundaries.
+    // Contour lines — dark inset borders on band boundaries.
     for (const s of contourSides(height, map.cols, map.rows, i)) {
-      const line = "inset 0 0 0 1px rgba(0,0,0,0.45)";
       if (s === "top")    tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 2px 0 rgba(0,0,0,0.45)";
       if (s === "bottom") tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 -2px 0 rgba(0,0,0,0.45)";
       if (s === "left")   tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 2px 0 0 rgba(0,0,0,0.45)";
@@ -238,11 +223,11 @@ async function run() {
       tile.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
     }
 
-    tile.title = labelFor(cell, k, row, column, findProblem, h);
+    tile.title = labelFor(cell, k, row, column, findProblem, h, band);
     gridEl.appendChild(tile);
   }
 
-  // Faint hairline grid so cells remain countable without dominating.
+  // Faint hairline grid so cells remain countable.
   gridEl.style.backgroundImage =
     "linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px)," +
     "linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)";
@@ -251,13 +236,13 @@ async function run() {
   renderLegend();
 }
 
-function labelFor(cell, kind, row, column, findProblem, h) {
+function labelFor(cell, kind, row, column, findProblem, h, band) {
   const base = cell
     ? cell.kind === "problem"
       ? `${cell.type} #${cell.problemNo} — ${problemDifficulty(findProblem(cell.problemNo, cell.type)) || "unknown"}`
       : cell.kind
     : "empty";
-  return `${base} (r${row} c${column}) · elevation ${h.toFixed(2)}`;
+  return `${base} (r${row} c${column}) · band ${band} · elevation ${h.toFixed(2)}`;
 }
 
 function renderLegend() {
