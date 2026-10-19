@@ -1449,6 +1449,74 @@ async function handleContestState(req, res, db, user, body) {
 // Main handler
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Public (no auth) actions for the guest testing page ──────────────
+// These expose only prompt/type/difficulty and a pass/fail result.
+// `answer` and `logic` are never sent to the client.
+
+const PUBLIC_INDEX_MIN = 26000;
+const PUBLIC_INDEX_MAX = 26099;
+const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
+
+function isPublicProblem(problem) {
+  return problem
+    && Number.isInteger(problem.index)
+    && problem.index >= PUBLIC_INDEX_MIN
+    && problem.index <= PUBLIC_INDEX_MAX
+    && problem.type !== PUBLIC_EXCLUDED_TYPE;
+}
+
+async function handlePublicProblems(req, res, db) {
+  const problems = await db.collection('problems')
+    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
+    .toArray();
+  return res.status(200).json({
+    success: true,
+    problems: problems.map((p) => ({
+      index: p.index,
+      type: p.type,
+      prompt: typeof p.prompt === 'string' ? p.prompt : '',
+      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+    })),
+  });
+}
+
+async function handlePublicCheck(req, res, db, body) {
+  const index = body.index;
+  const type = typeof body.type === 'string' ? body.type : '';
+  const given = typeof body.answer === 'string' ? body.answer : '';
+  if (!Number.isInteger(index) || !PROBLEM_TYPES.includes(type)) {
+    return res.status(400).json({ success: false, message: 'Missing problem.' });
+  }
+  const problem = await db.collection('problems').findOne({ index, type });
+  if (!problem || !isPublicProblem(problem)) {
+    return res.status(404).json({ success: false, message: 'Problem not available.' });
+  }
+  if (given.length > MAX_TEST_TEXT) {
+    return res.status(400).json({ success: false, message: 'Answer is too long.' });
+  }
+  const logic = typeof problem.logic === 'string' ? problem.logic.trim() : '';
+  if (logic) {
+    const judged = runProblemLogic(logic, problem.answer, given);
+    return res.status(200).json({
+      success: true,
+      correct: judged.correct,
+      systemError: judged.systemError,
+      score: judged.score,
+      comment: judged.comment,
+      error: judged.error,
+    });
+  }
+  const correct = answersMatch(problem.answer, given);
+  return res.status(200).json({
+    success: true,
+    correct,
+    systemError: false,
+    score: correct ? 100 : 0,
+    comment: correct ? 'AC' : 'WA',
+    error: '',
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   applyCors(req, res);
@@ -1544,70 +1612,3 @@ export default async function handler(req, res) {
 
 export const config = { maxDuration: 20 };
 
-// ── Public (no auth) actions for the guest testing page ──────────────
-// These expose only prompt/type/difficulty and a pass/fail result.
-// `answer` and `logic` are never sent to the client.
-
-const PUBLIC_INDEX_MIN = 26000;
-const PUBLIC_INDEX_MAX = 26099;
-const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
-
-function isPublicProblem(problem) {
-  return problem
-    && Number.isInteger(problem.index)
-    && problem.index >= PUBLIC_INDEX_MIN
-    && problem.index <= PUBLIC_INDEX_MAX
-    && problem.type !== PUBLIC_EXCLUDED_TYPE;
-}
-
-async function handlePublicProblems(req, res, db) {
-  const problems = await db.collection('problems')
-    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
-    .toArray();
-  return res.status(200).json({
-    success: true,
-    problems: problems.map((p) => ({
-      index: p.index,
-      type: p.type,
-      prompt: typeof p.prompt === 'string' ? p.prompt : '',
-      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
-    })),
-  });
-}
-
-async function handlePublicCheck(req, res, db, body) {
-  const index = body.index;
-  const type = typeof body.type === 'string' ? body.type : '';
-  const given = typeof body.answer === 'string' ? body.answer : '';
-  if (!Number.isInteger(index) || !PROBLEM_TYPES.includes(type)) {
-    return res.status(400).json({ success: false, message: 'Missing problem.' });
-  }
-  const problem = await db.collection('problems').findOne({ index, type });
-  if (!problem || !isPublicProblem(problem)) {
-    return res.status(404).json({ success: false, message: 'Problem not available.' });
-  }
-  if (given.length > MAX_TEST_TEXT) {
-    return res.status(400).json({ success: false, message: 'Answer is too long.' });
-  }
-  const logic = typeof problem.logic === 'string' ? problem.logic.trim() : '';
-  if (logic) {
-    const judged = runProblemLogic(logic, problem.answer, given);
-    return res.status(200).json({
-      success: true,
-      correct: judged.correct,
-      systemError: judged.systemError,
-      score: judged.score,
-      comment: judged.comment,
-      error: judged.error,
-    });
-  }
-  const correct = answersMatch(problem.answer, given);
-  return res.status(200).json({
-    success: true,
-    correct,
-    systemError: false,
-    score: correct ? 100 : 0,
-    comment: correct ? 'AC' : 'WA',
-    error: '',
-  });
-}
