@@ -1454,6 +1454,27 @@ export default async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
 
+
+  // Public actions must be checked before auth. They never read the
+  // Authorization header and never return answer/logic.
+  if (req.method === 'GET' && req.query.action === 'public-problems') {
+    let db;
+    try { db = await connectToDatabase(); }
+    catch { return res.status(500).json({ success: false, message: 'Database unavailable' }); }
+    try { return await handlePublicProblems(req, res, db); }
+    catch { return res.status(500).json({ success: false, message: 'Internal error' }); }
+  }
+  if (req.method === 'POST' && req.query.action === 'public-check') {
+    let db, body;
+    try { db = await connectToDatabase(); }
+    catch { return res.status(500).json({ success: false, message: 'Database unavailable' }); }
+    try { body = await readBody(req); }
+    catch (e) { return res.status(400).json({ success: false, message: e.message }); }
+    try { return await handlePublicCheck(req, res, db, body); }
+    catch { return res.status(500).json({ success: false, message: 'Internal error' }); }
+  }
+
+
   // Auth
   const user = verifyToken(req);
   if (!user) {
@@ -1522,3 +1543,71 @@ export default async function handler(req, res) {
 }
 
 export const config = { maxDuration: 20 };
+
+// ── Public (no auth) actions for the guest testing page ──────────────
+// These expose only prompt/type/difficulty and a pass/fail result.
+// `answer` and `logic` are never sent to the client.
+
+const PUBLIC_INDEX_MIN = 26000;
+const PUBLIC_INDEX_MAX = 26099;
+const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
+
+function isPublicProblem(problem) {
+  return problem
+    && Number.isInteger(problem.index)
+    && problem.index >= PUBLIC_INDEX_MIN
+    && problem.index <= PUBLIC_INDEX_MAX
+    && problem.type !== PUBLIC_EXCLUDED_TYPE;
+}
+
+async function handlePublicProblems(req, res, db) {
+  const problems = await db.collection('problems')
+    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
+    .toArray();
+  return res.status(200).json({
+    success: true,
+    problems: problems.map((p) => ({
+      index: p.index,
+      type: p.type,
+      prompt: typeof p.prompt === 'string' ? p.prompt : '',
+      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+    })),
+  });
+}
+
+async function handlePublicCheck(req, res, db, body) {
+  const index = body.index;
+  const type = typeof body.type === 'string' ? body.type : '';
+  const given = typeof body.answer === 'string' ? body.answer : '';
+  if (!Number.isInteger(index) || !PROBLEM_TYPES.includes(type)) {
+    return res.status(400).json({ success: false, message: 'Missing problem.' });
+  }
+  const problem = await db.collection('problems').findOne({ index, type });
+  if (!problem || !isPublicProblem(problem)) {
+    return res.status(404).json({ success: false, message: 'Problem not available.' });
+  }
+  if (given.length > MAX_TEST_TEXT) {
+    return res.status(400).json({ success: false, message: 'Answer is too long.' });
+  }
+  const logic = typeof problem.logic === 'string' ? problem.logic.trim() : '';
+  if (logic) {
+    const judged = runProblemLogic(logic, problem.answer, given);
+    return res.status(200).json({
+      success: true,
+      correct: judged.correct,
+      systemError: judged.systemError,
+      score: judged.score,
+      comment: judged.comment,
+      error: judged.error,
+    });
+  }
+  const correct = answersMatch(problem.answer, given);
+  return res.status(200).json({
+    success: true,
+    correct,
+    systemError: false,
+    score: correct ? 100 : 0,
+    comment: correct ? 'AC' : 'WA',
+    error: '',
+  });
+}

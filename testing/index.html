@@ -1,67 +1,331 @@
-// ── Public (no auth) actions for the guest testing page ──────────────
-// These expose only prompt/type/difficulty and a pass/fail result.
-// `answer` and `logic` are never sent to the client.
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Practice · 260xx</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+    <style>
+      /* Reuse the contest board look: same grid, legend, leaderboard-ish cards. */
+      .practice { max-width: 56rem; margin: 0 auto; padding: 24px 16px 64px; }
+      .practice-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+      }
+      .practice-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        background: #101820;
+        color: var(--ink);
+        cursor: pointer;
+        text-align: left;
+      }
+      .practice-card:hover { outline: 2px solid var(--cyan); outline-offset: -4px; }
+      .practice-card .tag {
+        font-family: var(--font-ui);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: .04em;
+      }
+      .practice-card .tag.oi { color: #7d9dff; }
+      .practice-card .tag.science { color: #ff9a1a; }
+      .practice-card .tag.puzzle { color: #ff7eb6; }
+      .practice-card .tag.testing { color: #b7ff4a; }
+      .practice-card .diff {
+        align-self: flex-start;
+        padding: 2px 7px;
+        border: 1px solid currentColor;
+        font-family: var(--font-ui);
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+      .practice-card .diff.easy { color: #3ddc6a; }
+      .practice-card .diff.normal { color: #ffe14a; }
+      .practice-card .diff.hard { color: #ff3b4e; }
+      .practice-card .diff.insane { color: #c084fc; }
+      .practice-card .preview {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+      }
 
-const PUBLIC_INDEX_MIN = 26000;
-const PUBLIC_INDEX_MAX = 26099;
-const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
+      /* Modal mirrors .student-problem-card */
+      .practice-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgba(0, 0, 0, 0.62);
+      }
+      .practice-modal-card {
+        width: min(100%, 40rem);
+        max-height: min(90dvh, 800px);
+        overflow: auto;
+        padding: 20px 22px;
+        border: 1px solid var(--line);
+        background: rgba(8, 18, 32, 0.96);
+        box-shadow: 0 0 48px rgba(62, 224, 255, 0.12);
+      }
+      .practice-modal-close {
+        position: sticky;
+        top: 0;
+        float: right;
+        z-index: 6;
+        margin: 0 0 8px 12px;
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        background: rgba(8, 18, 32, 0.96);
+        color: var(--cyan);
+        font: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .practice-modal h2 { margin: 0 0 12px; font-size: 28px; }
+      .practice-modal .frame-wrap { min-height: 60px; }
+      .practice-modal .frame-wrap .statement-frame {
+        width: 100%;
+        border: 0;
+        background: #081220;
+      }
+      .practice-modal form { display: grid; gap: 10px; margin-top: 16px; }
+      .practice-modal label { display: grid; gap: 6px; font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .practice-modal input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; font-size: 16px; }
+      .practice-modal .status { margin: 0; font-family: var(--font-ui); font-size: 14px; }
+      .practice-modal .status.ac { color: #3ddc6a; }
+      .practice-modal .status.wa { color: #ffe14a; }
+      .practice-modal .status.err { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <main class="practice">
+      <p class="eyebrow">Practice</p>
+      <h1>260xx Problems</h1>
+      <p class="lead">Guests can view and submit. Math (M) problems are hidden here. Answers are checked by the saved grader; nothing is written to the database.</p>
+      <ul class="legend">
+        <li><span class="swatch fill easy"></span>Easy</li>
+        <li><span class="swatch fill normal"></span>Normal</li>
+        <li><span class="swatch fill hard"></span>Hard</li>
+        <li><span class="swatch fill insane"></span>Insane</li>
+      </ul>
+      <p id="practice-error" class="form-error" hidden></p>
+      <p id="practice-empty" class="field-note" hidden>No problems available in this range.</p>
+      <div id="practice-grid" class="practice-grid" aria-live="polite"></div>
+    </main>
 
-function isPublicProblem(problem) {
-  return problem
-    && Number.isInteger(problem.index)
-    && problem.index >= PUBLIC_INDEX_MIN
-    && problem.index <= PUBLIC_INDEX_MAX
-    && problem.type !== PUBLIC_EXCLUDED_TYPE;
-}
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <script>
+      (function () {
+        "use strict";
+        var API_BASE = "/api/territory";
+        var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
+        var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+        var TYPE_TAG = { oi: "O", science: "S", puzzle: "P", testing: "T" };
+        var KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+        var KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
+        var AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
 
-async function handlePublicProblems(req, res, db) {
-  const problems = await db.collection('problems')
-    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
-    .toArray();
-  return res.status(200).json({
-    success: true,
-    problems: problems.map((p) => ({
-      index: p.index,
-      type: p.type,
-      prompt: typeof p.prompt === 'string' ? p.prompt : '',
-      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
-    })),
-  });
-}
+        var grid = document.getElementById("practice-grid");
+        var errorEl = document.getElementById("practice-error");
+        var emptyEl = document.getElementById("practice-empty");
 
-async function handlePublicCheck(req, res, db, body) {
-  const index = body.index;
-  const type = typeof body.type === 'string' ? body.type : '';
-  const given = typeof body.answer === 'string' ? body.answer : '';
-  if (!Number.isInteger(index) || !PROBLEM_TYPES.includes(type)) {
-    return res.status(400).json({ success: false, message: 'Missing problem.' });
-  }
-  const problem = await db.collection('problems').findOne({ index, type });
-  if (!problem || !isPublicProblem(problem)) {
-    return res.status(404).json({ success: false, message: 'Problem not available.' });
-  }
-  if (given.length > MAX_TEST_TEXT) {
-    return res.status(400).json({ success: false, message: 'Answer is too long.' });
-  }
-  const logic = typeof problem.logic === 'string' ? problem.logic.trim() : '';
-  if (logic) {
-    const judged = runProblemLogic(logic, problem.answer, given);
-    return res.status(200).json({
-      success: true,
-      correct: judged.correct,
-      systemError: judged.systemError,
-      score: judged.score,
-      comment: judged.comment,
-      error: judged.error,
-    });
-  }
-  const correct = answersMatch(problem.answer, given);
-  return res.status(200).json({
-    success: true,
-    correct,
-    systemError: false,
-    score: correct ? 100 : 0,
-    comment: correct ? 'AC' : 'WA',
-    error: '',
-  });
-}
+        function tagOf(problem) { return (TYPE_TAG[problem.type] || "?") + problem.index; }
+
+        function problemHtml(source) {
+          // Render HTML statements in a sandboxed frame, same as the app.
+          return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
+        }
+
+        function buildFrame(src, tag) {
+          var doc = "<!doctype html><html><head><meta charset='utf-8'>"
+            + "<link rel='stylesheet' href='" + KATEX_CSS + "' crossorigin='anonymous'>"
+            + "<style>html,body{margin:0;padding:0;background:#081220;color:#d7f6ff;}"
+            + "body{font-family:'Share Tech Mono',ui-monospace,Menlo,Consolas,monospace;font-size:16px;line-height:1.55;}"
+            + ".statement-content{overflow-wrap:anywhere;}"
+            + ".statement-content img,.statement-content video,.statement-content canvas,.statement-content svg{max-width:100%;height:auto;}"
+            + ".statement-content table{max-width:100%;border-collapse:collapse;}"
+            + ".statement-content a{color:#3ee0ff;}"
+            + ".katex{font-size:1em;}"
+            + "</style>"
+            + "<script src='" + KATEX_JS + "' crossorigin='anonymous'><\/script>"
+            + "<script src='" + AUTO_RENDER_JS + "' crossorigin='anonymous'><\/script>"
+            + "<script>(function(){function report(){try{var h=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);parent.postMessage({type:'practice-height',height:h},'*');}catch(e){}}"
+            + "function render(){if(typeof renderMathInElement!=='function')return;try{renderMathInElement(document.querySelector('.statement-content'),{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\\\[',right:'\\\\]',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false}],throwOnError:false,strict:'ignore'});}catch(e){}}"
+            + "function boot(){render();report();try{if(window.ResizeObserver)new ResizeObserver(report).observe(document.documentElement);}catch(e){}"
+            + "try{new MutationObserver(report).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true});}catch(e){}}"
+            + "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();window.addEventListener('load',boot);})();<\/script>"
+            + "</head><body><div class='statement-content'>"
+            + (problemHtml(src) ? src : "<pre>" + String(src).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</pre>")
+            + "</div></body></html>";
+          var frame = document.createElement("iframe");
+          frame.className = "statement-frame";
+          frame.setAttribute("sandbox", "allow-scripts");
+          frame.setAttribute("title", "Problem statement");
+          frame.style.height = "120px";
+          frame.srcdoc = doc;
+          return frame;
+        }
+
+        window.addEventListener("message", function (event) {
+          var data = event.data;
+          if (!data || data.type !== "practice-height") return;
+          var height = Number(data.height);
+          if (!Number.isFinite(height)) return;
+          // The frame that sent this is found by scanning; small page, fine.
+          for (var i = 0; i < grid.querySelectorAll("iframe.statement-frame").length; i += 1) {
+            var f = grid.querySelectorAll("iframe.statement-frame")[i];
+            if (f.contentWindow === event.source) {
+              f.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
+              break;
+            }
+          }
+        });
+
+        function plainText(source) {
+          return String(source || "")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<[^>]*>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+
+        function showError(message) {
+          errorEl.hidden = false;
+          errorEl.textContent = message || "Could not load problems.";
+        }
+
+        async function load() {
+          grid.replaceChildren();
+          emptyEl.hidden = true;
+          try {
+            var res = await fetch(API_BASE + "?action=public-problems", { method: "GET" });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+            var problems = Array.isArray(data.problems) ? data.problems : [];
+            if (problems.length === 0) { emptyEl.hidden = false; return; }
+            for (var i = 0; i < problems.length; i += 1) grid.append(card(problems[i]));
+          } catch (error) {
+            showError(error.message);
+          }
+        }
+
+        function card(problem) {
+          var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
+          var card = document.createElement("button");
+          card.type = "button";
+          card.className = "practice-card";
+          card.setAttribute("aria-label", "Open " + tagOf(problem));
+          var tag = document.createElement("span");
+          tag.className = "tag " + problem.type;
+          tag.textContent = tagOf(problem);
+          var diff = document.createElement("span");
+          diff.className = "diff " + level;
+          diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+          var preview = document.createElement("span");
+          preview.className = "preview";
+          preview.textContent = plainText(problem.prompt) || "(empty)";
+          card.append(tag, diff, preview);
+          card.addEventListener("click", function () { openModal(problem); });
+          return card;
+        }
+
+        function openModal(problem) {
+          var overlay = document.createElement("div");
+          overlay.className = "practice-modal";
+          overlay.setAttribute("role", "dialog");
+          overlay.setAttribute("aria-modal", "true");
+          var card = document.createElement("div");
+          card.className = "practice-modal-card";
+          var close = document.createElement("button");
+          close.type = "button";
+          close.className = "practice-modal-close";
+          close.textContent = "Close";
+          var heading = document.createElement("h2");
+          heading.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[problem.difficulty] + " · " + DIFFICULTY_SCORE[problem.difficulty];
+          var wrap = document.createElement("div");
+          wrap.className = "frame-wrap";
+          wrap.append(buildFrame(problem.prompt || "", tagOf(problem)));
+          var form = document.createElement("form");
+          var label = document.createElement("label");
+          label.append("Answer");
+          var input = document.createElement("input");
+          input.type = "text";
+          input.maxLength = 5000;
+          label.append(input);
+          var submit = document.createElement("button");
+          submit.type = "submit";
+          submit.textContent = "Submit";
+          var status = document.createElement("p");
+          status.className = "status";
+          status.hidden = true;
+          form.append(label, submit, status);
+
+          function closeModal() { overlay.remove(); }
+          close.addEventListener("click", closeModal);
+          overlay.addEventListener("click", function (e) { if (e.target === overlay) closeModal(); });
+          document.addEventListener("keydown", function onKey(e) {
+            if (e.key === "Escape") { closeModal(); document.removeEventListener("keydown", onKey); }
+          });
+
+          form.addEventListener("submit", async function (e) {
+            e.preventDefault();
+            if (submit.disabled) return;
+            submit.disabled = true;
+            status.hidden = true;
+            try {
+              var res = await fetch(API_BASE + "?action=public-check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ index: problem.index, type: problem.type, answer: input.value }),
+              });
+              var data = await res.json().catch(function () { return {}; });
+              if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+              status.hidden = false;
+              if (data.systemError) {
+                status.className = "status err";
+                status.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
+              } else if (data.correct) {
+                status.className = "status ac";
+                status.textContent = "AC";
+              } else {
+                status.className = "status wa";
+                status.textContent = "WA" + (data.comment && data.comment !== "WA" ? " · " + data.comment : "");
+              }
+            } catch (error) {
+              status.hidden = false;
+              status.className = "status err";
+              status.textContent = error.message;
+            } finally {
+              submit.disabled = false;
+            }
+          });
+
+          card.append(close, heading, wrap, form);
+          overlay.append(card);
+          document.body.append(overlay);
+          input.focus();
+        }
+
+        load();
+      })();
+    </script>
+  </body>
+</html>
