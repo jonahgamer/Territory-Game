@@ -22,38 +22,32 @@ const HEIGHT = {
   unknown: 0.5, empty: 0, obstacle: 2, spawnpoint: 1,
 };
 
+// ── Hypsometric palette (real topographic map colours) ─────
+// Low → high: dark green → green → yellow → tan → brown → white
 const RAMP = [
-  { h: 0.0, c: "#1e2430" },
-  { h: 1.0, c: "#4caf50" },
-  { h: 2.0, c: "#ff9800" },
-  { h: 3.0, c: "#f44336" },
-  { h: 4.0, c: "#9c27b0" },
+  { h: 0.0, c: "#2b6b3a" }, // lowland — deep green
+  { h: 0.8, c: "#4a8f4e" }, // low hills — green
+  { h: 1.5, c: "#8bbf5a" }, // upland — olive green
+  { h: 2.0, c: "#d6c94a" }, // plateau — yellow
+  { h: 2.6, c: "#c9a15a" }, // foothills — tan
+  { h: 3.2, c: "#a0673c" }, // mountains — brown
+  { h: 3.8, c: "#e8e2d8" }, // high mountains — off‑white
+  { h: 4.0, c: "#ffffff" }, // peaks — white
 ];
 
+// Legend swatches — pick representative stops from the ramp.
 const LEGEND = [
-  ["Easy",     "#4caf50"],
-  ["Normal",   "#ff9800"],
-  ["Hard",     "#f44336"],
-  ["Insane",   "#9c27b0"],
-  ["Obstacle", "#2c2c3a"],
-  ["Spawn",    "#0a7ea4"],
-  ["Empty",    "#1e2430"],
+  ["Low",       "#2b6b3a"],
+  ["Hills",     "#4a8f4e"],
+  ["Upland",    "#8bbf5a"],
+  ["Plateau",   "#d6c94a"],
+  ["Foothills", "#c9a15a"],
+  ["Mountains", "#a0673c"],
+  ["High",      "#e8e2d8"],
+  ["Peak",      "#ffffff"],
 ];
 
-// ── Fake‑3D tuning (70° camera pitch = 20° off straight‑down) ─
-// At 70° the height is clearly visible:
-//  - cos(70°) ≈ 0.342 → side band is ~34% of true height
-//  - 1 − cos(70°) ≈ 0.658 → top face offsets up‑left by ~66% of height
-const CAMERA_PITCH_DEG = 70;
-const COS_PITCH        = Math.cos(CAMERA_PITCH_DEG * Math.PI / 180); // ≈ 0.342
-
-const MAX_LIFT_PX   = 28;                              // raw 3‑D height at tallest
-const VISIBLE_LIFT  = MAX_LIFT_PX * (1 - COS_PITCH);   // ≈ 18.4px
-const SIDE_HEIGHT   = MAX_LIFT_PX * COS_PITCH;         // ≈ 9.6px
-const SHADOW_BLUR   = 8;
-const SHADOW_OFFSET = 5;
-
-const CONTOUR_LEVELS = [0.5, 1.5, 2.5, 3.5];
+const CONTOUR_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5];
 
 // ── Height field + smoothing (unchanged) ───────────────────
 function buildHeightField(map, findProblem) {
@@ -79,6 +73,7 @@ function buildHeightField(map, findProblem) {
     kindOf[i] = "unknown";
   }
 
+  // Kind‑weighted pass preserves difficulty bands.
   const pass1 = new Float32Array(n);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -98,6 +93,7 @@ function buildHeightField(map, findProblem) {
     }
   }
 
+  // Box blur ×2 for smooth slopes.
   let field = pass1;
   for (let iter = 0; iter < 2; iter++) {
     const next = new Float32Array(n);
@@ -122,6 +118,7 @@ function buildHeightField(map, findProblem) {
   return { height: field, kind: kindOf };
 }
 
+// ── Continuous hypsometric colour ──────────────────────────
 function heightToColour(h) {
   const clamped = Math.max(0, Math.min(4, h));
   for (let i = 0; i < RAMP.length - 1; i++) {
@@ -145,16 +142,15 @@ function mixHex(a, b, t) {
   ).toString(16).slice(1);
 }
 
-function shade(hex, amount) {
+// Contrast text on light vs dark backgrounds.
+function textColourFor(hex) {
   const n = parseInt(hex.slice(1), 16);
-  const f = (v) => Math.max(0, Math.min(255, Math.round(v + amount * 255)));
-  return "#" + ((1 << 24)
-    | (f((n >> 16) & 0xff) << 16)
-    | (f((n >> 8) & 0xff) << 8)
-    | f(n & 0xff)
-  ).toString(16).slice(1);
+  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 150 ? "#111" : "#fff";
 }
 
+// ── Contour edge detection ─────────────────────────────────
 function contourSides(height, cols, rows, i) {
   const r = Math.floor(i / cols), c = i % cols;
   const h = height[i];
@@ -174,7 +170,7 @@ function contourSides(height, cols, rows, i) {
   return sides;
 }
 
-// ── Render ──────────────────────────────────────────────────
+// ── Render ─────────────────────────────────────────────────
 async function run() {
   if (!mapId) throw new Error("No map selected.");
   const data = await loadBootstrap();
@@ -194,13 +190,11 @@ async function run() {
   layoutMapGrid(gridEl, map.cols, map.rows);
   gridEl.replaceChildren();
   gridEl.style.gap = "0";
-  gridEl.style.padding = `${VISIBLE_LIFT + 16}px ${VISIBLE_LIFT + 16}px ${VISIBLE_LIFT + 40}px`;
-  gridEl.style.background =
-    "radial-gradient(ellipse at 50% 25%, #1a2233 0%, #0b0f14 78%)";
+  gridEl.style.padding = "12px";
+  gridEl.style.background = "#0b0f14";
   gridEl.style.borderRadius = "10px";
   gridEl.style.overflow = "hidden";
 
-  const tiles = [];
   for (let i = 0; i < map.rows * map.cols; i++) {
     const cell = map.cells[i];
     const row = Math.floor(i / map.cols) + 1;
@@ -209,124 +203,61 @@ async function run() {
     const k = kind[i];
     const colour = heightToColour(h);
 
-    // Normalised height 0…1
-    const t = Math.max(0, Math.min(1, h / 4));
+    const tile = document.createElement("div");
+    tile.className = "grid-cell difficulty-cell";
+    tile.style.position = "relative";
+    tile.style.aspectRatio = "1 / 1";
+    tile.style.background = colour;
+    tile.style.display = "flex";
+    tile.style.alignItems = "center";
+    tile.style.justifyContent = "center";
+    tile.style.fontFamily = '"Share Tech Mono", monospace';
+    tile.style.fontSize = "0.72rem";
+    tile.style.color = textColourFor(colour);
+    tile.style.textShadow = "none";
+    tile.style.boxSizing = "border-box";
 
-    // At 70° pitch:
-    //  - top face offsets up‑left by `lift` (≈66% of real height)
-    //  - side band is `side` px tall (≈34% of real height)
-    //  - the left face is a narrow strip `side` px wide
-    const lift = t * VISIBLE_LIFT;
-    const side = t * SIDE_HEIGHT;
-
-    const wrap = document.createElement("div");
-    wrap.className = "grid-cell difficulty-cell";
-    wrap.style.position = "relative";
-    wrap.style.aspectRatio = "1 / 1";
-
-    // Base — dark footprint on the floor.
-    const base = document.createElement("div");
-    base.style.position = "absolute";
-    base.style.inset = "0";
-    base.style.background = shade(colour, -0.65);
-    base.style.borderRadius = "2px";
-    wrap.appendChild(base);
-
-    if (side > 0.3) {
-      // Left face — visible because we're looking slightly from the right.
-      // It runs the full height of the block, from base up to the top face.
-      const leftFace = document.createElement("div");
-      leftFace.style.position = "absolute";
-      leftFace.style.left = `${-lift}px`;
-      leftFace.style.top = `${-lift}px`;
-      leftFace.style.width = `${side}px`;
-      leftFace.style.height = `calc(100% + ${lift}px)`;
-      leftFace.style.background =
-        `linear-gradient(to right, ${shade(colour, -0.32)}, ${shade(colour, -0.55)})`;
-      leftFace.style.borderRadius = "2px 0 0 2px";
-      wrap.appendChild(leftFace);
-
-      // Front face — visible because we're looking slightly from above.
-      // It's the bottom strip between the top face and the base.
-      const frontFace = document.createElement("div");
-      frontFace.style.position = "absolute";
-      frontFace.style.left = `${-lift}px`;
-      frontFace.style.bottom = "0";
-      frontFace.style.width = `calc(100% + ${lift}px)`;
-      frontFace.style.height = `${side}px`;
-      frontFace.style.background =
-        `linear-gradient(to bottom, ${shade(colour, -0.22)}, ${shade(colour, -0.5)})`;
-      frontFace.style.borderRadius = "0 0 2px 2px";
-      wrap.appendChild(frontFace);
-    }
-
-    // Top face — the visible lid, shifted up‑left by `lift`.
-    const top = document.createElement("div");
-    top.style.position = "absolute";
-    top.style.left = `${-lift}px`;
-    top.style.top = `${-lift}px`;
-    top.style.width = "100%";
-    top.style.height = "100%";
-    top.style.borderRadius = "2px";
-    top.style.background = colour;
-    top.style.display = "flex";
-    top.style.alignItems = "center";
-    top.style.justifyContent = "center";
-    top.style.fontFamily = '"Share Tech Mono", monospace';
-    top.style.fontSize = "0.72rem";
-    top.style.color = "#fff";
-    top.style.textShadow = "0 1px 2px rgba(0,0,0,0.85)";
-
-    // Shadow: at 70° the shadow is longer and more noticeable.
-    top.style.boxShadow =
-      `0 ${SHADOW_OFFSET + side * 0.9}px ${SHADOW_BLUR + side * 1.1}px rgba(0,0,0,0.6), ` +
-      `inset 0 1px 0 rgba(255,255,255,0.12)`;
-    top.style.transition = "top 120ms ease-out, left 120ms ease-out, box-shadow 120ms ease-out";
-    top.style.zIndex = "2";
-
-    // Contour lines on the top face.
+    // Contour lines — dark inset borders on the boundaries.
     for (const s of contourSides(height, map.cols, map.rows, i)) {
-      if (s === "top")    top.style.boxShadow += ", inset 0 2px 0 rgba(0,0,0,0.65)";
-      if (s === "bottom") top.style.boxShadow += ", inset 0 -2px 0 rgba(0,0,0,0.65)";
-      if (s === "left")   top.style.boxShadow += ", inset 2px 0 0 rgba(0,0,0,0.65)";
-      if (s === "right")  top.style.boxShadow += ", inset -2px 0 0 rgba(0,0,0,0.65)";
+      const line = "inset 0 0 0 1px rgba(0,0,0,0.45)";
+      if (s === "top")    tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 2px 0 rgba(0,0,0,0.45)";
+      if (s === "bottom") tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 0 -2px 0 rgba(0,0,0,0.45)";
+      if (s === "left")   tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset 2px 0 0 rgba(0,0,0,0.45)";
+      if (s === "right")  tile.style.boxShadow += (tile.style.boxShadow ? ", " : "") + "inset -2px 0 0 rgba(0,0,0,0.45)";
     }
 
     if (cell && cell.kind === "problem") {
-      top.textContent = String(cell.problemNo);
+      tile.textContent = String(cell.problemNo);
     } else if (k === "obstacle") {
-      top.style.background =
-        `repeating-linear-gradient(45deg, ${shade(colour, -0.1)} 0 6px, ${shade(colour, 0.1)} 6px 12px)`;
+      tile.style.background =
+        "repeating-linear-gradient(45deg, #2c2c3a 0 5px, #3a3a4c 5px 10px)";
+      tile.style.color = "#ddd";
     } else if (k === "spawnpoint") {
-      top.textContent = "★";
+      tile.textContent = "★";
+      tile.style.color = "#fff";
+      tile.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
     }
 
-    wrap.appendChild(top);
-    gridEl.appendChild(wrap);
-    tiles.push({ wrap, top, lift, side });
+    tile.title = labelFor(cell, k, row, column, findProblem, h);
+    gridEl.appendChild(tile);
   }
 
-  // Hover: lift the top face another 3px.
-  tiles.forEach(({ wrap, top, lift, side }) => {
-    wrap.addEventListener("mouseenter", () => {
-      top.style.left = `${-lift - 3}px`;
-      top.style.top = `${-lift - 3}px`;
-      top.style.boxShadow =
-        `0 ${SHADOW_OFFSET + 3 + side * 0.9}px ${SHADOW_BLUR + 3 + side * 1.1}px rgba(0,0,0,0.75), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.18)`;
-      wrap.style.zIndex = "5";
-    });
-    wrap.addEventListener("mouseleave", () => {
-      top.style.left = `${-lift}px`;
-      top.style.top = `${-lift}px`;
-      top.style.boxShadow =
-        `0 ${SHADOW_OFFSET + side * 0.9}px ${SHADOW_BLUR + side * 1.1}px rgba(0,0,0,0.6), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.12)`;
-      wrap.style.zIndex = "";
-    });
-  });
+  // Faint hairline grid so cells remain countable without dominating.
+  gridEl.style.backgroundImage =
+    "linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px)," +
+    "linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px)";
+  gridEl.style.backgroundSize = `calc(100% / ${map.cols}) calc(100% / ${map.rows})`;
 
   renderLegend();
+}
+
+function labelFor(cell, kind, row, column, findProblem, h) {
+  const base = cell
+    ? cell.kind === "problem"
+      ? `${cell.type} #${cell.problemNo} — ${problemDifficulty(findProblem(cell.problemNo, cell.type)) || "unknown"}`
+      : cell.kind
+    : "empty";
+  return `${base} (r${row} c${column}) · elevation ${h.toFixed(2)}`;
 }
 
 function renderLegend() {
@@ -341,7 +272,7 @@ function renderLegend() {
     sw.style.height = "16px";
     sw.style.borderRadius = "3px";
     sw.style.background = colour;
-    sw.style.border = "1px solid rgba(255,255,255,0.2)";
+    sw.style.border = "1px solid rgba(0,0,0,0.3)";
     span.append(sw, document.createTextNode(label));
     legendEl.append(span);
   }
