@@ -9,6 +9,37 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+    <style>
+      .cat-section { margin-top: 32px; }
+      .cat-section h2 {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 12px;
+      }
+      .cat-section h2 .cat-tag {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--cyan);
+      }
+      .cat-section h2 .cat-count {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .cat-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+      }
+      .cat-empty {
+        margin: 0;
+        color: var(--muted);
+        font-family: var(--font-ui);
+        font-size: 13px;
+      }
+    </style>
   </head>
   <body>
     <main class="practice" style="max-width:56rem;margin:0 auto;padding:24px 16px 64px;">
@@ -16,22 +47,38 @@
       <h1>260xx Problems</h1>
       <p class="lead">Guests can view and submit. Answers are checked by the saved grader; nothing is written to the database.</p>
 
-      <div class="kind-choices" id="practice-filters" role="group" aria-label="Filter by category" style="margin:16px 0;">
-        <button type="button" data-cat="M" aria-pressed="true">M</button>
-        <button type="button" data-cat="O" aria-pressed="true">O</button>
-        <button type="button" data-cat="P" aria-pressed="true">P</button>
-        <button type="button" data-cat="S" aria-pressed="true">S</button>
-      </div>
-
       <ul class="legend">
         <li><span class="swatch fill easy"></span>Easy</li>
         <li><span class="swatch fill normal"></span>Normal</li>
         <li><span class="swatch fill hard"></span>Hard</li>
         <li><span class="swatch fill insane"></span>Insane</li>
       </ul>
+
       <p id="practice-error" class="form-error" hidden></p>
-      <p id="practice-empty" class="field-note" hidden>No problems available in this range.</p>
-      <div id="practice-grid" style="display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));" aria-live="polite"></div>
+
+      <section class="cat-section" data-cat="M">
+        <h2>Math <span class="cat-tag">M</span><span class="cat-count"></span></h2>
+        <div class="cat-grid" aria-live="polite"></div>
+        <p class="cat-empty" hidden>No Math problems.</p>
+      </section>
+
+      <section class="cat-section" data-cat="O">
+        <h2>OI <span class="cat-tag">O</span><span class="cat-count"></span></h2>
+        <div class="cat-grid" aria-live="polite"></div>
+        <p class="cat-empty" hidden>No OI problems.</p>
+      </section>
+
+      <section class="cat-section" data-cat="P">
+        <h2>Puzzle <span class="cat-tag">P</span><span class="cat-count"></span></h2>
+        <div class="cat-grid" aria-live="polite"></div>
+        <p class="cat-empty" hidden>No Puzzle problems.</p>
+      </section>
+
+      <section class="cat-section" data-cat="S">
+        <h2>Science <span class="cat-tag">S</span><span class="cat-count"></span></h2>
+        <div class="cat-grid" aria-live="polite"></div>
+        <p class="cat-empty" hidden>No Science problems.</p>
+      </section>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -44,15 +91,14 @@
         var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
         var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
-        var TAG_TO_TYPE = { M: "math", O: "oi", S: "science", P: "puzzle", T: "testing" };
+        var SECTIONS = [
+          { cat: "M", type: "math" },
+          { cat: "O", type: "oi" },
+          { cat: "P", type: "puzzle" },
+          { cat: "S", type: "science" },
+        ];
 
-        var grid = document.getElementById("practice-grid");
         var errorEl = document.getElementById("practice-error");
-        var emptyEl = document.getElementById("practice-empty");
-        var filters = document.getElementById("practice-filters");
-
-        var activeCats = new Set(["M", "O", "P", "S"]);
-        var allProblems = [];
 
         function tagOf(p) { return (TYPE_TAG[p.type] || "?") + p.index; }
 
@@ -66,25 +112,10 @@
             .trim();
         }
 
-        function renderList() {
-          grid.replaceChildren();
-          var visible = allProblems.filter(function (p) {
-            return activeCats.has(TYPE_TAG[p.type]);
-          });
-          // Order by index ascending, then by type tag.
-          visible.sort(function (a, b) {
-            return a.index - b.index || String(TYPE_TAG[a.type]).localeCompare(String(TYPE_TAG[b.type]));
-          });
-          emptyEl.hidden = visible.length > 0;
-          for (var i = 0; i < visible.length; i += 1) grid.append(card(visible[i]));
-        }
-
         function card(problem) {
           var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
           var link = document.createElement("a");
-          // Relative URL: index.html lives in /testing, so this resolves to
-          // /testing/problem.html?index=...&type=...
-          link.href = "problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
+          link.href = "/testing/problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
           link.target = "_blank";
           link.rel = "noopener";
           link.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;text-decoration:none;cursor:pointer;";
@@ -106,26 +137,32 @@
           return link;
         }
 
-        filters.addEventListener("click", function (event) {
-          var button = event.target.closest("[data-cat]");
-          if (!button) return;
-          var cat = button.dataset.cat;
-          if (activeCats.has(cat)) activeCats.delete(cat);
-          else activeCats.add(cat);
-          button.setAttribute("aria-pressed", String(activeCats.has(cat)));
-          renderList();
-        });
+        function renderSections(problems) {
+          for (var i = 0; i < SECTIONS.length; i += 1) {
+            var section = SECTIONS[i];
+            var sectionEl = document.querySelector('.cat-section[data-cat="' + section.cat + '"]');
+            if (!sectionEl) continue;
+            var gridEl = sectionEl.querySelector(".cat-grid");
+            var emptyEl = sectionEl.querySelector(".cat-empty");
+            var countEl = sectionEl.querySelector(".cat-count");
+            gridEl.replaceChildren();
+
+            var items = problems.filter(function (p) { return p.type === section.type; });
+            items.sort(function (a, b) { return a.index - b.index; });
+
+            countEl.textContent = items.length ? "(" + items.length + ")" : "";
+            emptyEl.hidden = items.length > 0;
+            for (var j = 0; j < items.length; j += 1) gridEl.append(card(items[j]));
+          }
+        }
 
         async function load() {
-          grid.replaceChildren();
-          emptyEl.hidden = true;
           errorEl.hidden = true;
           try {
             var res = await fetch(API_BASE + "?action=public-problems", { method: "GET" });
             var data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
-            allProblems = Array.isArray(data.problems) ? data.problems : [];
-            renderList();
+            renderSections(Array.isArray(data.problems) ? data.problems : []);
           } catch (error) {
             errorEl.hidden = false;
             errorEl.textContent = error.message || "Could not load problems.";
