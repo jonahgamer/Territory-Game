@@ -329,6 +329,7 @@ let problemDraft = null;
 let pendingProblemDraft = null;
 let problemDirty = false;
 let newMapMode = "official";
+let placeType = "math";
 let placeMode = "manual";
 let placePickSource = "random";
 const placePickTypes = new Set(["math"]);
@@ -2643,7 +2644,7 @@ function mapListItem(map) {
   name.className = "map-name";
   name.textContent = map.name;
   size.className = "map-size";
-  size.textContent = `${map.cols} × ${map.rows} · ${mapMode(map) === "testing" ? "Testing" : "Official"}`;
+  size.textContent = `${map.cols} × ${map.rows}`;
   label.append(name, size);
   openButton.append(createPreview(map), label);
   item.append(openButton);
@@ -3957,7 +3958,7 @@ function problemSnippet(problem) {
   div.querySelectorAll("script, style").forEach((node) => node.remove());
   const text = (div.textContent || "").replace(/\s+/g, " ").trim();
   if (!text) return "(empty)";
-  return text.length > 36 ? `${text.slice(0, 36).trimEnd()}…` : text;
+  return text;
 }
 
 function renderProblemEditor() {
@@ -5155,9 +5156,6 @@ function renderCompetitions() {
     const name = document.createElement("span");
     const detail = document.createElement("span");
     const map = maps.find((item) => item.id === contest.mapId);
-    const teamCount = (contest.teams || []).length;
-    const people = teamCount === 0 ? "No teams" : `${teamCount} team${teamCount === 1 ? "" : "s"}`;
-    const kind = isTestingContest(contest) ? "Testing" : "Competition";
 
     openButton.type = "button";
     openButton.className = "open-problem";
@@ -5166,8 +5164,7 @@ function renderCompetitions() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.append(`${map ? mapOptionLabel(map) : "Map removed"} · ${kind} · ${contestTimingLine(contest)} · ${people} · `);
-    detail.append(phaseClockNode(contest));
+    detail.textContent = contestListPreview(contest, map);
     openButton.append(name, detail);
     item.append(openButton);
     contestList.append(item);
@@ -5327,7 +5324,6 @@ function renderStudent() {
     const name = document.createElement("span");
     const detail = document.createElement("span");
     const map = maps.find((item) => item.id === contest.mapId);
-    const team = teamForUser(contest);
 
     openButton.type = "button";
     openButton.className = "open-problem";
@@ -5336,8 +5332,7 @@ function renderStudent() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.append(`${team.name} · ${map ? mapOptionLabel(map) : "Map removed"} · `);
-    detail.append(phaseClockNode(contest));
+    detail.textContent = contestListPreview(contest, map);
     openButton.append(name, detail);
     item.append(openButton);
     studentContestList.append(item);
@@ -5850,11 +5845,11 @@ function paintPhaseClocks() {
   }
 }
 
-function contestTimingLine(contest) {
+function contestListPreview(contest, map) {
+  const mapName = map ? map.name : "Map removed";
   const schedule = contestSchedule(contest);
-  if (!schedule) return "Schedule not set";
-  const contestMinutes = schedule.duration - schedule.spawn - schedule.ready;
-  return `Starts ${formatContestTime(schedule.startAt)} · spawn ${schedule.spawn} min · wait ${schedule.ready} min · contest ${contestMinutes} min`;
+  const when = schedule ? formatContestTime(schedule.startAt) : "Schedule not set";
+  return `${mapName} · ${when}`;
 }
 
 function readWholeMinutes(value) {

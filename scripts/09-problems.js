@@ -1118,7 +1118,7 @@ function problemSnippet(problem) {
   div.querySelectorAll("script, style").forEach((node) => node.remove());
   const text = (div.textContent || "").replace(/\s+/g, " ").trim();
   if (!text) return "(empty)";
-  return text.length > 36 ? `${text.slice(0, 36).trimEnd()}…` : text;
+  return text;
 }
 
 function renderProblemEditor() {

@@ -327,6 +327,7 @@ let problemDraft = null;
 let pendingProblemDraft = null;
 let problemDirty = false;
 let newMapMode = "official";
+let placeType = "math";
 let placeMode = "manual";
 let placePickSource = "random";
 const placePickTypes = new Set(["math"]);

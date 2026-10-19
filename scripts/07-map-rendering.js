@@ -74,7 +74,7 @@ function mapListItem(map) {
   name.className = "map-name";
   name.textContent = map.name;
   size.className = "map-size";
-  size.textContent = `${map.cols} × ${map.rows} · ${mapMode(map) === "testing" ? "Testing" : "Official"}`;
+  size.textContent = `${map.cols} × ${map.rows}`;
   label.append(name, size);
   openButton.append(createPreview(map), label);
   item.append(openButton);

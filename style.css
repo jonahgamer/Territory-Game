@@ -486,6 +486,9 @@ button[type="submit"],
 
 .map-name {
   font-size: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .map-size {
@@ -1547,7 +1550,9 @@ button[type="submit"],
 }
 
 .contest-name-label {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 40%;
   font-size: 22px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1555,8 +1560,7 @@ button[type="submit"],
 }
 
 .problem-snippet {
-  flex: 0 1 12rem;
-  max-width: 12rem;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
