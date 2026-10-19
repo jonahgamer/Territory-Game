@@ -463,7 +463,15 @@
               error.hidden = false;
               error.style.color = "#3ddc6a";
               error.textContent = "Accepted";
-              error.insertAdjacentHTML("beforeend", '<br><img src="https://nekos.best/api/v2/neko" alt="">');
+              fetch("https://nekos.best/api/v2/neko")
+    .then(function (r) { return r.json(); })
+    .then(function (json) {
+      var imgUrl = json.results && json.results[0] && json.results[0].url;
+      if (imgUrl) {
+        error.insertAdjacentHTML("beforeend", '<br><img src="' + imgUrl + '" alt="">');
+      }
+    })
+    .catch(function () {});
             } else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
