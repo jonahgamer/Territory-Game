@@ -89,7 +89,7 @@
               <button type="button" data-place-type="science" aria-pressed="false">Science</button>
               <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
             </div>
-            <label id="problem-no-field">Problem no. <input id="problem-no" type="number" min="1" max="999" value="1" /></label>
+            <label id="problem-no-field">Problem no. <input id="problem-no" type="number" min="1" max="99999" value="1" /></label>
             <label class="next-number"><input id="next-number" type="checkbox" checked /> Use the next number for each cell</label>
           </div>
           <div id="place-pick" hidden>
@@ -111,10 +111,10 @@
               <button type="button" data-pick-source="fixed" aria-pressed="false">Fixed index</button>
               <button type="button" data-pick-source="range" aria-pressed="false">Index range</button>
             </div>
-            <label id="place-fixed-field" hidden>Index <input id="place-fixed-index" type="number" min="1" max="999" value="1" /></label>
+            <label id="place-fixed-field" hidden>Index <input id="place-fixed-index" type="number" min="1" max="99999" value="1" /></label>
             <div id="place-range-field" class="place-range" hidden>
-              <label>From <input id="place-range-from" type="number" min="1" max="999" value="1" /></label>
-              <label>To <input id="place-range-to" type="number" min="1" max="999" value="20" /></label>
+              <label>From <input id="place-range-from" type="number" min="1" max="99999" value="1" /></label>
+              <label>To <input id="place-range-to" type="number" min="1" max="99999" value="20" /></label>
             </div>
           </div>
           <p id="problem-no-error" class="form-error" hidden></p>

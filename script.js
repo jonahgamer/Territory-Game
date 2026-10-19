@@ -10,7 +10,10 @@ const SESSION_KEY = "territory-game-session";
 const MIN_SIZE = 1;
 const MAX_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
-const MAX_PROBLEM_NO = 999;
+const MAX_PROBLEM_NO = 99999;
+const PROBLEM_YEAR = 26;
+const YEAR_INDEX_START = PROBLEM_YEAR * 1000 + 1;
+const YEAR_INDEX_END = PROBLEM_YEAR * 1000 + 999;
 const MAX_CONTEST_MINUTES = 10080;
 const PROBLEM_TYPES = [
   { id: "math", name: "Math", tag: "MO" },
@@ -2614,7 +2617,7 @@ function nextProblemNo(type) {
       if (cell.kind === "problem" && cell.type === type) used.add(cell.problemNo);
     }
   }
-  for (let index = MIN_PROBLEM_NO; index <= MAX_PROBLEM_NO; index += 1) {
+  for (let index = YEAR_INDEX_START; index <= YEAR_INDEX_END; index += 1) {
     if (!used.has(index)) return index;
   }
   return null;
@@ -2815,7 +2818,7 @@ function addProblem(type) {
   const problemType = typeInfo(type) ? type : "math";
   const index = nextProblemNo(problemType);
   if (index === null) {
-    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(problemType).name} problem indexes are in use.`, "warn");
+    showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(problemType).name}.`, "warn");
     return;
   }
   if (ROUTED) navigateTo(["problems", problemType, String(index)]);
@@ -2890,7 +2893,7 @@ function duplicateProblem(index, type) {
   const copyType = typeInfo(type) ? type : "math";
   const nextIndex = nextProblemNo(copyType);
   if (nextIndex === null) {
-    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(copyType).name} problem indexes are in use.`, "warn");
+    showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(copyType).name}.`, "warn");
     return;
   }
   const copy = {
@@ -2917,7 +2920,7 @@ function duplicateCurrentProblem() {
   const type = problemDraft.type;
   const nextIndex = nextProblemNo(type);
   if (nextIndex === null) {
-    showPageToast(`All ${MAX_PROBLEM_NO} ${typeInfo(type).name} problem indexes are in use.`, "warn");
+    showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(type).name}.`, "warn");
     return;
   }
   pendingProblemDraft = {

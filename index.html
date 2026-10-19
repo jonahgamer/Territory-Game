@@ -289,9 +289,9 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           <form id="problem-editor-form" class="problem-editor">
             <label id="problem-index-field">
               Index
-              <input id="problem-index-input" type="number" min="1" max="999" />
+              <input id="problem-index-input" type="number" min="1" max="99999" />
             </label>
-            <p id="problem-index-note" class="field-note">The map shows the type tag followed by this index, such as MO3. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+            <p id="problem-index-note" class="field-note">An index is the year and the problem number, such as 26001 for year 26, problem 001. The map shows the type tag in front, such as MO26001. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
             <p id="problem-index-error" class="form-error" hidden></p>
             <div class="kind-choices" id="problem-type-choices">
               <button type="button" data-problem-type="math">Math</button>
@@ -553,7 +553,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               </div>
               <label id="problem-no-field">
                 Problem no.
-                <input id="problem-no" type="number" min="1" max="999" value="1" />
+                <input id="problem-no" type="number" min="1" max="99999" value="1" />
               </label>
               <label class="next-number">
                 <input id="next-number" type="checkbox" checked />
@@ -581,16 +581,16 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               </div>
               <label id="place-fixed-field" hidden>
                 Index
-                <input id="place-fixed-index" type="number" min="1" max="999" value="1" />
+                <input id="place-fixed-index" type="number" min="1" max="99999" value="1" />
               </label>
               <div id="place-range-field" class="place-range" hidden>
                 <label>
                   From
-                  <input id="place-range-from" type="number" min="1" max="999" value="1" />
+                  <input id="place-range-from" type="number" min="1" max="99999" value="1" />
                 </label>
                 <label>
                   To
-                  <input id="place-range-to" type="number" min="1" max="999" value="20" />
+                  <input id="place-range-to" type="number" min="1" max="99999" value="20" />
                 </label>
               </div>
             </div>

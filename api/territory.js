@@ -53,7 +53,8 @@ function isAdmin(user) {
 const MIN_MAP_SIZE = 1;
 const MAX_MAP_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
-const MAX_PROBLEM_NO = 999;
+const MAX_PROBLEM_NO = 99999;
+const PROBLEM_YEAR = 26;
 const MAX_PROBLEM_TEXT = 50000;
 const MAX_PROBLEM_LOGIC = 10000;
 const MAX_TEST_TEXT = 10000;

@@ -8,7 +8,10 @@ const SESSION_KEY = "territory-game-session";
 const MIN_SIZE = 1;
 const MAX_SIZE = 40;
 const MIN_PROBLEM_NO = 1;
-const MAX_PROBLEM_NO = 999;
+const MAX_PROBLEM_NO = 99999;
+const PROBLEM_YEAR = 26;
+const YEAR_INDEX_START = PROBLEM_YEAR * 1000 + 1;
+const YEAR_INDEX_END = PROBLEM_YEAR * 1000 + 999;
 const MAX_CONTEST_MINUTES = 10080;
 const PROBLEM_TYPES = [
   { id: "math", name: "Math", tag: "MO" },

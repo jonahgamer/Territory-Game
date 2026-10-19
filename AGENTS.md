@@ -60,7 +60,7 @@ Login looks up the exact username. A banned account gets the same error as a bad
 
 Mongo database `territory_game` unless `MONGODB_DB` is set. Saves that replace a collection use a transaction, so the database must be a replica set.
 
-Maps are 1–40 by 1–40. A cell is `empty`, `obstacle`, `spawnpoint`, or `problem`. A problem cell stores `problemNo` (1–999) and `type` (`math`, `oi`, `science`, `puzzle`). Tags are MO, OI, SCI, PUZ plus that index. Identity of a problem is `(type, index)`. The same index in another type is a different problem.
+Maps are 1–40 by 1–40. A cell is `empty`, `obstacle`, `spawnpoint`, or `problem`. A problem cell stores `problemNo` and `type` (`math`, `oi`, `science`, `puzzle`). The tag is MO, OI, SCI, or PUZ plus the index. An index is `XYABC`: `XY` is the year (`26` for now) and `ABC` is the problem number `001`–`999`, so `26001` displays as `MO26001`. Any whole number from 1 to 99999 is still accepted. Identity is `(type, index)`.
 
 A problem is `{ index, type, prompt, answer, logic, difficulty }`. Difficulty is `easy` (1), `normal` (2), `hard` (3), or `insane` (4). Those points are the contest score. The grader’s 0–100 score is only pass or fail.
 

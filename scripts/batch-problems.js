@@ -37,7 +37,7 @@ function createBatchRow(index) {
   const indexInput = document.createElement("input");
   indexInput.type = "number";
   indexInput.min = "1";
-  indexInput.max = "999";
+  indexInput.max = String(MAX_PROBLEM_NO);
   indexInput.value = index === null || index === undefined ? "" : String(index);
   indexInput.dataset.batchIndex = "";
   indexLabel.append(indexInput);
@@ -83,7 +83,7 @@ function nextBatchIndex() {
   const last = rows[rows.length - 1];
   if (last) {
     const value = Number(last.querySelector("[data-batch-index]").value);
-    if (Number.isInteger(value) && value >= 1 && value < 999) return value + 1;
+    if (Number.isInteger(value) && value >= 1 && value < MAX_PROBLEM_NO) return value + 1;
   }
   return nextProblemNo(batchProblemType()) ?? "";
 }
@@ -96,7 +96,7 @@ function maybeAppendBatchRow() {
   const index = Number(values.index);
   if (!Number.isInteger(index) || !values.prompt.trim() || !values.answer.trim()) return;
   const next = index + 1;
-  if (next > 999) return;
+  if (next > MAX_PROBLEM_NO) return;
   if (rows.some((row, position) => position !== rows.length - 1 && Number(row.querySelector("[data-batch-index]").value) === next)) return;
   createBatchRow(next);
 }
@@ -148,8 +148,8 @@ function saveProblemBatch() {
     const hasContent = Boolean(values.prompt.trim() || values.answer.trim() || values.logic.trim());
     if (!hasContent) continue;
     const label = `Row ${position + 1}`;
-    if (!Number.isInteger(index) || index < 1 || index > 999) {
-      showBatchError(`${label}: enter an index from 1 to 999.`);
+    if (!Number.isInteger(index) || index < MIN_PROBLEM_NO || index > MAX_PROBLEM_NO) {
+      showBatchError(`${label}: enter an index from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.`);
       return;
     }
     if (!values.prompt.trim()) {

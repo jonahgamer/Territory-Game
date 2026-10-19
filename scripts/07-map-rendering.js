@@ -131,7 +131,7 @@ function nextProblemNo(type) {
       if (cell.kind === "problem" && cell.type === type) used.add(cell.problemNo);
     }
   }
-  for (let index = MIN_PROBLEM_NO; index <= MAX_PROBLEM_NO; index += 1) {
+  for (let index = YEAR_INDEX_START; index <= YEAR_INDEX_END; index += 1) {
     if (!used.has(index)) return index;
   }
   return null;
