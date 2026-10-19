@@ -29,8 +29,8 @@ const VALUE_TIER = ["", "easy", "normal", "hard", "insane"]; // index = value
 const ANCHOR = {
   1: { r: 0x2e, g: 0x7d, b: 0x32 }, // easy   green
   2: { r: 0xf9, g: 0xa8, b: 0x25 }, // med    yellow
-  3: { r: 0x6d, g: 0x4c, b: 0x41 }, // hard   brown
-  4: { r: 0xff, g: 0xff, b: 0xff }, // insane white
+  3: { r: 0xd3, g: 0x2f, b: 0x2f }, // hard   red
+  4: { r: 0x7b, g: 0x1f, b: 0xa2 }, // insane purple
 };
 
 // Non‑problem cell colours (flat, not blended).
