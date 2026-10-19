@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Problem browser · M260xx / OI260xx / SCI260xx / PUZ260xx</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    /* ---- minimal, self-contained styling (no external dependencies) ---- */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      background: #0b0f17;
+      color: #d6e6ff;
+      padding: 2rem 1.5rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app {
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 2.2rem;
+      letter-spacing: 1px;
+      color: #a6d4ff;
+      text-shadow: 0 0 8px #1e4a7a;
+      margin-bottom: 0.25rem;
+    }
+
+    .subhead {
+      font-size: 1rem;
+      color: #8aa9cc;
+      margin-bottom: 2rem;
+      border-left: 3px solid #2e6a9e;
+      padding-left: 1rem;
+      line-height: 1.5;
+    }
+
+    .prefix-badge {
+      display: inline-block;
+      background: #142233;
+      border: 1px solid #2e6a9e;
+      border-radius: 20px;
+      padding: 0.1rem 0.8rem;
+      font-size: 0.85rem;
+      margin-right: 0.3rem;
+      font-weight: 600;
+      color: #b8d8ff;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.8rem 1.5rem;
+      background: #111c2b;
+      border: 1px solid #1f3a55;
+      border-radius: 12px;
+      padding: 0.8rem 1.2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    }
+
+    .toolbar button {
+      background: #1b3148;
+      border: 1px solid #2e6a9e;
+      color: #d0e6ff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+
+    .toolbar button:hover:not(:disabled) {
+      background: #2a4a6a;
+      border-color: #4a8ac0;
+      color: #fff;
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .toolbar button.primary {
+      background: #1b4d6b;
+      border-color: #3f8ac9;
+      font-weight: 600;
+      color: #e1f0ff;
+    }
+
+    .toolbar button.primary:hover:not(:disabled) {
+      background: #266a91;
+    }
+
+    .toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: #9bb7d4;
+      cursor: pointer;
+    }
+
+    .toolbar input[type="checkbox"] {
+      accent-color: #3f8ac9;
+      width: 1.1rem;
+      height: 1.1rem;
+      cursor: pointer;
+    }
+
+    .status-line {
+      margin-left: auto;
+      font-size: 0.85rem;
+      color: #8aa9cc;
+      font-style: italic;
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 2rem;
+      margin-bottom: 1.5rem;
+      background: #0e1622;
+      border-radius: 10px;
+      padding: 0.75rem 1.2rem;
+      border: 1px solid #1a2c3e;
+    }
+
+    .stats span {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .stats .count {
+      font-weight: 700;
+      color: #b0d4ff;
+      font-size: 1.1rem;
+    }
+
+    .problem-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .problem-card {
+      background: #101c28;
+      border: 1px solid #1f3a55;
+      border-left: 6px solid #2e6a9e;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      transition: border-color 0.15s, background 0.15s;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .problem-card:hover {
+      border-left-color: #6ab0f0;
+      background: #142232;
+    }
+
+    .problem-card .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem 1rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .problem-tag {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: #b0d4ff;
+      background: #0a121e;
+      padding: 0.15rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid #2e6a9e;
+      letter-spacing: 0.5px;
+    }
+
+    .problem-type {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 0.15rem 0.7rem;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .type-math {
+      background: #1e3b4f;
+      color: #7ec8ff;
+      border: 1px solid #2e6a9e;
+    }
+    .type-oi {
+      background: #1f3b2e;
+      color: #7ed9a0;
+      border: 1px solid #2d7a4b;
+    }
+    .type-science {
+      background: #3b2e1f;
+      color: #e6c87e;
+      border: 1px solid #8a6a2e;
+    }
+    .type-puzzle {
+      background: #2e1f3b;
+      color: #c87ee6;
+      border: 1px solid #6a2e8a;
+    }
+
+    .difficulty-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.15rem 0.8rem;
+      border-radius: 12px;
+      letter-spacing: 0.5px;
+    }
+    .diff-easy { background: #0e4a2e; color: #6ee7a0; border: 1px solid #1a7a4a; }
+    .diff-normal { background: #3a3a1a; color: #e6e66e; border: 1px solid #7a7a2e; }
+    .diff-hard { background: #4a2a1a; color: #ffaa6e; border: 1px solid #aa5a2e; }
+    .diff-insane { background: #4a1a2a; color: #ff6e8e; border: 1px solid #aa2e4a; }
+
+    .problem-index-note {
+      font-size: 0.75rem;
+      color: #5a7a9a;
+      margin-left: auto;
+    }
+
+    .problem-prompt {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #c0d8f0;
+      background: #0a121e;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      margin: 0.6rem 0 0.3rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-left: 2px solid #1f3a55;
+      font-family: 'Share Tech Mono', monospace;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .problem-answer {
+      font-size: 0.9rem;
+      color: #8aa9cc;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: #0a121e;
+      display: inline-block;
+      margin-top: 0.3rem;
+    }
+
+    .problem-answer strong {
+      color: #b0d4ff;
+      font-weight: 600;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #5a7a9a;
+      font-size: 1.2rem;
+      border: 2px dashed #1a2c3e;
+      border-radius: 16px;
+      background: #0a101a;
+    }
+
+    .empty-state i {
+      font-size: 2.5rem;
+      display: block;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .error-banner {
+      background: #2a1010;
+      border: 1px solid #aa2e2e;
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      color: #ff9a9a;
+      margin-bottom: 2rem;
+      font-size: 0.95rem;
+    }
+
+    .error-banner strong {
+      color: #ff6a6a;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 1.2rem;
+      height: 1.2rem;
+      border: 2px solid #2e6a9e;
+      border-top-color: #b0d4ff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .page-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1b3148;
+      border: 1px solid #3f8ac9;
+      border-radius: 10px;
+      padding: 0.8rem 1.5rem;
+      color: #e1f0ff;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+      font-size: 0.9rem;
+      max-width: 400px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .page-toast button {
+      background: none;
+      border: 1px solid #3f8ac9;
+      color: #b0d4ff;
+      padding: 0.2rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.8rem;
+    }
+
+    .page-toast button:hover {
+      background: #2a4a6a;
+    }
+
+    @media (max-width: 650px) {
+      body { padding: 1rem 0.75rem; }
+      h1 { font-size: 1.6rem; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .status-line { margin-left: 0; text-align: right; }
+      .problem-card { padding: 0.8rem 1rem; }
+      .problem-tag { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>📚 Problem browser</h1>
+    <div class="subhead">
+      Showing problems with prefix
+      <span class="prefix-badge">M260xx</span>
+      <span class="prefix-badge">OI260xx</span>
+      <span class="prefix-badge">SCI260xx</span>
+      <span class="prefix-badge">PUZ260xx</span>
+      <br />
+      <small style="color:#6a8aaa;">xx = any two digits (00–99) · data loaded from the same backend as the Territory Game</small>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button id="refresh-btn" class="primary" type="button">
+        <span class="spinner" id="refresh-spinner" hidden></span>
+        <span id="refresh-label">⟳ Refresh</span>
+      </button>
+      <label>
+        <input type="checkbox" id="auto-refresh" checked />
+        Auto‑refresh every 30s
+      </label>
+      <button id="toggle-empty-btn" type="button">Hide empty types</button>
+      <span class="status-line" id="status-line">Ready</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" id="stats-panel">
+      <span>📊 Total: <span class="count" id="stat-total">—</span></span>
+      <span>🧮 Math: <span class="count" id="stat-math">—</span></span>
+      <span>💻 OI: <span class="count" id="stat-oi">—</span></span>
+      <span>🔬 Science: <span class="count" id="stat-science">—</span></span>
+      <span>🧩 Puzzle: <span class="count" id="stat-puzzle">—</span></span>
+    </div>
+
+    <!-- Error banner -->
+    <div id="error-banner" class="error-banner" hidden></div>
+
+    <!-- Problem list -->
+    <div id="problem-list-container" class="problem-grid">
+      <div class="empty-state">
+        <i>⏳</i>
+        Loading problems…
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="page-toast" class="page-toast" hidden>
+    <p id="page-toast-message" style="margin:0; flex:1;">Message</p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // ------------------------------------------------------------------
+      // Configuration
+      // ------------------------------------------------------------------
+      const API_ENDPOINT = '/api/problems';           // <-- adjust if your backend path differs
+      const PREFIX_PATTERN = /^(M|OI|SCI|PUZ)260\d{2}$/;   // M260xx, OI260xx, SCI260xx, PUZ260xx
+      const AUTO_REFRESH_MS = 30000;
+      const MAX_PROMPT_PREVIEW = 400;
+
+      // ------------------------------------------------------------------
+      // State
+      // ------------------------------------------------------------------
+      let allProblems = [];
+      let hideEmptyTypes = false;
+      let autoRefreshTimer = null;
+      let isLoading = false;
+      let lastFetchTime = null;
+
+      // ------------------------------------------------------------------
+      // DOM references
+      // ------------------------------------------------------------------
+      const $ = (id) => document.getElementById(id);
+
+      const refreshBtn = $('refresh-btn');
+      const refreshLabel = $('refresh-label');
+      const refreshSpinner = $('refresh-spinner');
+      const autoRefreshCheckbox = $('auto-refresh');
+      const toggleEmptyBtn = $('toggle-empty-btn');
+      const statusLine = $('status-line');
+      const statsPanel = $('stats-panel');
+      const statTotal = $('stat-total');
+      const statMath = $('stat-math');
+      const statOi = $('stat-oi');
+      const statScience = $('stat-science');
+      const statPuzzle = $('stat-puzzle');
+      const errorBanner = $('error-banner');
+      const listContainer = $('problem-list-container');
+      const toast = $('page-toast');
+      const toastMessage = $('page-toast-message');
+      const toastClose = $('page-toast-close');
+
+      // ------------------------------------------------------------------
+      // Helpers
+      // ------------------------------------------------------------------
+
+      function showToast(msg, duration = 5000) {
+        toastMessage.textContent = msg;
+        toast.hidden = false;
+        if (duration > 0) {
+          clearTimeout(toast._timeout);
+          toast._timeout = setTimeout(() => { toast.hidden = true; }, duration);
+        }
+      }
+
+      function hideToast() {
+        toast.hidden = true;
+        clearTimeout(toast._timeout);
+      }
+
+      toastClose.addEventListener('click', hideToast);
+
+      function setLoading(loading) {
+        isLoading = loading;
+        refreshBtn.disabled = loading;
+        refreshSpinner.hidden = !loading;
+        refreshLabel.textContent = loading ? 'Loading…' : '⟳ Refresh';
+      }
+
+      function setStatus(text, isError = false) {
+        statusLine.textContent = text;
+        statusLine.style.color = isError ? '#ff9a9a' : '#8aa9cc';
+      }
+
+      function showError(msg) {
+        errorBanner.hidden = false;
+        errorBanner.innerHTML = '<strong>⚠ Error:</strong> ' + escapeHtml(msg);
+        setStatus('Error loading data', true);
+      }
+
+      function clearError() {
+        errorBanner.hidden = true;
+        errorBanner.innerHTML = '';
+      }
+
+      function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+      }
+
+      // ------------------------------------------------------------------
+      // Type detection from tag
+      // ------------------------------------------------------------------
+      function getTypeFromTag(tag) {
+        if (!tag) return 'unknown';
+        const t = tag.trim().toUpperCase();
+        if (t.startsWith('M260')) return 'math';
+        if (t.startsWith('OI260')) return 'oi';
+        if (t.startsWith('SCI260')) return 'science';
+        if (t.startsWith('PUZ260')) return 'puzzle';
+        return 'unknown';
+      }
+
+      function getTypeLabel(type) {
+        switch (type) {
+          case 'math': return 'Math';
+          case 'oi': return 'OI';
+          case 'science': return 'Science';
+          case 'puzzle': return 'Puzzle';
+          default: return 'Other';
+        }
+      }
+
+      function getTypeClass(type) {
+        return 'type-' + (type === 'unknown' ? 'math' : type); // fallback
+      }
+
+      function getDifficultyInfo(difficulty) {
+        const d = (difficulty || 'easy').toLowerCase();
+        const map = {
+          easy:   { label: 'Easy',   cls: 'diff-easy'   },
+          normal: { label: 'Normal', cls: 'diff-normal' },
+          hard:   { label: 'Hard',   cls: 'diff-hard'   },
+          insane: { label: 'Insane', cls: 'diff-insane' },
+        };
+        return map[d] || map.easy;
+      }
+
+      // ------------------------------------------------------------------
+      // Fetch & filter
+      // ------------------------------------------------------------------
+      async function fetchProblems() {
+        if (isLoading) return;
+        setLoading(true);
+        clearError();
+        setStatus('Fetching…');
+
+        try {
+          const res = await fetch(API_ENDPOINT, {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store',
+          });
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${res.statusText}`);
+          }
+
+          const data = await res.json();
+
+          // Normalise: accept array directly or { problems: [...] } or { data: [...] }
+          let problems = [];
+          if (Array.isArray(data)) {
+            problems = data;
+          } else if (Array.isArray(data.problems)) {
+            problems = data.problems;
+          } else if (Array.isArray(data.data)) {
+            problems = data.data;
+          } else {
+            throw new Error('Unexpected response format: expected an array of problems');
+          }
+
+          // Filter by tag prefix
+          const filtered = problems.filter(p => {
+            const tag = (p.tag || p.indexTag || p.index || '').toString().trim().toUpperCase();
+            return PREFIX_PATTERN.test(tag);
+          });
+
+          allProblems = filtered;
+          lastFetchTime = new Date();
+          setStatus(`Loaded ${filtered.length} matching problem${filtered.length !== 1 ? 's' : ''} · ${lastFetchTime.toLocaleTimeString()}`);
+          clearError();
+          render();
+        } catch (err) {
+          console.error('Fetch error:', err);
+          showError(err.message || 'Failed to fetch problems. Is the API running?');
+          // Keep old data if any
+          if (allProblems.length === 0) {
+            listContainer.innerHTML = `
+              <div class="empty-state">
+                <i>⚠️</i>
+                Could not load problems.<br />
+                <small style="display:block;margin-top:0.8rem;color:#5a7a9a;">Check that the backend is running at <code>${escapeHtml(API_ENDPOINT)}</code></small>
+              </div>`;
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // ------------------------------------------------------------------
+      // Rendering
+      // ------------------------------------------------------------------
+      function render() {
+        // Stats
+        const counts = { math: 0, oi: 0, science: 0, puzzle: 0, unknown: 0 };
+        allProblems.forEach(p => {
+          const tag = (p.tag || p.indexTag || p.index || '').toString().trim().toUpperCase();
+          const type = getTypeFromTag(tag);
+          counts[type] = (counts[type] || 0) + 1;
+        });
+
+        statTotal.textContent = allProblems.length;
+        statMath.textContent = counts.math;
+        statOi.textContent = counts.oi;
+        statScience.textContent = counts.science;
+        statPuzzle.textContent = counts.puzzle;
+
+        // Filter by type visibility
+        let visible = allProblems;
+        if (hideEmptyTypes) {
+          visible = allProblems.filter(p => {
+            const tag = (p.tag || p.indexTag || p.index || '').toString().trim().toUpperCase();
+            return getTypeFromTag(tag) !== 'unknown';
+          });
+          // Actually "hide empty types" should hide problems whose type has no problems — but all have at least themselves.
+          // So instead: if a type count is 0, we hide nothing extra; but the button intent is to hide types with zero problems.
+          // We'll instead filter out types that have zero count (which is impossible for a problem itself) — but the button is still useful if we later show groups.
+          // For now, just keep all; we'll repurpose the button to toggle showing only non-zero groups (visual grouping).
+          // Since we render flat, we'll just toggle a class on the container. We'll implement it as: hide problems of types that have zero count (none) — so effectively no change.
+          // Better: hide the *group headers* if we grouped. We are not grouping, so we'll just show a message.
+          // Actually: let's make the button filter out problems whose type tag is malformed (unknown). That's useful.
+          // We'll keep that logic.
+        }
+
+        // Sort by tag (then by index)
+        visible = [...visible].sort((a, b) => {
+          const tagA = (a.tag || a.indexTag || a.index || '').toString().trim().toUpperCase();
+          const tagB = (b.tag || b.indexTag || b.index || '').toString().trim().toUpperCase();
+          return tagA.localeCompare(tagB);
+        });
+
+        // Render
+        if (visible.length === 0) {
+          listContainer.innerHTML = `
+            <div class="empty-state">
+              <i>🔍</i>
+              ${allProblems.length === 0
+                ? 'No problems found with the requested prefixes.<br /><small style="color:#5a7a9a;">Try refreshing — or check that the backend has problems tagged M260xx, OI260xx, SCI260xx, or PUZ260xx.</small>'
+                : 'All matching problems are hidden by the current filter.<br /><small style="color:#5a7a9a;">Toggle “Hide empty types” to show everything.</small>'}
+            </div>`;
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        visible.forEach(problem => {
+          const tag = (problem.tag || problem.indexTag || problem.index || '???').toString().trim();
+          const tagUpper = tag.toUpperCase();
+          const type = getTypeFromTag(tagUpper);
+          const typeLabel = getTypeLabel(type);
+          const typeClass = getTypeClass(type);
+          const difficulty = getDifficultyInfo(problem.difficulty);
+          const prompt = problem.prompt || problem.statement || problem.question || '(no statement)';
+          const answer = problem.answer || problem.expected || '(hidden)';
+
+          const card = document.createElement('div');
+          card.className = 'problem-card';
+          card.dataset.type = type;
+
+          // Build prompt preview
+          let promptPreview = prompt.length > MAX_PROMPT_PREVIEW
+            ? prompt.slice(0, MAX_PROMPT_PREVIEW) + '…'
+            : prompt;
+
+          card.innerHTML = `
+            <div class="tag-row">
+              <span class="problem-tag">${escapeHtml(tagUpper)}</span>
+              <span class="problem-type ${typeClass}">${escapeHtml(typeLabel)}</span>
+              <span class="difficulty-badge ${difficulty.cls}">${difficulty.label}</span>
+              <span class="problem-index-note">index: ${escapeHtml(problem.index || tagUpper)}</span>
+            </div>
+            <div class="problem-prompt">${escapeHtml(promptPreview)}</div>
+            <div class="problem-answer"><strong>Answer:</strong> ${escapeHtml(answer)}</div>
+          `;
+
+          fragment.appendChild(card);
+        });
+
+        listContainer.innerHTML = '';
+        listContainer.appendChild(fragment);
+      }
+
+      // ------------------------------------------------------------------
+      // Toggle empty types (repurposed: hide problems with malformed tags)
+      // ------------------------------------------------------------------
+      function updateToggleButtonLabel() {
+        toggleEmptyBtn.textContent = hideEmptyTypes ? 'Show all types' : 'Hide empty types';
+      }
+
+      toggleEmptyBtn.addEventListener('click', () => {
+        hideEmptyTypes = !hideEmptyTypes;
+        updateToggleButtonLabel();
+        render();
+      });
+
+      // ------------------------------------------------------------------
+      // Auto-refresh
+      // ------------------------------------------------------------------
+      function startAutoRefresh() {
+        stopAutoRefresh();
+        if (!autoRefreshCheckbox.checked) return;
+        autoRefreshTimer = setInterval(() => {
+          if (!isLoading) fetchProblems();
+        }, AUTO_REFRESH_MS);
+      }
+
+      function stopAutoRefresh() {
+        if (autoRefreshTimer) {
+          clearInterval(autoRefreshTimer);
+          autoRefreshTimer = null;
+        }
+      }
+
+      autoRefreshCheckbox.addEventListener('change', () => {
+        if (autoRefreshCheckbox.checked) {
+          startAutoRefresh();
+          showToast('Auto-refresh enabled (every 30s)', 3000);
+        } else {
+          stopAutoRefresh();
+          showToast('Auto-refresh disabled', 3000);
+        }
+      });
+
+      // ------------------------------------------------------------------
+      // Manual refresh
+      // ------------------------------------------------------------------
+      refreshBtn.addEventListener('click', () => {
+        fetchProblems();
+      });
+
+      // ------------------------------------------------------------------
+      // Init
+      // ------------------------------------------------------------------
+      function init() {
+        updateToggleButtonLabel();
+        fetchProblems();
+        startAutoRefresh();
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', stopAutoRefresh);
+      }
+
+      init();
+
+    })();
+  </script>
+</body>
+</html>
