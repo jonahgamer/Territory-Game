@@ -195,12 +195,14 @@
           }
         }
 
-        function card(problem) {
+                function card(problem) {
           var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
-          var card = document.createElement("button");
-          card.type = "button";
-          card.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;cursor:pointer;";
-          card.setAttribute("aria-label", "Open " + tagOf(problem));
+          var link = document.createElement("a");
+          link.href = "problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;text-decoration:none;cursor:pointer;";
+          link.setAttribute("aria-label", "Open " + tagOf(problem) + " in a new tab");
 
           var tag = document.createElement("span");
           tag.style.cssText = "font-family:var(--font-ui);font-size:18px;font-weight:700;letter-spacing:.04em;";
@@ -214,9 +216,8 @@
           preview.style.cssText = "font-family:var(--font-ui);font-size:13px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;";
           preview.textContent = plainText(problem.prompt) || "(empty)";
 
-          card.append(tag, diff, preview);
-          card.addEventListener("click", function () { openModal(problem); });
-          return card;
+          link.append(tag, diff, preview);
+          return link;
         }
 
         function openModal(problem) {

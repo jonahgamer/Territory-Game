@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Problem · Practice</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+  </head>
+  <body>
+    <main class="answer-page">
+      <p id="answer-status" class="form-error" hidden></p>
+      <h1 id="student-problem-tag"></h1>
+      <div id="student-problem-prompt"></div>
+      <form id="student-answer-form">
+        <label>
+          Answer
+          <input id="student-answer" type="text" maxlength="5000" />
+        </label>
+        <button type="submit">Submit</button>
+        <p id="student-answer-error" class="form-error" hidden></p>
+      </form>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <script>
+      (function () {
+        "use strict";
+
+        var API_BASE = "/api/territory";
+        var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
+        var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+        var TYPE_TAG = { oi: "O", science: "S", puzzle: "P", testing: "T" };
+
+        var params = new URLSearchParams(location.search);
+        var index = Number(params.get("index"));
+        var type = params.get("type") || "";
+
+        var status = document.getElementById("answer-status");
+        var title = document.getElementById("student-problem-tag");
+        var prompt = document.getElementById("student-problem-prompt");
+        var form = document.getElementById("student-answer-form");
+        var answer = document.getElementById("student-answer");
+        var error = document.getElementById("student-answer-error");
+
+        function showStatus(message) {
+          status.hidden = false;
+          status.textContent = message;
+        }
+
+        function tagOf(p) { return (TYPE_TAG[p.type] || "?") + p.index; }
+
+        // ── buildStatementDocument / setRichText copied from script.js ──
+        var STATEMENT_KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+        var STATEMENT_KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
+        var STATEMENT_AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
+        var statementFrames = new WeakMap();
+
+        function escapeStatementText(value) {
+          return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+        function containsHtml(source) {
+          return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
+        }
+        function buildStatementDocument(source, tag) {
+          tag = tag || "";
+          var text = String(source || "");
+          var tagText = escapeStatementText(tag);
+          var body = containsHtml(text)
+            ? text
+            : '<pre class="statement-text">' + escapeStatementText(text) + "</pre>";
+          return '<!doctype html><html><head><meta charset="utf-8">'
+            + '<link rel="stylesheet" href="' + STATEMENT_KATEX_CSS + '" crossorigin="anonymous">'
+            + '<style>'
+            + "html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }"
+            + 'body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }'
+            + "#territory-bridge { display: none; }"
+            + ".statement-content { overflow-wrap: anywhere; font-size: 16px; }"
+            + ".katex { font-size: 1em; }"
+            + ".statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }"
+            + ".statement-content img, .statement-content video,"
+            + ".statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }"
+            + ".statement-content table { max-width: 100%; border-collapse: collapse; }"
+            + ".statement-content a { color: #3ee0ff; }"
+            + "</style>"
+            + '<script src="' + STATEMENT_KATEX_JS + '" crossorigin="anonymous"><\/script>'
+            + '<script src="' + STATEMENT_AUTO_RENDER_JS + '" crossorigin="anonymous"><\/script>'
+            + "<script>"
+            + "(function () {"
+            + "  function report() {"
+            + "    try {"
+            + "      const height = Math.max("
+            + "        document.documentElement.scrollHeight,"
+            + "        document.body ? document.body.scrollHeight : 0"
+            + "      );"
+            + "      parent.postMessage({ type: \"territory-statement-height\", height: height }, \"*\");"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  function renderMath() {"
+            + "    if (typeof renderMathInElement !== \"function\") return;"
+            + "    try {"
+            + "      renderMathInElement(document.querySelector(\".statement-content\"), {"
+            + "        delimiters: ["
+            + "          { left: \"$$\", right: \"$$\", display: true },"
+            + "          { left: \"\\\\[\", right: \"\\\\]\", display: true },"
+            + "          { left: \"$\", right: \"$\", display: false },"
+            + "          { left: \"\\\\(\", right: \"\\\\)\", display: false }"
+            + "        ],"
+            + "        throwOnError: false,"
+            + "        strict: \"ignore\""
+            + "      });"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  let booted = false;"
+            + "  function boot() {"
+            + "    if (booted) return;"
+            + "    booted = true;"
+            + "    renderMath();"
+            + "    report();"
+            + "    try { if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement); } catch (error) {}"
+            + "    try { new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true }); } catch (error) {}"
+            + "  }"
+            + "  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", boot);"
+            + "  else boot();"
+            + "  window.addEventListener(\"load\", boot);"
+            + "})();"
+            + "<\/script>"
+            + "</head><body>"
+            + '<div id="territory-bridge" aria-hidden="true">'
+            + '  <span id="student-problem-tag">' + tagText + "</span>"
+            + '  <form id="student-answer-form"><button type="submit">Submit</button></form>'
+            + '  <input id="student-answer" type="text" />'
+            + '  <p id="student-answer-error" hidden></p>'
+            + "</div>"
+            + '<div class="statement-content">' + body + "</div>"
+            + "</body></html>";
+        }
+        function setRichText(element, source, options) {
+          options = options || {};
+          var text = String(source || "");
+          element.replaceChildren();
+          element.classList.add("rich-html", "isolated-statement");
+          var frame = document.createElement("iframe");
+          frame.className = "statement-frame";
+          frame.setAttribute("sandbox", "allow-scripts");
+          frame.setAttribute("title", "Problem statement");
+          frame.style.height = "120px";
+          frame.srcdoc = buildStatementDocument(text, options.tag || "");
+          element.append(frame);
+          if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
+          return frame;
+        }
+        window.addEventListener("message", function (event) {
+          var data = event.data;
+          if (!data || typeof data.type !== "string") return;
+          var frame = statementFrames.get(event.source);
+          if (!frame) return;
+          if (data.type === "territory-statement-height") {
+            var height = Number(data.height);
+            if (!Number.isFinite(height)) return;
+            frame.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
+          }
+        });
+        // ────────────────────────────────────────────────────────────
+
+        async function loadProblem() {
+          if (!Number.isInteger(index) || !type) {
+            showStatus("This problem link is not valid.");
+            form.hidden = true;
+            return;
+          }
+          try {
+            var res = await fetch(API_BASE + "?action=public-problems", { method: "GET" });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+            var list = Array.isArray(data.problems) ? data.problems : [];
+            var problem = list.find(function (p) { return p.index === index && p.type === type; });
+            if (!problem) {
+              showStatus("That problem is not available.");
+              form.hidden = true;
+              return;
+            }
+            var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
+            title.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+            document.title = tagOf(problem) + " · Practice";
+            setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
+            if (answer.offsetParent !== null) answer.focus();
+          } catch (e) {
+            showStatus(e.message || "The problem could not be opened.");
+            form.hidden = true;
+          }
+        }
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          error.hidden = true;
+          var button = form.querySelector("button");
+          if (button.disabled) return;
+          var label = button.textContent;
+          button.disabled = true;
+          button.textContent = "Checking...";
+          try {
+            var res = await fetch(API_BASE + "?action=public-check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ index: index, type: type, answer: answer.value }),
+            });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
+            if (data.systemError) {
+              error.hidden = false;
+              error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
+            } else if (data.correct) {
+              form.hidden = true;
+              showStatus("Answer accepted. You can close this tab.");
+            } else {
+              error.hidden = false;
+              error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
+            }
+          } catch (e) {
+            error.hidden = false;
+            error.textContent = e.message;
+          } finally {
+            button.disabled = false;
+            button.textContent = label;
+          }
+        });
+
+        loadProblem();
+      })();
+    </script>
+  </body>
+</html>
