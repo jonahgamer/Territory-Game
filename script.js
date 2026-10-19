@@ -351,8 +351,8 @@ const spawnAgreementCache = new Map();
 const ANSWER_OPEN_MODE_KEY = "territory-answer-open-mode";
 let answerOpenMode = readAnswerOpenMode();
 
-// Routing is only enabled on the full single-page app. The split pages in
-// ui2/ keep their own real URLs and are handled by openSplitPage().
+// The student page and each admin page are separate documents. Hash routing
+// runs only when every view is on the same page.
 const ROUTED = Boolean(homeView && mapsView && problemsView && competitionsView && settingsView && tutorialView && creditsView);
 let routeApplying = false;
 let routeLast = "";
@@ -412,7 +412,47 @@ const _persistContestsDebounced = debounce(() => { persistContestsNow(); }, 600)
 //   #/student                      #/student/<contestId>
 //   #/settings                     #/tutorial                     #/credits
 //
-// ui2/ pages keep their own real URLs and call openSplitPage() instead.
+function routeFromPath(path) {
+  const parts = (Array.isArray(path) ? path : String(path || "").split("/"))
+    .map((part) => String(part ?? "").trim())
+    .filter((part) => part.length > 0);
+  return { name: parts[0] || "home", parts: parts.slice(1) };
+}
+
+function splitPageUrl(path) {
+  const route = routeFromPath(path);
+  const contestant = isContestant();
+  if (route.name === "home") return contestant ? "/index.html" : "/admin/maps.html";
+  if (route.name === "student" || (route.name === "contests" && contestant)) {
+    return route.parts[0] ? `/index.html?contest=${encodeURIComponent(route.parts[0])}` : "/index.html";
+  }
+  if (route.name === "settings" && contestant) return "/index.html?settings=1";
+  if (route.name === "maps") {
+    if (route.parts[1] === "problem") {
+      const params = new URLSearchParams({
+        type: route.parts[2] || "",
+        index: route.parts[3] || "",
+        from: "map",
+        map: route.parts[0] || "",
+      });
+      return `/admin/problems.html?${params.toString()}`;
+    }
+    return route.parts[0] ? `/admin/maps.html?map=${encodeURIComponent(route.parts[0])}` : "/admin/maps.html";
+  }
+  if (route.name === "problems") {
+    if (route.parts[1] === "batch") return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}&batch=1`;
+    if (route.parts[1]) return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}&index=${encodeURIComponent(route.parts[1])}`;
+    if (route.parts[0]) return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}`;
+    return "/admin/problems.html";
+  }
+  if (route.name === "contests") {
+    return route.parts[0] ? `/admin/contest.html?id=${encodeURIComponent(route.parts[0])}` : "/admin/contest.html";
+  }
+  if (route.name === "tutorial") return "/admin/tutorial.html";
+  if (route.name === "credits") return "/admin/credits.html";
+  if (route.name === "settings") return "/admin/settings.html";
+  return contestant ? "/index.html" : "/admin/maps.html";
+}
 
 function routeHash(path) {
   const parts = Array.isArray(path) ? path : String(path || "").split("/");
@@ -442,7 +482,26 @@ function defaultRouteHash() {
 }
 
 function navigateTo(path, options = {}) {
-  if (!ROUTED) return;
+  if (!ROUTED) {
+    const route = routeFromPath(path);
+    if (!canLeaveRoute(route)) return;
+    const url = splitPageUrl(path);
+    const current = `${location.pathname}${location.search}`;
+    if (url === current) {
+      openSplitPage();
+      return;
+    }
+    const nextPath = new URL(url, location.origin).pathname;
+    if (nextPath === location.pathname) {
+      if (options.replace) history.replaceState(null, "", url);
+      else history.pushState(null, "", url);
+      openSplitPage();
+      return;
+    }
+    if (options.replace) location.replace(url);
+    else location.assign(url);
+    return;
+  }
   const hash = routeHash(path);
   if (hash === location.hash) {
     if (bootstrapped) applyRoute();
@@ -460,7 +519,11 @@ function navigateTo(path, options = {}) {
 }
 
 function setHashSilently(path) {
-  if (!ROUTED) return;
+  if (!ROUTED) {
+    const url = splitPageUrl(path);
+    if (`${location.pathname}${location.search}` !== url) history.replaceState(null, "", url);
+    return;
+  }
   const hash = routeHash(path);
   if (location.hash !== hash) history.replaceState(null, "", hash);
   routeLast = hash;
@@ -686,8 +749,14 @@ function renderRoute(route) {
 // Event wiring
 // ═══════════════════════════════════════════════════════════════════
 
-homeButton?.addEventListener("click", () => navigateTo("home"));
-mobileHome?.addEventListener("click", () => navigateTo("home"));
+homeButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "maps");
+});
+mobileHome?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "maps");
+});
 menuButton?.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
 sidebarBackdrop?.addEventListener("click", () => setMenuOpen(false));
 document.querySelector(".sidebar")?.addEventListener("click", (event) => {
@@ -710,12 +779,30 @@ document?.addEventListener("keydown", (event) => {
   event.preventDefault();
   saveOpenProblem();
 });
-mapsButton?.addEventListener("click", () => navigateTo("maps"));
-problemsButton?.addEventListener("click", () => navigateTo("problems"));
-competitionsButton?.addEventListener("click", () => navigateTo(isContestant() ? "student" : "contests"));
-tutorialButton?.addEventListener("click", () => navigateTo("tutorial"));
-creditsButton?.addEventListener("click", () => navigateTo("credits"));
-settingsButton?.addEventListener("click", () => navigateTo("settings"));
+mapsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("maps");
+});
+problemsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("problems");
+});
+competitionsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "contests");
+});
+tutorialButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("tutorial");
+});
+creditsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("credits");
+});
+settingsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("settings");
+});
 accountForm?.addEventListener("submit", createAccount);
 accountList?.addEventListener("click", onAccountListClick);
 accountSearch?.addEventListener("input", () => {
@@ -2389,7 +2476,7 @@ function onMapListClick(event) {
   if (!maps.some((map) => map.id === mapId)) return;
   try {
     showEditor(mapId);
-    if (ROUTED) setHashSilently(["maps", mapId]);
+    setHashSilently(["maps", mapId]);
   } catch (error) {
     console.error("[map]", error);
     showPageToast(error?.message || "Could not open this map.", "warn");
@@ -2478,8 +2565,17 @@ function stopPaint() {
   window.removeEventListener("pointerup", stopPaint);
   window.removeEventListener("pointercancel", stopPaint);
   if (openNo && openMapId) {
-    if (ROUTED) navigateTo(["maps", openMapId, "problem", openNo.type, String(openNo.index)]);
-    else showProblemEditor(openNo.index, openNo.type, true);
+    const type = openNo.type;
+    const index = String(openNo.index);
+    const mapId = openMapId;
+    const openProblem = () => navigateTo(["maps", mapId, "problem", type, index]);
+    if (mapDirty) {
+      saveOpenMap().then(() => {
+        if (!mapDirty) openProblem();
+      });
+    } else {
+      openProblem();
+    }
   }
 }
 
@@ -2854,7 +2950,11 @@ function onProblemSectionClick(event) {
   selectedProblemKeys.clear();
   if (problemSearch) problemSearch.value = "";
   if (ROUTED) navigateTo(["problems", button.dataset.section]);
-  else renderProblems();
+  else {
+    activeProblemType = button.dataset.section;
+    setHashSilently(["problems", button.dataset.section]);
+    renderProblems();
+  }
 }
 
 function syncProblemToolbar() {
@@ -2917,8 +3017,7 @@ function addProblem(type) {
     showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(problemType).name}.`, "warn");
     return;
   }
-  if (ROUTED) navigateTo(["problems", problemType, String(index)]);
-  else showProblemEditor(index, problemType, false);
+  navigateTo(["problems", problemType, String(index)]);
 }
 
 function deleteOpenProblem() {
@@ -2926,12 +3025,8 @@ function deleteOpenProblem() {
     const type = problemDraft.type;
     problemDraft = null;
     problemDirty = false;
-    if (ROUTED) {
-      if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
-      else navigateTo(["problems", type], { replace: true });
-    } else {
-      showProblems();
-    }
+    if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
+    else navigateTo(["problems", type], { replace: true });
     return;
   }
   deleteProblem(editingProblemNo, editingProblemType);
@@ -2979,8 +3074,7 @@ function onProblemListClick(event) {
 
   const openButton = event.target.closest("[data-open-problem]");
   if (!openButton) return;
-  if (ROUTED) navigateTo(["problems", openButton.dataset.openType, openButton.dataset.openProblem]);
-  else showProblemEditor(Number(openButton.dataset.openProblem), openButton.dataset.openType, false);
+  navigateTo(["problems", openButton.dataset.openType, openButton.dataset.openProblem]);
 }
 
 function duplicateProblem(index, type) {
@@ -3003,8 +3097,7 @@ function duplicateProblem(index, type) {
   problems.push(copy);
   problems.sort(compareProblems);
   persistProblems();
-  if (ROUTED) navigateTo(["problems", copyType, String(nextIndex)]);
-  else showProblemEditor(nextIndex, copyType, false);
+  navigateTo(["problems", copyType, String(nextIndex)]);
 }
 
 function duplicateCurrentProblem() {
@@ -3028,8 +3121,7 @@ function duplicateCurrentProblem() {
     difficulty: problemDraft.difficulty,
     isNew: true,
   };
-  if (ROUTED) navigateTo(["problems", type, String(nextIndex)]);
-  else showProblemEditor(nextIndex, type, false);
+  navigateTo(["problems", type, String(nextIndex)]);
 }
 function showProblemEditor(index, type, fromMap) {
   const problemType = typeInfo(type) ? type : "math";
@@ -3070,15 +3162,13 @@ function closeProblemEditor() {
   if (!discardUnsavedProblem()) return;
   const mapId = openMapId;
   if (problemReturn === "map" && mapId && maps.some((map) => map.id === mapId)) {
-    if (ROUTED) navigateTo(["maps", mapId]);
-    else showEditor(mapId, { keepTool: true });
+    navigateTo(["maps", mapId]);
     return;
   }
   const problem = findProblem(editingProblemNo, editingProblemType);
   const type = problem ? problem.type : editingProblemType;
   if (problem) revealProblemInList(problem.index, problem.type);
-  if (ROUTED) navigateTo(["problems", typeInfo(type) ? type : "math"]);
-  else showProblems();
+  navigateTo(["problems", typeInfo(type) ? type : "math"]);
 }
 
 function revealProblemInList(index, type) {
@@ -3305,12 +3395,8 @@ function deleteProblem(index, type) {
   persistProblems();
   persistMaps();
   if (wasOpen) {
-    if (ROUTED) {
-      if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
-      else navigateTo(["problems", typeInfo(type) ? type : "math"], { replace: true });
-    } else {
-      showProblems();
-    }
+    if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
+    else navigateTo(["problems", typeInfo(type) ? type : "math"], { replace: true });
   } else {
     renderProblems();
   }
@@ -6129,7 +6215,6 @@ async function bootstrap() {
     applyAccount();
     updateHomeLead();
     if (ROUTED) startRouter();
-    else if (isContestant() && studentView) showStudent();
     else openSplitPage();
   } catch (e) {
     console.error("[bootstrap]", e);
@@ -6145,24 +6230,62 @@ async function bootstrap() {
     applyAccount();
     updateHomeLead();
     if (ROUTED) startRouter();
-    else if (isContestant() && studentView) showStudent();
     else openSplitPage();
+  }
+  if (!ROUTED) {
+    window.addEventListener("popstate", () => {
+      if (bootstrapped) openSplitPage();
+    });
   }
 }
 
 function openSplitPage() {
-  if (mapsButton) return;
-  if (isContestant()) {
+  if (!isSignedIn()) return;
+  const adminPath = location.pathname.startsWith("/admin/");
+  const contestant = isContestant();
+  if (contestant && adminPath && !location.pathname.endsWith("/credits.html")) {
     location.replace("/index.html");
     return;
   }
-  if (location.hash === "#tutorial" && tutorialView) {
-    showTutorial();
+  if (!contestant && !adminPath) {
+    location.replace("/admin/maps.html");
     return;
   }
-  if (mapsView) showMaps();
-  else if (problemsView) showProblems();
-  else if (settingsView) showSettings();
+
+  const params = new URLSearchParams(location.search);
+  if (contestant && studentView) {
+    if (params.get("settings") && studentSettingsView) showStudentSettings();
+    else if (params.get("contest")) showStudentPlay(params.get("contest"));
+    else showStudent();
+    return;
+  }
+  if (problemsView) {
+    const type = params.get("type");
+    const index = Number(params.get("index"));
+    if (params.get("from") === "map" && params.get("map")) openMapId = params.get("map");
+    if (typeInfo(type) && params.get("batch")) showProblemBatch(type);
+    else if (typeInfo(type) && params.has("index") && Number.isInteger(index)) showProblemEditor(index, type, params.get("from") === "map");
+    else {
+      activeProblemType = typeInfo(type) ? type : null;
+      showProblems();
+    }
+    return;
+  }
+  if (mapsView) {
+    const mapId = params.get("map");
+    if (mapId && maps.some((map) => map.id === mapId)) showEditor(mapId);
+    else showMaps();
+    return;
+  }
+  if (competitionsView) {
+    const id = params.get("id");
+    if (id && contests.some((contest) => contest.id === id)) showContest(id);
+    else showCompetitions();
+    return;
+  }
+  if (settingsView) showSettings();
+  else if (tutorialView) showTutorial();
+  else if (creditsView) showCredits();
 }
 
 bootstrap();

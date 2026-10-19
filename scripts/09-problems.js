@@ -14,7 +14,11 @@ function onProblemSectionClick(event) {
   selectedProblemKeys.clear();
   if (problemSearch) problemSearch.value = "";
   if (ROUTED) navigateTo(["problems", button.dataset.section]);
-  else renderProblems();
+  else {
+    activeProblemType = button.dataset.section;
+    setHashSilently(["problems", button.dataset.section]);
+    renderProblems();
+  }
 }
 
 function syncProblemToolbar() {
@@ -77,8 +81,7 @@ function addProblem(type) {
     showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(problemType).name}.`, "warn");
     return;
   }
-  if (ROUTED) navigateTo(["problems", problemType, String(index)]);
-  else showProblemEditor(index, problemType, false);
+  navigateTo(["problems", problemType, String(index)]);
 }
 
 function deleteOpenProblem() {
@@ -86,12 +89,8 @@ function deleteOpenProblem() {
     const type = problemDraft.type;
     problemDraft = null;
     problemDirty = false;
-    if (ROUTED) {
-      if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
-      else navigateTo(["problems", type], { replace: true });
-    } else {
-      showProblems();
-    }
+    if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
+    else navigateTo(["problems", type], { replace: true });
     return;
   }
   deleteProblem(editingProblemNo, editingProblemType);
@@ -139,8 +138,7 @@ function onProblemListClick(event) {
 
   const openButton = event.target.closest("[data-open-problem]");
   if (!openButton) return;
-  if (ROUTED) navigateTo(["problems", openButton.dataset.openType, openButton.dataset.openProblem]);
-  else showProblemEditor(Number(openButton.dataset.openProblem), openButton.dataset.openType, false);
+  navigateTo(["problems", openButton.dataset.openType, openButton.dataset.openProblem]);
 }
 
 function duplicateProblem(index, type) {
@@ -163,8 +161,7 @@ function duplicateProblem(index, type) {
   problems.push(copy);
   problems.sort(compareProblems);
   persistProblems();
-  if (ROUTED) navigateTo(["problems", copyType, String(nextIndex)]);
-  else showProblemEditor(nextIndex, copyType, false);
+  navigateTo(["problems", copyType, String(nextIndex)]);
 }
 
 function duplicateCurrentProblem() {
@@ -188,8 +185,7 @@ function duplicateCurrentProblem() {
     difficulty: problemDraft.difficulty,
     isNew: true,
   };
-  if (ROUTED) navigateTo(["problems", type, String(nextIndex)]);
-  else showProblemEditor(nextIndex, type, false);
+  navigateTo(["problems", type, String(nextIndex)]);
 }
 function showProblemEditor(index, type, fromMap) {
   const problemType = typeInfo(type) ? type : "math";
@@ -230,15 +226,13 @@ function closeProblemEditor() {
   if (!discardUnsavedProblem()) return;
   const mapId = openMapId;
   if (problemReturn === "map" && mapId && maps.some((map) => map.id === mapId)) {
-    if (ROUTED) navigateTo(["maps", mapId]);
-    else showEditor(mapId, { keepTool: true });
+    navigateTo(["maps", mapId]);
     return;
   }
   const problem = findProblem(editingProblemNo, editingProblemType);
   const type = problem ? problem.type : editingProblemType;
   if (problem) revealProblemInList(problem.index, problem.type);
-  if (ROUTED) navigateTo(["problems", typeInfo(type) ? type : "math"]);
-  else showProblems();
+  navigateTo(["problems", typeInfo(type) ? type : "math"]);
 }
 
 function revealProblemInList(index, type) {
@@ -465,12 +459,8 @@ function deleteProblem(index, type) {
   persistProblems();
   persistMaps();
   if (wasOpen) {
-    if (ROUTED) {
-      if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
-      else navigateTo(["problems", typeInfo(type) ? type : "math"], { replace: true });
-    } else {
-      showProblems();
-    }
+    if (problemReturn === "map" && openMapId) navigateTo(["maps", openMapId], { replace: true });
+    else navigateTo(["problems", typeInfo(type) ? type : "math"], { replace: true });
   } else {
     renderProblems();
   }

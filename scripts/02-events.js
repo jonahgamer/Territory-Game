@@ -2,8 +2,14 @@
 // Event wiring
 // ═══════════════════════════════════════════════════════════════════
 
-homeButton?.addEventListener("click", () => navigateTo("home"));
-mobileHome?.addEventListener("click", () => navigateTo("home"));
+homeButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "maps");
+});
+mobileHome?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "maps");
+});
 menuButton?.addEventListener("click", () => setMenuOpen(!document.body.classList.contains("menu-open")));
 sidebarBackdrop?.addEventListener("click", () => setMenuOpen(false));
 document.querySelector(".sidebar")?.addEventListener("click", (event) => {
@@ -26,12 +32,30 @@ document?.addEventListener("keydown", (event) => {
   event.preventDefault();
   saveOpenProblem();
 });
-mapsButton?.addEventListener("click", () => navigateTo("maps"));
-problemsButton?.addEventListener("click", () => navigateTo("problems"));
-competitionsButton?.addEventListener("click", () => navigateTo(isContestant() ? "student" : "contests"));
-tutorialButton?.addEventListener("click", () => navigateTo("tutorial"));
-creditsButton?.addEventListener("click", () => navigateTo("credits"));
-settingsButton?.addEventListener("click", () => navigateTo("settings"));
+mapsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("maps");
+});
+problemsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("problems");
+});
+competitionsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo(isContestant() ? "student" : "contests");
+});
+tutorialButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("tutorial");
+});
+creditsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("credits");
+});
+settingsButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigateTo("settings");
+});
 accountForm?.addEventListener("submit", createAccount);
 accountList?.addEventListener("click", onAccountListClick);
 accountSearch?.addEventListener("input", () => {

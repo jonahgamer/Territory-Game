@@ -126,14 +126,12 @@ function showProblemBatch(type) {
 
 function openProblemBatchForActiveType() {
   if (!activeProblemType) return;
-  if (ROUTED) navigateTo(["problems", activeProblemType, "batch"]);
-  else showProblemBatch(activeProblemType);
+  navigateTo(["problems", activeProblemType, "batch"]);
 }
 
 function closeProblemBatch() {
   const type = batchProblemType();
-  if (ROUTED) navigateTo(["problems", type]);
-  else showProblems();
+  navigateTo(["problems", type]);
 }
 
 function saveProblemBatch() {

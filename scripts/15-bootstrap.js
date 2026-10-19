@@ -40,7 +40,6 @@ async function bootstrap() {
     applyAccount();
     updateHomeLead();
     if (ROUTED) startRouter();
-    else if (isContestant() && studentView) showStudent();
     else openSplitPage();
   } catch (e) {
     console.error("[bootstrap]", e);
@@ -56,24 +55,62 @@ async function bootstrap() {
     applyAccount();
     updateHomeLead();
     if (ROUTED) startRouter();
-    else if (isContestant() && studentView) showStudent();
     else openSplitPage();
+  }
+  if (!ROUTED) {
+    window.addEventListener("popstate", () => {
+      if (bootstrapped) openSplitPage();
+    });
   }
 }
 
 function openSplitPage() {
-  if (mapsButton) return;
-  if (isContestant()) {
+  if (!isSignedIn()) return;
+  const adminPath = location.pathname.startsWith("/admin/");
+  const contestant = isContestant();
+  if (contestant && adminPath && !location.pathname.endsWith("/credits.html")) {
     location.replace("/index.html");
     return;
   }
-  if (location.hash === "#tutorial" && tutorialView) {
-    showTutorial();
+  if (!contestant && !adminPath) {
+    location.replace("/admin/maps.html");
     return;
   }
-  if (mapsView) showMaps();
-  else if (problemsView) showProblems();
-  else if (settingsView) showSettings();
+
+  const params = new URLSearchParams(location.search);
+  if (contestant && studentView) {
+    if (params.get("settings") && studentSettingsView) showStudentSettings();
+    else if (params.get("contest")) showStudentPlay(params.get("contest"));
+    else showStudent();
+    return;
+  }
+  if (problemsView) {
+    const type = params.get("type");
+    const index = Number(params.get("index"));
+    if (params.get("from") === "map" && params.get("map")) openMapId = params.get("map");
+    if (typeInfo(type) && params.get("batch")) showProblemBatch(type);
+    else if (typeInfo(type) && params.has("index") && Number.isInteger(index)) showProblemEditor(index, type, params.get("from") === "map");
+    else {
+      activeProblemType = typeInfo(type) ? type : null;
+      showProblems();
+    }
+    return;
+  }
+  if (mapsView) {
+    const mapId = params.get("map");
+    if (mapId && maps.some((map) => map.id === mapId)) showEditor(mapId);
+    else showMaps();
+    return;
+  }
+  if (competitionsView) {
+    const id = params.get("id");
+    if (id && contests.some((contest) => contest.id === id)) showContest(id);
+    else showCompetitions();
+    return;
+  }
+  if (settingsView) showSettings();
+  else if (tutorialView) showTutorial();
+  else if (creditsView) showCredits();
 }
 
 bootstrap();

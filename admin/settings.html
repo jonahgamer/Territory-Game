@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings · Territory Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="mobile-bar">
+        <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span class="menu-bars" aria-hidden="true"></span>
+          Menu
+        </button>
+      </header>
+      <aside class="sidebar">
+        <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+        <nav id="site-nav" aria-label="Sections">
+          <ul>
+            <li><a id="maps-button" href="/admin/maps.html">Maps</a></li>
+            <li><a id="problems-button" href="/admin/problems.html">Problems</a></li>
+            <li><a id="competitions-button" href="/admin/contest.html">Contests</a></li>
+            <li><a id="tutorial-button" href="/admin/tutorial.html">Tutorial</a></li>
+            <li><a id="credits-button" href="/admin/credits.html">Credits</a></li>
+            <li><a id="settings-button" href="/admin/settings.html">Settings</a></li>
+          </ul>
+        </nav>
+        <div class="account">
+          <img id="account-pfp" class="account-pfp" alt="" hidden />
+          <p id="account-name" hidden></p>
+          <button id="account-button" type="button">Log out</button>
+          <p id="account-role"></p>
+        </div>
+      </aside>
+      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+      <main>
+        <p id="load-error" class="form-error" hidden></p>
+<section id="settings-view" hidden>
+          <p class="eyebrow">Settings</p>
+          <h1>Accounts</h1>
+          <p class="lead">Create and manage student accounts.</p>
+
+          <div id="account-summary" class="account-summary"></div>
+
+          <form id="account-form" class="create-map">
+            <label>
+              Username
+              <input id="account-username" class="contest-name" type="text" maxlength="64" autocomplete="off" required />
+            </label>
+            <label>
+              Display name
+              <input id="account-display-name" class="contest-name" type="text" maxlength="60" />
+            </label>
+            <label>
+              Password
+              <input id="account-password" class="contest-name" type="password" maxlength="256" autocomplete="new-password" required />
+            </label>
+            <button type="submit">Add student</button>
+            <p id="account-form-error" class="form-error" hidden></p>
+          </form>
+
+          <h2>Accounts</h2>
+          <div class="account-toolbar">
+            <label class="account-search">
+              Search
+              <input id="account-search" type="search" maxlength="60" placeholder="Username or display name" autocomplete="off" />
+            </label>
+            <div class="kind-choices account-filters" id="account-filters" role="group" aria-label="Filter accounts">
+              <button type="button" data-account-filter="all" aria-pressed="true">All</button>
+              <button type="button" data-account-filter="student" aria-pressed="false">Students</button>
+              <button type="button" data-account-filter="admin" aria-pressed="false">Admins</button>
+              <button type="button" data-account-filter="suspended" aria-pressed="false">Suspended</button>
+            </div>
+          </div>
+          <p id="account-status" class="status-note" hidden></p>
+          <p id="account-list-error" class="form-error" hidden></p>
+          <p id="account-empty">No accounts yet.</p>
+          <ul id="account-list" class="account-list" hidden></ul>
+        </section>
+      </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+      <p id="page-toast-message"></p>
+      <button id="page-toast-close" type="button">Close</button>
+    </div>
+    <script src="/scripts/batch-problems.js"></script>
+    <script src="/script.js"></script>
+  </body>
+</html>

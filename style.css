@@ -21,6 +21,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: var(--font-ui);
   color: var(--ink);
   background:
@@ -91,6 +92,7 @@ body::before {
   line-height: 1.35;
   text-align: left;
   text-transform: uppercase;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -106,6 +108,7 @@ nav ul {
   gap: 4px;
 }
 
+nav a,
 nav button,
 .section-label {
   display: block;
@@ -118,16 +121,19 @@ nav button,
   font-size: 16px;
   letter-spacing: 0.04em;
   text-align: left;
+  text-decoration: none;
 }
 
 .section-label {
   color: var(--muted);
 }
 
+nav a,
 nav button {
   cursor: pointer;
 }
 
+nav a[aria-current="page"],
 nav button[aria-current="page"] {
   color: var(--cyan);
   background: rgba(62, 224, 255, 0.08);
@@ -250,6 +256,11 @@ main {
   max-width: 100%;
   overflow-x: clip;
   padding: 56px 64px;
+}
+
+main > section {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .eyebrow {
@@ -1571,7 +1582,7 @@ button[type="submit"],
 .problem-snippet {
   flex: 1 1 0;
   min-width: 0;
-  max-width: min(42rem, 100%);
+  max-width: 100%;
   overflow: hidden;
   color: var(--muted);
   text-overflow: ellipsis;

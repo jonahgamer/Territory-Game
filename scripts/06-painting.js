@@ -81,8 +81,17 @@ function stopPaint() {
   window.removeEventListener("pointerup", stopPaint);
   window.removeEventListener("pointercancel", stopPaint);
   if (openNo && openMapId) {
-    if (ROUTED) navigateTo(["maps", openMapId, "problem", openNo.type, String(openNo.index)]);
-    else showProblemEditor(openNo.index, openNo.type, true);
+    const type = openNo.type;
+    const index = String(openNo.index);
+    const mapId = openMapId;
+    const openProblem = () => navigateTo(["maps", mapId, "problem", type, index]);
+    if (mapDirty) {
+      saveOpenMap().then(() => {
+        if (!mapDirty) openProblem();
+      });
+    } else {
+      openProblem();
+    }
   }
 }
 

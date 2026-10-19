@@ -99,7 +99,7 @@ function onMapListClick(event) {
   if (!maps.some((map) => map.id === mapId)) return;
   try {
     showEditor(mapId);
-    if (ROUTED) setHashSilently(["maps", mapId]);
+    setHashSilently(["maps", mapId]);
   } catch (error) {
     console.error("[map]", error);
     showPageToast(error?.message || "Could not open this map.", "warn");

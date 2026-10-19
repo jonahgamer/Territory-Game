@@ -349,8 +349,8 @@ const spawnAgreementCache = new Map();
 const ANSWER_OPEN_MODE_KEY = "territory-answer-open-mode";
 let answerOpenMode = readAnswerOpenMode();
 
-// Routing is only enabled on the full single-page app. The split pages in
-// ui2/ keep their own real URLs and are handled by openSplitPage().
+// The student page and each admin page are separate documents. Hash routing
+// runs only when every view is on the same page.
 const ROUTED = Boolean(homeView && mapsView && problemsView && competitionsView && settingsView && tutorialView && creditsView);
 let routeApplying = false;
 let routeLast = "";
@@ -410,7 +410,47 @@ const _persistContestsDebounced = debounce(() => { persistContestsNow(); }, 600)
 //   #/student                      #/student/<contestId>
 //   #/settings                     #/tutorial                     #/credits
 //
-// ui2/ pages keep their own real URLs and call openSplitPage() instead.
+function routeFromPath(path) {
+  const parts = (Array.isArray(path) ? path : String(path || "").split("/"))
+    .map((part) => String(part ?? "").trim())
+    .filter((part) => part.length > 0);
+  return { name: parts[0] || "home", parts: parts.slice(1) };
+}
+
+function splitPageUrl(path) {
+  const route = routeFromPath(path);
+  const contestant = isContestant();
+  if (route.name === "home") return contestant ? "/index.html" : "/admin/maps.html";
+  if (route.name === "student" || (route.name === "contests" && contestant)) {
+    return route.parts[0] ? `/index.html?contest=${encodeURIComponent(route.parts[0])}` : "/index.html";
+  }
+  if (route.name === "settings" && contestant) return "/index.html?settings=1";
+  if (route.name === "maps") {
+    if (route.parts[1] === "problem") {
+      const params = new URLSearchParams({
+        type: route.parts[2] || "",
+        index: route.parts[3] || "",
+        from: "map",
+        map: route.parts[0] || "",
+      });
+      return `/admin/problems.html?${params.toString()}`;
+    }
+    return route.parts[0] ? `/admin/maps.html?map=${encodeURIComponent(route.parts[0])}` : "/admin/maps.html";
+  }
+  if (route.name === "problems") {
+    if (route.parts[1] === "batch") return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}&batch=1`;
+    if (route.parts[1]) return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}&index=${encodeURIComponent(route.parts[1])}`;
+    if (route.parts[0]) return `/admin/problems.html?type=${encodeURIComponent(route.parts[0])}`;
+    return "/admin/problems.html";
+  }
+  if (route.name === "contests") {
+    return route.parts[0] ? `/admin/contest.html?id=${encodeURIComponent(route.parts[0])}` : "/admin/contest.html";
+  }
+  if (route.name === "tutorial") return "/admin/tutorial.html";
+  if (route.name === "credits") return "/admin/credits.html";
+  if (route.name === "settings") return "/admin/settings.html";
+  return contestant ? "/index.html" : "/admin/maps.html";
+}
 
 function routeHash(path) {
   const parts = Array.isArray(path) ? path : String(path || "").split("/");
@@ -440,7 +480,26 @@ function defaultRouteHash() {
 }
 
 function navigateTo(path, options = {}) {
-  if (!ROUTED) return;
+  if (!ROUTED) {
+    const route = routeFromPath(path);
+    if (!canLeaveRoute(route)) return;
+    const url = splitPageUrl(path);
+    const current = `${location.pathname}${location.search}`;
+    if (url === current) {
+      openSplitPage();
+      return;
+    }
+    const nextPath = new URL(url, location.origin).pathname;
+    if (nextPath === location.pathname) {
+      if (options.replace) history.replaceState(null, "", url);
+      else history.pushState(null, "", url);
+      openSplitPage();
+      return;
+    }
+    if (options.replace) location.replace(url);
+    else location.assign(url);
+    return;
+  }
   const hash = routeHash(path);
   if (hash === location.hash) {
     if (bootstrapped) applyRoute();
@@ -458,7 +517,11 @@ function navigateTo(path, options = {}) {
 }
 
 function setHashSilently(path) {
-  if (!ROUTED) return;
+  if (!ROUTED) {
+    const url = splitPageUrl(path);
+    if (`${location.pathname}${location.search}` !== url) history.replaceState(null, "", url);
+    return;
+  }
   const hash = routeHash(path);
   if (location.hash !== hash) history.replaceState(null, "", hash);
   routeLast = hash;

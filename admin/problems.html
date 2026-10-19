@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Problems · Territory Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="mobile-bar">
+        <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span class="menu-bars" aria-hidden="true"></span>
+          Menu
+        </button>
+      </header>
+      <aside class="sidebar">
+        <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+        <nav id="site-nav" aria-label="Sections">
+          <ul>
+            <li><a id="maps-button" href="/admin/maps.html">Maps</a></li>
+            <li><a id="problems-button" href="/admin/problems.html">Problems</a></li>
+            <li><a id="competitions-button" href="/admin/contest.html">Contests</a></li>
+            <li><a id="tutorial-button" href="/admin/tutorial.html">Tutorial</a></li>
+            <li><a id="credits-button" href="/admin/credits.html">Credits</a></li>
+            <li><a id="settings-button" href="/admin/settings.html">Settings</a></li>
+          </ul>
+        </nav>
+        <div class="account">
+          <img id="account-pfp" class="account-pfp" alt="" hidden />
+          <p id="account-name" hidden></p>
+          <button id="account-button" type="button">Log out</button>
+          <p id="account-role"></p>
+        </div>
+      </aside>
+      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+      <main>
+        <p id="load-error" class="form-error" hidden></p>
+<section id="problems-view" hidden>
+          <p class="eyebrow">Problems</p>
+          <h1>Problems</h1>
+
+          <div class="kind-choices" id="problem-section-choices">
+            <button type="button" data-section="math" aria-pressed="false">Math</button>
+            <button type="button" data-section="oi" aria-pressed="false">OI</button>
+            <button type="button" data-section="science" aria-pressed="false">Science</button>
+            <button type="button" data-section="puzzle" aria-pressed="false">Puzzle</button>
+          </div>
+          <div id="problem-section" class="problem-section" hidden>
+            <div class="problem-group-head">
+              <h2 id="problem-section-title"></h2>
+              <div class="problem-group-actions">
+                <button id="problem-select-toggle" type="button" aria-pressed="false" hidden>Select</button>
+                <button id="batch-add-problem" class="add-problem" type="button">Batch add</button>
+                <button id="add-problem" class="add-problem" type="button">Add problem</button>
+              </div>
+            </div>
+            <div class="problem-toolbar">
+              <label class="problem-search">
+                Search
+                <input id="problem-search" type="search" maxlength="120" placeholder="Tag, prompt, or answer" autocomplete="off" />
+              </label>
+              <div class="kind-choices" id="problem-difficulty-filter" role="group" aria-label="Filter by difficulty">
+                <button type="button" data-problem-difficulty-filter="all" aria-pressed="true">All</button>
+                <button type="button" data-problem-difficulty-filter="easy" aria-pressed="false">Easy</button>
+                <button type="button" data-problem-difficulty-filter="normal" aria-pressed="false">Normal</button>
+                <button type="button" data-problem-difficulty-filter="hard" aria-pressed="false">Hard</button>
+                <button type="button" data-problem-difficulty-filter="insane" aria-pressed="false">Insane</button>
+              </div>
+              <label class="problem-sort">
+                Sort
+                <select id="problem-sort">
+                  <option value="index">Index ascending</option>
+                  <option value="index-desc">Index descending</option>
+                  <option value="difficulty">Difficulty (hard first)</option>
+                </select>
+              </label>
+              <p id="problem-count" class="field-note"></p>
+            </div>
+            <p id="problem-empty" class="problem-group-empty" hidden></p>
+            <div id="problem-pages" class="kind-choices problem-pages" hidden></div>
+            <div id="problem-bulk" class="problem-bulk" hidden>
+              <label class="problem-check">
+                <input id="problem-select-page" type="checkbox" />
+                This page
+              </label>
+              <label class="problem-check">
+                <input id="problem-select-all" type="checkbox" />
+                <span id="problem-select-all-label">All</span>
+              </label>
+              <p id="problem-selected-count" class="field-note">None selected</p>
+              <div class="kind-choices" id="problem-bulk-difficulty">
+                <button type="button" data-bulk-difficulty="easy">Easy</button>
+                <button type="button" data-bulk-difficulty="normal">Normal</button>
+                <button type="button" data-bulk-difficulty="hard">Hard</button>
+                <button type="button" data-bulk-difficulty="insane">Insane</button>
+              </div>
+              <button id="problem-bulk-delete" class="delete-map" type="button">Delete selected</button>
+            </div>
+            <ul id="problem-list" class="problem-list" hidden></ul>
+          </div>
+        </section>
+        <section id="problem-editor-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="problem-back-button" type="button">Back to problems</button>
+            <div class="editor-toolbar-actions">
+              <span id="problem-save-state" class="problem-save-state" aria-live="polite"></span>
+              <button class="save-changes" id="save-problem-top" type="button">Save problem</button>
+              <button class="account-action" id="duplicate-open-problem" type="button">Duplicate</button>
+              <button class="delete-map" id="delete-open-problem" type="button">Delete</button>
+            </div>
+          </div>
+          <p class="eyebrow">Problems</p>
+          <h1 id="problem-editor-title"></h1>
+          <p id="problem-usage" class="field-note" hidden></p>
+          <form id="problem-editor-form" class="problem-editor">
+            <label id="problem-index-field">
+              Index
+              <input id="problem-index-input" type="number" min="1" max="99999" />
+            </label>
+            <p id="problem-index-note" class="field-note">An index is the year and the problem number, such as 26000 for year 26, problem 000. The map shows the type tag in front, such as MO26000. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+            <p id="problem-index-error" class="form-error" hidden></p>
+            <div class="kind-choices" id="problem-type-choices">
+              <button type="button" data-problem-type="math">Math</button>
+              <button type="button" data-problem-type="oi">OI</button>
+              <button type="button" data-problem-type="science">Science</button>
+              <button type="button" data-problem-type="puzzle">Puzzle</button>
+            </div>
+            <div class="kind-choices" id="problem-difficulty-choices">
+              <button type="button" data-problem-difficulty="easy">Easy</button>
+              <button type="button" data-problem-difficulty="normal">Normal</button>
+              <button type="button" data-problem-difficulty="hard">Hard</button>
+              <button type="button" data-problem-difficulty="insane">Insane</button>
+            </div>
+            <p class="field-note">Students see this difficulty as the cell color. On this map, difficulty is the colored border.</p>
+            <label>
+              Problem
+              <textarea id="problem-prompt" rows="12"></textarea>
+            </label>
+            <label>
+              Answer
+              <textarea id="problem-answer" rows="2"></textarea>
+            </label>
+            <label>
+              Logic
+              <textarea id="problem-logic" rows="8" spellcheck="false"></textarea>
+            </label>
+            <p class="field-note">Use $x^2$ for inline math and $$x^2$$ on its own line. HTML in the problem is shown in an isolated statement frame. Its scripts can run inside that frame and can update the answer through the answer bridge, but they cannot close the problem or change the rest of the page. The answer is the exact text a student types. Logic is optional JavaScript. It can read answer and expected, then set result.score from 0 to 100 and result.comment. A score of 100 is correct. Leave logic empty to compare the answer as text.</p>
+            <p id="problem-save-error" class="form-error" hidden></p>
+            <button id="save-problem-button" class="save-changes" type="button">Save problem</button>
+          </form>
+        </section>
+        <section id="problem-batch-view" hidden>
+          <div class="editor-toolbar">
+            <button class="back-button" id="batch-back" type="button">Back to problems</button>
+            <div class="editor-toolbar-actions">
+              <button class="save-changes" id="batch-save" type="button">Save batch</button>
+            </div>
+          </div>
+          <p class="eyebrow">Problems</p>
+          <h1 id="batch-title">Batch add</h1>
+          <p id="batch-error" class="form-error" hidden></p>
+          <p class="field-note">Fill in index, statement, and answer. Logic is optional. A new row is added automatically when the last row is complete.</p>
+          <div id="batch-rows" class="batch-rows"></div>
+          <button id="batch-add-row" class="add-problem" type="button">Add row</button>
+        </section>
+      </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+      <p id="page-toast-message"></p>
+      <button id="page-toast-close" type="button">Close</button>
+    </div>
+    <script src="/scripts/batch-problems.js"></script>
+    <script src="/script.js"></script>
+  </body>
+</html>
