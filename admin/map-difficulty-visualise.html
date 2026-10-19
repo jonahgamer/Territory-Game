@@ -44,12 +44,13 @@
 
       <div class="map-counts" id="map-counts"></div>
 
-      <!-- Read‑only name and mode display (no inputs) -->
-      <p class="map-name-display" id="map-name-display" style="font-size:1.1rem;margin:0.5rem 0;"><strong>Name:</strong> <span id="map-name-text">—</span></p>
-      <p class="map-mode-display" id="map-mode-display" style="font-size:1rem;margin:0.2rem 0 1rem;"><strong>Mode:</strong> <span id="map-mode-text">—</span></p>
+      <p class="map-name-display" style="font-size:1.05rem;margin:0.5rem 0 1rem;">
+        <strong>Mode:</strong> <span id="map-mode-text">—</span>
+      </p>
 
-      <!-- Grid container (read‑only, populated by script) -->
-      <div class="grid-scroll"><div id="editor-grid" class="editor-grid" style="pointer-events:none; user-select:none;"></div></div>
+      <div class="grid-scroll"><div id="editor-grid" class="editor-grid" style="pointer-events:none;user-select:none;"></div></div>
+
+      <div id="difficulty-legend" style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center;margin-top:1.5rem;font-size:0.9rem;opacity:0.9;"></div>
     </main>
   </div>
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
@@ -58,269 +59,20 @@
   </div>
 
   <script type="module">
-    // ──────────────────────────────────────────────────────────────
-    // 1. Adjust the terrain / difficulty buttons to carry the map ID
-    // ──────────────────────────────────────────────────────────────
+    // Keep the terrain / difficulty buttons pointed at the current map.
     (function () {
-      const params = new URLSearchParams(window.location.search);
-      const mapId = params.get('id') || params.get('map');
-
-      const terrainBtn = document.getElementById('terrain-view-button');
-      const difficultyBtn = document.getElementById('difficulty-view-button');
-
-      if (mapId) {
-        const enc = encodeURIComponent(mapId);
-        if (terrainBtn)    terrainBtn.href    = `terrain-view.html?id=${enc}`;
-        if (difficultyBtn) difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
-      } else {
-        if (terrainBtn)    terrainBtn.href    = 'terrain-view.html';
-        if (difficultyBtn) difficultyBtn.href = 'map-difficulty-visualise.html';
+      const p = new URLSearchParams(location.search);
+      const id = p.get("map") || p.get("id");
+      const t = document.getElementById("terrain-view-button");
+      const d = document.getElementById("difficulty-view-button");
+      if (id) {
+        const enc = encodeURIComponent(id);
+        if (t) t.href = `terrain-view.html?id=${enc}`;
+        if (d) d.href = `map-difficulty-visualise.html?id=${enc}`;
       }
-    })();
-
-    // ──────────────────────────────────────────────────────────────
-    // 2. Difficulty‑visualisation only – no editing logic
-    //    This script replaces the usual admin-map-editor.js.
-    //    It fetches the map data, renders the grid with per‑cell
-    //    difficulty colours, and fills in the header info.
-    // ──────────────────────────────────────────────────────────────
-    (async function difficultyView() {
-      const params = new URLSearchParams(window.location.search);
-      const mapId = params.get('id') || params.get('map');
-
-      const errorEl   = document.getElementById('load-error');
-      const titleEl   = document.getElementById('editor-title');
-      const sizeEl    = document.getElementById('editor-size');
-      const countsEl  = document.getElementById('map-counts');
-      const nameText  = document.getElementById('map-name-text');
-      const modeText  = document.getElementById('map-mode-text');
-      const gridEl    = document.getElementById('editor-grid');
-
-      // Helper: show error
-      function showError(msg) {
-        errorEl.textContent = msg;
-        errorEl.hidden = false;
-        console.error(msg);
-      }
-
-      if (!mapId) {
-        showError('No map ID provided in the URL. Use ?id=<mapId>.');
-        return;
-      }
-
-      // ── Fetch map data ──────────────────────────────────────────
-      let mapData;
-      try {
-        const res = await fetch(`/api/maps/${encodeURIComponent(mapId)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
-        mapData = await res.json();
-      } catch (err) {
-        showError(`Failed to load map: ${err.message}`);
-        return;
-      }
-
-      // ── Validate basic structure ────────────────────────────────
-      if (!mapData || !mapData.rows || !mapData.cols || !Array.isArray(mapData.cells)) {
-        showError('Map data is incomplete or malformed.');
-        return;
-      }
-
-      const { rows, cols, cells, name, mode } = mapData;
-
-      // ── Populate header text ────────────────────────────────────
-      titleEl.textContent = name || 'Untitled map';
-      sizeEl.textContent  = `${cols} × ${rows} cells`;
-      nameText.textContent = name || '—';
-      modeText.textContent = mode ? (mode.charAt(0).toUpperCase() + mode.slice(1)) : '—';
-
-      // ── Count cells by type (optional, nice to have) ────────────
-      const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0 };
-      cells.forEach(cell => {
-        const t = cell?.type || 'empty';
-        if (counts[t] !== undefined) counts[t]++;
-        else counts.empty++;
-      });
-      countsEl.innerHTML = `
-        <span><strong>Problems:</strong> ${counts.problem}</span>
-        <span><strong>Obstacles:</strong> ${counts.obstacle}</span>
-        <span><strong>Spawn points:</strong> ${counts.spawnpoint}</span>
-        <span><strong>Empty:</strong> ${counts.empty}</span>
-      `;
-
-      // ── Helper: difficulty colour map ───────────────────────────
-      //    Adjust these colours to match your game's palette.
-      const DIFFICULTY_COLOURS = {
-        easy:   '#4caf50', // green
-        normal: '#ff9800', // orange
-        hard:   '#f44336', // red
-        insane: '#9c27b0', // purple
-        // fallback for unknown / no difficulty
-        default:'#9e9e9e'  // grey
-      };
-
-      // ── Helper: extract difficulty from a cell ──────────────────
-      //    The map format may store difficulty inside cell.problem.difficulty
-      //    or directly as cell.difficulty.  Both are supported.
-      function getCellDifficulty(cell) {
-        if (!cell) return null;
-        if (cell.type !== 'problem') return null;
-        // Try common shapes:
-        if (cell.problem && typeof cell.problem === 'object') {
-          return cell.problem.difficulty || null;
-        }
-        if (cell.difficulty) return cell.difficulty;
-        // If problem is just a number (problem no.), we have no difficulty → null
-        return null;
-      }
-
-      // ── Render the grid ─────────────────────────────────────────
-      gridEl.innerHTML = '';
-      gridEl.style.display = 'grid';
-      gridEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-      gridEl.style.gap = '2px';
-      gridEl.style.background = '#1e1e2f';   // dark background for contrast
-      gridEl.style.padding = '4px';
-      gridEl.style.borderRadius = '8px';
-
-      // Make grid responsive: each cell is a square
-      gridEl.style.gridAutoRows = '1fr';
-      gridEl.style.width = '100%';
-      gridEl.style.maxWidth = 'min(90vw, 80vh)'; // keep it square-ish
-      gridEl.style.margin = '0 auto';
-
-      // Build cells
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const idx = r * cols + c;
-          const cell = cells[idx] || {};
-
-          // Create cell element
-          const cellEl = document.createElement('div');
-          cellEl.className = 'difficulty-cell';
-          cellEl.style.aspectRatio = '1 / 1';
-          cellEl.style.borderRadius = '4px';
-          cellEl.style.display = 'flex';
-          cellEl.style.alignItems = 'center';
-          cellEl.style.justifyContent = 'center';
-          cellEl.style.fontFamily = '"Share Tech Mono", monospace';
-          cellEl.style.fontSize = '0.75rem';
-          cellEl.style.color = '#fff';
-          cellEl.style.textShadow = '0 1px 2px rgba(0,0,0,0.6)';
-          cellEl.style.transition = 'transform 0.1s';
-          cellEl.style.position = 'relative';
-
-          // Determine background colour based on difficulty
-          const diff = getCellDifficulty(cell);
-          let bgColor;
-          if (cell.type === 'obstacle') {
-            // Obstacles – use a distinct colour (dark grey, maybe hatched)
-            bgColor = '#2c2c3a';
-            cellEl.title = 'Obstacle';
-          } else if (cell.type === 'spawnpoint') {
-            bgColor = '#0a7ea4'; // teal for spawn
-            cellEl.title = 'Spawn point';
-          } else if (cell.type === 'empty') {
-            bgColor = '#1a1a24'; // very dark
-            cellEl.title = 'Empty';
-          } else if (cell.type === 'problem') {
-            // Problem cell – colour by difficulty
-            const col = DIFFICULTY_COLOURS[diff] || DIFFICULTY_COLOURS.default;
-            bgColor = col;
-            cellEl.title = `Problem${cell.problem?.number ? ' #' + cell.problem.number : ''} – ${diff || 'unknown'} difficulty`;
-            // Show problem number if present
-            const num = cell.problem?.number ?? cell.problemNo ?? '';
-            if (num) {
-              cellEl.textContent = num;
-            }
-          } else {
-            // Unknown type
-            bgColor = '#555';
-            cellEl.title = 'Unknown';
-          }
-
-          cellEl.style.background = bgColor;
-          cellEl.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.1)';
-
-          // Optional: add a subtle border radius hover effect
-          cellEl.addEventListener('mouseenter', () => {
-            cellEl.style.transform = 'scale(1.08)';
-            cellEl.style.zIndex = '2';
-            cellEl.style.boxShadow = '0 0 12px rgba(255,255,255,0.4)';
-          });
-          cellEl.addEventListener('mouseleave', () => {
-            cellEl.style.transform = 'scale(1)';
-            cellEl.style.zIndex = '0';
-            cellEl.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.1)';
-          });
-
-          gridEl.appendChild(cellEl);
-        }
-      }
-
-      // ── Legend (optional) – add a small legend below the grid ──
-      const legend = document.createElement('div');
-      legend.style.display = 'flex';
-      legend.style.flexWrap = 'wrap';
-      legend.style.gap = '1rem';
-      legend.style.justifyContent = 'center';
-      legend.style.marginTop = '1.5rem';
-      legend.style.fontSize = '0.9rem';
-      legend.style.opacity = '0.9';
-
-      const legendItems = [
-        { label: 'Easy',       color: DIFFICULTY_COLOURS.easy },
-        { label: 'Normal',     color: DIFFICULTY_COLOURS.normal },
-        { label: 'Hard',       color: DIFFICULTY_COLOURS.hard },
-        { label: 'Insane',     color: DIFFICULTY_COLOURS.insane },
-        { label: 'Unknown',    color: DIFFICULTY_COLOURS.default },
-        { label: 'Obstacle',   color: '#2c2c3a' },
-        { label: 'Spawn',      color: '#0a7ea4' },
-        { label: 'Empty',      color: '#1a1a24' }
-      ];
-
-      legendItems.forEach(({ label, color }) => {
-        const item = document.createElement('span');
-        item.style.display = 'inline-flex';
-        item.style.alignItems = 'center';
-        item.style.gap = '0.4rem';
-        const swatch = document.createElement('span');
-        swatch.style.width = '16px';
-        swatch.style.height = '16px';
-        swatch.style.borderRadius = '3px';
-        swatch.style.background = color;
-        swatch.style.border = '1px solid rgba(255,255,255,0.2)';
-        item.appendChild(swatch);
-        item.appendChild(document.createTextNode(label));
-        legend.appendChild(item);
-      });
-
-      // Insert legend after the grid scroll container
-      const gridScroll = gridEl.closest('.grid-scroll');
-      if (gridScroll) {
-        gridScroll.insertAdjacentElement('afterend', legend);
-      } else {
-        gridEl.insertAdjacentElement('afterend', legend);
-      }
-
-      // ── Hide any leftover editing UI that might exist ──────────
-      //    (just in case the stylesheet shows something)
-      const editTools = document.querySelector('.editor-tools');
-      if (editTools) editTools.style.display = 'none';
-      const kindChoices = document.getElementById('kind-choices');
-      if (kindChoices) kindChoices.style.display = 'none';
-      const problemOptions = document.getElementById('problem-options');
-      if (problemOptions) problemOptions.style.display = 'none';
-      const mapNameInput = document.getElementById('map-name-input');
-      if (mapNameInput) mapNameInput.style.display = 'none';
-      const mapModeChoices = document.getElementById('map-mode-choices');
-      if (mapModeChoices) mapModeChoices.style.display = 'none';
-      const saveBtn = document.getElementById('save-map-button');
-      if (saveBtn) saveBtn.style.display = 'none';
-      const deleteBtn = document.getElementById('delete-open-map');
-      if (deleteBtn) deleteBtn.style.display = 'none';
-      const problemSaveState = document.getElementById('problem-save-state');
-      if (problemSaveState) problemSaveState.style.display = 'none';
     })();
   </script>
+
+  <script type="module" src="/app/admin-map-difficulty-view.js"></script>
 </body>
 </html>
