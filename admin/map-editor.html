@@ -35,6 +35,7 @@
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
           <a class="terrain-view-button" id="terrain-view-button" href="terrain-view.html" title="Open terrain view"><i class="fa-solid fa-mountain-sun" style="margin-right:6px;"></i>Terrain view</a>
+          <a class="terrain-view-button" id="difficulty-view-button" href="map-difficulty-visualise.html" title="Open difficulty map"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>Difficulty map</a>
           <span id="problem-save-state" class="problem-save-state"></span>
           <button class="save-changes" id="save-map-button" type="button" disabled>Save map</button>
           <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
@@ -120,19 +121,23 @@
     <button id="page-toast-close" type="button">Close</button>
   </div>
   <script type="module">
-    // Pass the current map ID (from the editor's URL) to the terrain view.
-    // The map editor is expected to be opened with ?id=<mapId> (or ?map=<mapId>).
+    // Pass the current map ID (from the editor's URL) to the terrain view
+    // and the difficulty visualiser.
+    // The map editor is opened with ?map=<mapId> (or ?id=<mapId>).
     (function () {
       const params = new URLSearchParams(window.location.search);
       const mapId = params.get('id') || params.get('map');
+
       const terrainBtn = document.getElementById('terrain-view-button');
-      if (terrainBtn) {
-        if (mapId) {
-          terrainBtn.href = `terrain-view.html?id=${encodeURIComponent(mapId)}`;
-        } else {
-          // If no map ID is present, keep the plain link; terrain-view can show its own message.
-          terrainBtn.href = 'terrain-view.html';
-        }
+      const difficultyBtn = document.getElementById('difficulty-view-button');
+
+      if (mapId) {
+        const enc = encodeURIComponent(mapId);
+        if (terrainBtn)    terrainBtn.href    = `terrain-view.html?id=${enc}`;
+        if (difficultyBtn) difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
+      } else {
+        if (terrainBtn)    terrainBtn.href    = 'terrain-view.html';
+        if (difficultyBtn) difficultyBtn.href = 'map-difficulty-visualise.html';
       }
     })();
   </script>
