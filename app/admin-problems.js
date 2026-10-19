@@ -5,13 +5,12 @@ import { loadBootstrap } from "../shared/data.js";
 import { api } from "../shared/api.js";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
-  PROBLEM_PAGE_SIZE, YEAR_INDEX_START, YEAR_INDEX_END, MIN_PROBLEM_NO, MAX_PROBLEM_NO,
+  PROBLEM_PAGE_SIZE, YEAR_INDEX_START, YEAR_INDEX_END,
   DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
 } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 
-
-
+// ── 顶层状态 ─────────────────────────────────────────────
 const state = {
   problems: [],
   revisions: { problems: 0, maps: 0 },
@@ -25,22 +24,31 @@ const state = {
   maps: [],
 };
 
+// 防止 addProblem 被连续点击时并发请求
+let addProblemBusy = false;
+
+// ── 数据加载 ─────────────────────────────────────────────
+async function refreshData() {
+  const data = await loadBootstrap();
+  state.problems = data.problems;
+  state.maps = data.maps;
+  state.revisions = data.revisions;
+}
+
+// ── 启动 ─────────────────────────────────────────────────
 async function run() {
   try {
-    const data = await loadBootstrap();
-    state.problems = data.problems;
-    state.maps = data.maps;
-    state.revisions = data.revisions;
+    await refreshData();
   } catch (err) {
     const le = document.querySelector("#load-error");
     if (le) { le.hidden = false; le.textContent = err.message; }
     return;
   }
-
   bindEvents();
   render();
 }
 
+// ── 事件绑定 ─────────────────────────────────────────────
 function bindEvents() {
   document.querySelector("#problem-section-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-section]");
@@ -142,19 +150,58 @@ function bindEvents() {
   });
 
   document.querySelector("#add-problem")?.addEventListener("click", () => {
-    const index = nextProblemNo(state.activeType);
-    if (index === null) {
-      showPageToast(`Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used.`, "warn");
-      return;
-    }
-    location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(state.activeType)}&index=${index}`);
+    addProblem(state.activeType);
   });
 
   document.querySelector("#batch-add-problem")?.addEventListener("click", () => {
     location.assign(`/admin/problem-batch.html?type=${encodeURIComponent(state.activeType)}`);
   });
+
+  // 从 bfcache 恢复时（浏览器后退），重新拉一次数据，
+  // 避免用户看到旧列表、算出旧 index
+  window.addEventListener("pageshow", async (event) => {
+    if (!event.persisted) return;
+    try {
+      await refreshData();
+      render();
+    } catch (err) {
+      console.error("[pageshow reload]", err);
+    }
+  });
 }
 
+// ── 添加题目（异步刷新后计算 index） ─────────────────────
+async function addProblem(type) {
+  if (addProblemBusy) return;
+  const problemType = typeInfo(type) ? type : "math";
+  addProblemBusy = true;
+
+  const btn = document.querySelector("#add-problem");
+  if (btn) btn.disabled = true;
+
+  try {
+    // 关键：先拉最新数据，保证 nextProblemNo 基于最新题目集合
+    await refreshData();
+    render();
+
+    const index = nextProblemNo(problemType);
+    if (index === null) {
+      showPageToast(
+        `Every index from ${YEAR_INDEX_START} to ${YEAR_INDEX_END} is already used for ${typeInfo(problemType).name}.`,
+        "warn"
+      );
+      return;
+    }
+    location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(problemType)}&index=${index}`);
+  } catch (err) {
+    showPageToast(err.message || "Could not open the problem editor.", "warn");
+  } finally {
+    addProblemBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── 工具 ─────────────────────────────────────────────────
 function nextProblemNo(type) {
   const used = new Set();
   for (const p of state.problems) if (p.type === type) used.add(p.index);
@@ -210,6 +257,7 @@ function problemUsage(index, type) {
   return { cells, maps: mapIds.size };
 }
 
+// ── 渲染 ─────────────────────────────────────────────────
 function render() {
   for (const btn of document.querySelectorAll("[data-section]")) {
     const type = typeInfo(btn.dataset.section);
@@ -225,10 +273,10 @@ function render() {
   if (!type || !section) return;
   section.hidden = false;
 
-  document.querySelector("#problem-section-title").replaceChildren();
-  document.querySelector("#problem-section-title").textContent = type.name;
-  const tag = el("span", "problem-tag", type.tag);
-  document.querySelector("#problem-section-title").append(tag);
+  const titleEl = document.querySelector("#problem-section-title");
+  titleEl.replaceChildren();
+  titleEl.textContent = type.name;
+  titleEl.append(el("span", "problem-tag", type.tag));
 
   const all = state.problems.filter((p) => p.type === type.id);
   const matching = filteredProblems();
@@ -243,7 +291,9 @@ function render() {
     countEl.textContent = filtering ? `No matches in ${all.length} problems` : "No problems yet";
   } else {
     const end = Math.min(start + visible.length, matching.length);
-    countEl.textContent = filtering ? `Showing ${start + 1}–${end} of ${matching.length} matches (${all.length} total)` : `Showing ${start + 1}–${end} of ${matching.length}`;
+    countEl.textContent = filtering
+      ? `Showing ${start + 1}–${end} of ${matching.length} matches (${all.length} total)`
+      : `Showing ${start + 1}–${end} of ${matching.length}`;
   }
 
   const toggle = document.querySelector("#problem-select-toggle");
@@ -323,17 +373,27 @@ function createProblemRow(problem) {
 
   item.append(main);
   item.append(el("p", `problem-usage-chip ${usage.cells > 0 ? "" : "unused"}`,
-    usage.cells > 0 ? `${usage.maps} map${usage.maps === 1 ? "" : "s"} · ${usage.cells} cell${usage.cells === 1 ? "" : "s"}` : "Not placed"));
+    usage.cells > 0
+      ? `${usage.maps} map${usage.maps === 1 ? "" : "s"} · ${usage.cells} cell${usage.cells === 1 ? "" : "s"}`
+      : "Not placed"));
   return item;
 }
 
 async function duplicateProblem(source) {
+  // 先刷新，保证 nextProblemNo 是最新的
+  try {
+    await refreshData();
+  } catch (err) {
+    showPageToast(err.message || "Could not refresh problems.", "warn");
+    return;
+  }
   const nextIndex = nextProblemNo(source.type);
   if (nextIndex === null) { showPageToast("No free index.", "warn"); return; }
   const copy = { ...source, index: nextIndex };
   state.problems.push(copy);
   state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-  await persistProblems();
+  const ok = await persistProblems();
+  if (!ok) return;
   location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(copy.type)}&index=${nextIndex}`);
 }
 
@@ -450,6 +510,8 @@ async function persistMaps() {
     return false;
   }
 }
+
+// ── 启动（最后） ─────────────────────────────────────────
 if (requireAdmin()) {
   initNav("problems");
   bindToastClose();
