@@ -1455,7 +1455,6 @@ async function handleContestState(req, res, db, user, body) {
 
 const PUBLIC_INDEX_MIN = 26000;
 const PUBLIC_INDEX_MAX = 26099;
-const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
 
 function isPublicProblem(problem) {
   return problem
