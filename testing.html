@@ -1,665 +1,272 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Problem browser · M260xx / O260xx / S260xx / P260xx</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Testing · 260xx Problems</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
+    <style>
+      .testing-wrap { max-width: 52rem; margin: 0 auto; padding: 24px 16px 64px; }
+      .testing-token { display: grid; gap: 8px; margin: 16px 0 24px; }
+      .testing-token label { font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+      .testing-token textarea { width: 100%; min-height: 4.5rem; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; font-size: 14px; }
+      .testing-problem { border: 1px solid var(--line); background: rgba(8,18,32,.72); padding: 16px 18px; margin: 14px 0; }
+      .testing-problem h2 { margin: 0 0 6px; font-size: 20px; display: flex; gap: 10px; align-items: baseline; }
+      .testing-problem .tag { font-family: var(--font-ui); color: var(--cyan); }
+      .testing-problem .diff { font-family: var(--font-ui); font-size: 12px; padding: 2px 7px; border: 1px solid currentColor; }
+      .testing-problem .diff.easy { color: #3ddc6a; } .testing-problem .diff.normal { color: #ffe14a; }
+      .testing-problem .diff.hard { color: #ff3b4e; } .testing-problem .diff.insane { color: #c084fc; }
+      .testing-problem .prompt { margin: 10px 0 14px; line-height: 1.5; }
+      .testing-problem form { display: flex; gap: 8px; flex-wrap: wrap; }
+      .testing-problem input[type="text"] { flex: 1 1 16rem; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; }
+      .testing-problem button { padding: 8px 14px; border: 1px solid var(--cyan); background: rgba(62,224,255,.12); color: var(--cyan); font-family: var(--font-ui); cursor: pointer; }
+      .testing-problem button:disabled { opacity: .5; cursor: wait; }
+      .testing-result { margin: 10px 0 0; font-family: var(--font-ui); font-size: 14px; }
+      .testing-result.ac { color: #3ddc6a; } .testing-result.wa { color: #ffe14a; } .testing-result.err { color: var(--danger); }
+      .testing-empty { color: var(--muted); font-family: var(--font-ui); }
+    </style>
+  </head>
+  <body>
+    <div class="testing-wrap">
+      <p class="eyebrow">Testing</p>
+      <h1>260xx Problems</h1>
+      <p class="lead">Lists problems whose index is in the 26000–26099 range and lets you submit an answer against the saved grader. Nothing is written to the database; this is the same check as <code>test-problem</code>.</p>
 
-    body {
-      font-family: 'Share Tech Mono', monospace;
-      background: #0b0f17;
-      color: #d6e6ff;
-      padding: 2rem 1.5rem;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .app { max-width: 1100px; width: 100%; }
-
-    h1 {
-      font-family: 'Orbitron', sans-serif;
-      font-weight: 700;
-      font-size: 2.2rem;
-      letter-spacing: 1px;
-      color: #a6d4ff;
-      text-shadow: 0 0 8px #1e4a7a;
-      margin-bottom: 0.25rem;
-    }
-
-    .subhead {
-      font-size: 1rem;
-      color: #8aa9cc;
-      margin-bottom: 2rem;
-      border-left: 3px solid #2e6a9e;
-      padding-left: 1rem;
-      line-height: 1.5;
-    }
-
-    .prefix-badge {
-      display: inline-block;
-      background: #142233;
-      border: 1px solid #2e6a9e;
-      border-radius: 20px;
-      padding: 0.1rem 0.8rem;
-      font-size: 0.85rem;
-      margin-right: 0.3rem;
-      font-weight: 600;
-      color: #b8d8ff;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.8rem 1.5rem;
-      background: #111c2b;
-      border: 1px solid #1f3a55;
-      border-radius: 12px;
-      padding: 0.8rem 1.2rem;
-      margin-bottom: 2rem;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-    }
-
-    .toolbar button {
-      background: #1b3148;
-      border: 1px solid #2e6a9e;
-      color: #d0e6ff;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.9rem;
-      padding: 0.4rem 1rem;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      white-space: nowrap;
-    }
-
-    .toolbar button:hover:not(:disabled) { background: #2a4a6a; border-color: #4a8ac0; color: #fff; }
-    .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .toolbar button.primary { background: #1b4d6b; border-color: #3f8ac9; font-weight: 600; color: #e1f0ff; }
-    .toolbar button.primary:hover:not(:disabled) { background: #266a91; }
-
-    .toolbar label {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.9rem;
-      color: #9bb7d4;
-      cursor: pointer;
-    }
-
-    .toolbar input[type="checkbox"] {
-      accent-color: #3f8ac9;
-      width: 1.1rem;
-      height: 1.1rem;
-      cursor: pointer;
-    }
-
-    .status-line {
-      margin-left: auto;
-      font-size: 0.85rem;
-      color: #8aa9cc;
-      font-style: italic;
-      white-space: nowrap;
-    }
-
-    .stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem 2rem;
-      margin-bottom: 1.5rem;
-      background: #0e1622;
-      border-radius: 10px;
-      padding: 0.75rem 1.2rem;
-      border: 1px solid #1a2c3e;
-    }
-
-    .stats span { display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; }
-    .stats .count { font-weight: 700; color: #b0d4ff; font-size: 1.1rem; }
-
-    .problem-grid { display: flex; flex-direction: column; gap: 1.25rem; }
-
-    .problem-card {
-      background: #101c28;
-      border: 1px solid #1f3a55;
-      border-left: 6px solid #2e6a9e;
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      transition: border-color 0.15s, background 0.15s;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    }
-
-    .problem-card:hover { border-left-color: #6ab0f0; background: #142232; }
-
-    .problem-card .tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.6rem 1rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .problem-tag {
-      font-family: 'Orbitron', sans-serif;
-      font-weight: 700;
-      font-size: 1.15rem;
-      color: #b0d4ff;
-      background: #0a121e;
-      padding: 0.15rem 0.9rem;
-      border-radius: 20px;
-      border: 1px solid #2e6a9e;
-      letter-spacing: 0.5px;
-    }
-
-    .problem-type {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      padding: 0.15rem 0.7rem;
-      border-radius: 12px;
-      font-weight: 600;
-    }
-
-    .type-math { background: #1e3b4f; color: #7ec8ff; border: 1px solid #2e6a9e; }
-    .type-oi { background: #1f3b2e; color: #7ed9a0; border: 1px solid #2d7a4b; }
-    .type-science { background: #3b2e1f; color: #e6c87e; border: 1px solid #8a6a2e; }
-    .type-puzzle { background: #2e1f3b; color: #c87ee6; border: 1px solid #6a2e8a; }
-
-    .difficulty-badge {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      padding: 0.15rem 0.8rem;
-      border-radius: 12px;
-      letter-spacing: 0.5px;
-    }
-
-    .diff-easy { background: #0e4a2e; color: #6ee7a0; border: 1px solid #1a7a4a; }
-    .diff-normal { background: #3a3a1a; color: #e6e66e; border: 1px solid #7a7a2e; }
-    .diff-hard { background: #4a2a1a; color: #ffaa6e; border: 1px solid #aa5a2e; }
-    .diff-insane { background: #4a1a2a; color: #ff6e8e; border: 1px solid #aa2e4a; }
-
-    .problem-index-note { font-size: 0.75rem; color: #5a7a9a; margin-left: auto; }
-
-    .problem-prompt {
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: #c0d8f0;
-      background: #0a121e;
-      padding: 0.6rem 1rem;
-      border-radius: 8px;
-      margin: 0.6rem 0 0.3rem;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border-left: 2px solid #1f3a55;
-      font-family: 'Share Tech Mono', monospace;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-
-    .problem-answer {
-      font-size: 0.9rem;
-      color: #8aa9cc;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      background: #0a121e;
-      display: inline-block;
-      margin-top: 0.3rem;
-    }
-
-    .problem-answer strong { color: #b0d4ff; font-weight: 600; }
-
-    .empty-state {
-      text-align: center;
-      padding: 4rem 2rem;
-      color: #5a7a9a;
-      font-size: 1.2rem;
-      border: 2px dashed #1a2c3e;
-      border-radius: 16px;
-      background: #0a101a;
-    }
-
-    .empty-state i { font-size: 2.5rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
-
-    .error-banner {
-      background: #2a1010;
-      border: 1px solid #aa2e2e;
-      border-radius: 10px;
-      padding: 1rem 1.5rem;
-      color: #ff9a9a;
-      margin-bottom: 2rem;
-      font-size: 0.95rem;
-    }
-
-    .error-banner strong { color: #ff6a6a; }
-
-    .spinner {
-      display: inline-block;
-      width: 1.2rem;
-      height: 1.2rem;
-      border: 2px solid #2e6a9e;
-      border-top-color: #b0d4ff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .page-toast {
-      position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      background: #1b3148;
-      border: 1px solid #3f8ac9;
-      border-radius: 10px;
-      padding: 0.8rem 1.5rem;
-      color: #e1f0ff;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.7);
-      font-size: 0.9rem;
-      max-width: 400px;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .page-toast button {
-      background: none;
-      border: 1px solid #3f8ac9;
-      color: #b0d4ff;
-      padding: 0.2rem 0.8rem;
-      border-radius: 6px;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 0.8rem;
-    }
-
-    .page-toast button:hover { background: #2a4a6a; }
-
-    @media (max-width: 650px) {
-      body { padding: 1rem 0.75rem; }
-      h1 { font-size: 1.6rem; }
-      .toolbar { flex-direction: column; align-items: stretch; }
-      .status-line { margin-left: 0; text-align: right; }
-      .problem-card { padding: 0.8rem 1rem; }
-      .problem-tag { font-size: 1rem; }
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <h1>📚 Problem browser</h1>
-    <div class="subhead">
-      Showing problems with prefix
-      <span class="prefix-badge">M260xx</span>
-      <span class="prefix-badge">O260xx</span>
-      <span class="prefix-badge">S260xx</span>
-      <span class="prefix-badge">P260xx</span>
-      <br />
-      <small style="color:#6a8aaa;">xx = any two digits (00–99) · data loaded from the Territory Game API</small>
-    </div>
-
-    <div class="toolbar">
-      <button id="refresh-btn" class="primary" type="button">
-        <span class="spinner" id="refresh-spinner" hidden></span>
-        <span id="refresh-label">⟳ Refresh</span>
-      </button>
-      <label>
-        <input type="checkbox" id="auto-refresh" checked />
-        Auto‑refresh every 30s
-      </label>
-      <span class="status-line" id="status-line">Ready</span>
-    </div>
-
-    <div class="stats" id="stats-panel">
-      <span>📊 Total: <span class="count" id="stat-total">—</span></span>
-      <span>🧮 Math: <span class="count" id="stat-math">—</span></span>
-      <span>💻 OI: <span class="count" id="stat-oi">—</span></span>
-      <span>🔬 Science: <span class="count" id="stat-science">—</span></span>
-      <span>🧩 Puzzle: <span class="count" id="stat-puzzle">—</span></span>
-    </div>
-
-    <div id="error-banner" class="error-banner" hidden></div>
-
-    <div id="problem-list-container" class="problem-grid">
-      <div class="empty-state">
-        <i>⏳</i>
-        Loading problems…
+      <div class="testing-token">
+        <label for="testing-token">Session token (required by the API)</label>
+        <textarea id="testing-token" spellcheck="false" placeholder="Paste the JWT from localStorage key territory-game-session, or log in normally first."></textarea>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="testing-load" type="button">Load 260xx problems</button>
+          <button id="testing-clear" type="button" class="back-button">Forget token</button>
+        </div>
+        <p id="testing-status" class="field-note"></p>
       </div>
+
+      <div id="testing-list" aria-live="polite"></div>
     </div>
-  </div>
 
-  <div id="page-toast" class="page-toast" hidden>
-    <p id="page-toast-message" style="margin:0; flex:1;">Message</p>
-    <button id="page-toast-close" type="button">Close</button>
-  </div>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <script>
+      (function () {
+        "use strict";
 
-  <script>
-    (function () {
-      'use strict';
+        var SESSION_KEY = "territory-game-session";
+        var API_BASE = "/api/territory";
+        var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
+        var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+        var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
+        var RANGE_START = 26000;
+        var RANGE_END = 26099;
 
-      // ── Configuration ────────────────────────────────────────────────
-      const API_BASE = '/api/territory';
-      const SESSION_KEY = 'territory-game-session';
-      const PREFIX_PATTERN = /^(M|O|S|P)260\d{2}$/;
-      const AUTO_REFRESH_MS = 30000;
+        var tokenInput = document.getElementById("testing-token");
+        var loadButton = document.getElementById("testing-load");
+        var clearButton = document.getElementById("testing-clear");
+        var statusEl = document.getElementById("testing-status");
+        var listEl = document.getElementById("testing-list");
 
-      // ── State ────────────────────────────────────────────────────────
-      let allProblems = [];
-      let autoRefreshTimer = null;
-      let isLoading = false;
-      let lastFetchTime = null;
-
-      // ── DOM refs ─────────────────────────────────────────────────────
-      const $ = (id) => document.getElementById(id);
-      const refreshBtn = $('refresh-btn');
-      const refreshLabel = $('refresh-label');
-      const refreshSpinner = $('refresh-spinner');
-      const autoRefreshCheckbox = $('auto-refresh');
-      const statusLine = $('status-line');
-      const statTotal = $('stat-total');
-      const statMath = $('stat-math');
-      const statOi = $('stat-oi');
-      const statScience = $('stat-science');
-      const statPuzzle = $('stat-puzzle');
-      const errorBanner = $('error-banner');
-      const listContainer = $('problem-list-container');
-      const toast = $('page-toast');
-      const toastMessage = $('page-toast-message');
-      const toastClose = $('page-toast-close');
-
-      // ── Helpers ──────────────────────────────────────────────────────
-      function escapeHtml(text) {
-        if (text === null || text === undefined) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-      }
-
-      function showToast(msg, duration = 5000) {
-        toastMessage.textContent = msg;
-        toast.hidden = false;
-        clearTimeout(toast._timeout);
-        if (duration > 0) {
-          toast._timeout = setTimeout(() => { toast.hidden = true; }, duration);
+        function readStoredToken() {
+          try {
+            var stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            return stored && typeof stored.token === "string" ? stored.token : "";
+          } catch (e) {
+            return "";
+          }
         }
-      }
 
-      toastClose.addEventListener('click', () => { toast.hidden = true; clearTimeout(toast._timeout); });
-
-      function setLoading(loading) {
-        isLoading = loading;
-        refreshBtn.disabled = loading;
-        refreshSpinner.hidden = !loading;
-        refreshLabel.textContent = loading ? 'Loading…' : '⟳ Refresh';
-      }
-
-      function setStatus(text, isError = false) {
-        statusLine.textContent = text;
-        statusLine.style.color = isError ? '#ff9a9a' : '#8aa9cc';
-      }
-
-      function showError(msg) {
-        errorBanner.hidden = false;
-        errorBanner.innerHTML = '<strong>⚠ Error:</strong> ' + escapeHtml(msg);
-        setStatus('Error loading data', true);
-      }
-
-      function clearError() {
-        errorBanner.hidden = true;
-        errorBanner.innerHTML = '';
-      }
-
-      // ── Type detection ───────────────────────────────────────────────
-      function getTypeFromTag(tag) {
-        if (!tag) return 'unknown';
-        const t = tag.trim().toUpperCase();
-        if (t.startsWith('M260')) return 'math';
-        if (t.startsWith('O260')) return 'oi';
-        if (t.startsWith('S260')) return 'science';
-        if (t.startsWith('P260')) return 'puzzle';
-        return 'unknown';
-      }
-
-      function getTypeLabel(type) {
-        switch (type) {
-          case 'math': return 'Math';
-          case 'oi': return 'OI';
-          case 'science': return 'Science';
-          case 'puzzle': return 'Puzzle';
-          default: return 'Other';
+        function currentToken() {
+          return tokenInput.value.trim() || readStoredToken();
         }
-      }
 
-      function getTypeClass(type) {
-        return 'type-' + (type === 'unknown' ? 'math' : type);
-      }
-
-      function getDifficultyInfo(difficulty) {
-        const d = (difficulty || 'easy').toLowerCase();
-        const map = {
-          easy:   { label: 'Easy',   cls: 'diff-easy'   },
-          normal: { label: 'Normal', cls: 'diff-normal' },
-          hard:   { label: 'Hard',   cls: 'diff-hard'   },
-          insane: { label: 'Insane', cls: 'diff-insane' },
-        };
-        return map[d] || map.easy;
-      }
-
-      // ── Session ──────────────────────────────────────────────────────
-      function readSession() {
-        try {
-          const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-          if (!stored || typeof stored.token !== 'string' || !stored.user) return null;
-          return stored;
-        } catch {
-          return null;
+        function setStatus(text, tone) {
+          statusEl.textContent = text || "";
+          statusEl.style.color = tone === "err" ? "var(--danger)" : tone === "ok" ? "#3ddc6a" : "";
         }
-      }
 
-      // ── API call ─────────────────────────────────────────────────────
-      async function apiCall(action, body) {
-        const session = readSession();
-        const headers = { 'Content-Type': 'application/json' };
-        if (session?.token) headers['Authorization'] = `Bearer ${session.token}`;
-
-        const isPost = !!body;
-        const url = isPost
-          ? API_BASE
-          : `${API_BASE}?action=${encodeURIComponent(action)}`;
-
-        const r = await fetch(url, {
-          method: isPost ? 'POST' : 'GET',
-          headers,
-          body: isPost ? JSON.stringify({ action, ...body }) : undefined,
-        });
-
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          const error = new Error(data.message || `HTTP ${r.status}`);
-          error.status = r.status;
-          error.data = data;
-          throw error;
+        function problemTag(index, type) {
+          return (TYPE_TAG[type] || "M") + index;
         }
-        return data;
-      }
 
-      // ── Fetch & filter ───────────────────────────────────────────────
-      async function fetchProblems() {
-        if (isLoading) return;
-        setLoading(true);
-        clearError();
-        setStatus('Fetching…');
+        function plainText(source) {
+          return String(source || "")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<[^>]*>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
 
-        try {
-          const data = await apiCall('bootstrap');
+        async function apiCall(action, body) {
+          var headers = { "Content-Type": "application/json" };
+          var token = currentToken();
+          if (token) headers["Authorization"] = "Bearer " + token;
+          var isPost = !!body;
+          var url = isPost ? API_BASE : API_BASE + "?action=" + encodeURIComponent(action);
+          var res = await fetch(url, {
+            method: isPost ? "POST" : "GET",
+            headers: headers,
+            body: isPost ? JSON.stringify(Object.assign({ action: action }, body)) : undefined
+          });
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) {
+            var err = new Error(data.message || ("HTTP " + res.status));
+            err.status = res.status;
+            throw err;
+          }
+          return data;
+        }
 
-          if (!data.success) {
-            throw new Error(data.message || 'Bootstrap failed');
+        function renderMath(element) {
+          if (!element || typeof renderMathInElement !== "function") return;
+          try {
+            renderMathInElement(element, {
+              delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\[", right: "\\]", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false }
+              ],
+              throwOnError: false,
+              strict: "ignore"
+            });
+          } catch (e) { /* keep the raw text */ }
+        }
+
+        function inRange(problem) {
+          return problem && Number.isInteger(problem.index) && problem.index >= RANGE_START && problem.index <= RANGE_END;
+        }
+
+        function renderProblem(problem) {
+          var card = document.createElement("section");
+          card.className = "testing-problem";
+
+          var heading = document.createElement("h2");
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = problemTag(problem.index, problem.type);
+          var name = document.createElement("span");
+          name.textContent = problem.type;
+          var diff = document.createElement("span");
+          var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
+          diff.className = "diff " + level;
+          diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+          heading.append(tag, name, diff);
+
+          var prompt = document.createElement("div");
+          prompt.className = "prompt";
+          var source = problem.prompt || "";
+          if (/<\/?[a-z][\w:-]*\b[^>]*>/i.test(source)) {
+            // Keep HTML problems visible as text here; the real app renders them in a sandboxed frame.
+            prompt.textContent = plainText(source) || "(empty prompt)";
+          } else {
+            prompt.textContent = source || "(empty prompt)";
+            renderMath(prompt);
           }
 
-          const problems = Array.isArray(data.problems) ? data.problems : [];
+          var form = document.createElement("form");
+          var input = document.createElement("input");
+          input.type = "text";
+          input.maxLength = 5000;
+          input.placeholder = "Your answer";
+          input.setAttribute("aria-label", "Answer for " + tag.textContent);
+          var button = document.createElement("button");
+          button.type = "submit";
+          button.textContent = "Submit";
+          form.append(input, button);
 
-          // Filter by tag prefix
-          const filtered = problems.filter(p => {
-            const tag = (p.tag || p.indexTag || '').toString().trim().toUpperCase();
-            return PREFIX_PATTERN.test(tag);
+          var result = document.createElement("p");
+          result.className = "testing-result";
+          result.hidden = true;
+
+          form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            if (button.disabled) return;
+            button.disabled = true;
+            result.hidden = true;
+            try {
+              // test-problem runs the saved logic/answer without writing anything.
+              var data = await apiCall("test-problem", {
+                logic: problem.logic || "",
+                expected: problem.answer || "",
+                answer: input.value
+              });
+              result.hidden = false;
+              if (data.systemError) {
+                result.className = "testing-result err";
+                result.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
+              } else if (data.correct) {
+                result.className = "testing-result ac";
+                result.textContent = "AC" + (typeof data.score === "number" ? " · " + data.score + "/100" : "");
+              } else {
+                result.className = "testing-result wa";
+                var msg = data.comment && data.comment !== "WA" ? data.comment : "Wrong answer.";
+                result.textContent = "WA · " + msg + (typeof data.score === "number" ? " (" + data.score + "/100)" : "");
+              }
+            } catch (error) {
+              result.hidden = false;
+              result.className = "testing-result err";
+              result.textContent = error.message;
+            } finally {
+              button.disabled = false;
+            }
           });
 
-          allProblems = filtered;
-          lastFetchTime = new Date();
-          setStatus(`Loaded ${filtered.length} matching problem${filtered.length !== 1 ? 's' : ''} · ${lastFetchTime.toLocaleTimeString()}`);
-          clearError();
-          render();
-        } catch (err) {
-          console.error('Fetch error:', err);
-          if (err.status === 401) {
-            showError('You are not signed in. Please log in at /login.html first.');
-          } else {
-            showError(err.message || 'Failed to fetch problems.');
+          card.append(heading, prompt, form, result);
+          return card;
+        }
+
+        async function loadProblems() {
+          loadButton.disabled = true;
+          setStatus("Loading…");
+          listEl.replaceChildren();
+          try {
+            var data = await apiCall("bootstrap");
+            var problems = Array.isArray(data.problems) ? data.problems : [];
+            var matched = problems.filter(inRange).sort(function (a, b) {
+              return a.index - b.index || a.type.localeCompare(b.type);
+            });
+            if (matched.length === 0) {
+              var empty = document.createElement("p");
+              empty.className = "testing-empty";
+              empty.textContent = "No problems with index 26000–26099 were returned.";
+              listEl.append(empty);
+              setStatus("Loaded, but the range is empty.");
+              return;
+            }
+            for (var i = 0; i < matched.length; i += 1) listEl.append(renderProblem(matched[i]));
+            setStatus("Loaded " + matched.length + " problem" + (matched.length === 1 ? "" : "s") + " in 26000–26099.", "ok");
+          } catch (error) {
+            var p = document.createElement("p");
+            p.className = "testing-empty";
+            p.textContent = error.message;
+            listEl.append(p);
+            setStatus(error.message, "err");
+          } finally {
+            loadButton.disabled = false;
           }
-          if (allProblems.length === 0) {
-            listContainer.innerHTML = `
-              <div class="empty-state">
-                <i>⚠️</i>
-                Could not load problems.<br />
-                <small style="display:block;margin-top:0.8rem;color:#5a7a9a;">
-                  Make sure you are signed in and the API is reachable at <code>${escapeHtml(API_BASE)}</code>.
-                </small>
-              </div>`;
-          }
-        } finally {
-          setLoading(false);
-        }
-      }
-
-      // ── Render ───────────────────────────────────────────────────────
-      function render() {
-        const counts = { math: 0, oi: 0, science: 0, puzzle: 0, unknown: 0 };
-        allProblems.forEach(p => {
-          const tag = (p.tag || p.indexTag || '').toString().trim().toUpperCase();
-          const type = getTypeFromTag(tag);
-          counts[type] = (counts[type] || 0) + 1;
-        });
-
-        statTotal.textContent = allProblems.length;
-        statMath.textContent = counts.math;
-        statOi.textContent = counts.oi;
-        statScience.textContent = counts.science;
-        statPuzzle.textContent = counts.puzzle;
-
-        const visible = [...allProblems].sort((a, b) => {
-          const tagA = (a.tag || a.indexTag || '').toString().trim().toUpperCase();
-          const tagB = (b.tag || b.indexTag || '').toString().trim().toUpperCase();
-          return tagA.localeCompare(tagB);
-        });
-
-        if (visible.length === 0) {
-          listContainer.innerHTML = `
-            <div class="empty-state">
-              <i>🔍</i>
-              No problems found with the requested prefixes.<br />
-              <small style="color:#5a7a9a;">Try refreshing — or check that the backend has problems tagged M260xx, O260xx, S260xx, or P260xx.</small>
-            </div>`;
-          return;
         }
 
-        const fragment = document.createDocumentFragment();
-
-        visible.forEach(problem => {
-          const tag = (problem.tag || problem.indexTag || '???').toString().trim();
-          const tagUpper = tag.toUpperCase();
-          const type = getTypeFromTag(tagUpper);
-          const typeLabel = getTypeLabel(type);
-          const typeClass = getTypeClass(type);
-          const difficulty = getDifficultyInfo(problem.difficulty);
-          const prompt = problem.prompt || problem.statement || problem.question || '(no statement)';
-          const answer = problem.answer || problem.expected || '(hidden)';
-
-          let promptPreview = prompt.length > 400 ? prompt.slice(0, 400) + '…' : prompt;
-
-          const card = document.createElement('div');
-          card.className = 'problem-card';
-
-          card.innerHTML = `
-            <div class="tag-row">
-              <span class="problem-tag">${escapeHtml(tagUpper)}</span>
-              <span class="problem-type ${typeClass}">${escapeHtml(typeLabel)}</span>
-              <span class="difficulty-badge ${difficulty.cls}">${difficulty.label}</span>
-              <span class="problem-index-note">index: ${escapeHtml(problem.index ?? tagUpper)}</span>
-            </div>
-            <div class="problem-prompt">${escapeHtml(promptPreview)}</div>
-            <div class="problem-answer"><strong>Answer:</strong> ${escapeHtml(answer)}</div>
-          `;
-
-          fragment.appendChild(card);
-        });
-
-        listContainer.innerHTML = '';
-        listContainer.appendChild(fragment);
-      }
-
-      // ── Auto-refresh ─────────────────────────────────────────────────
-      function startAutoRefresh() {
-        stopAutoRefresh();
-        if (!autoRefreshCheckbox.checked) return;
-        autoRefreshTimer = setInterval(() => {
-          if (!isLoading) fetchProblems();
-        }, AUTO_REFRESH_MS);
-      }
-
-      function stopAutoRefresh() {
-        if (autoRefreshTimer) {
-          clearInterval(autoRefreshTimer);
-          autoRefreshTimer = null;
-        }
-      }
-
-      autoRefreshCheckbox.addEventListener('change', () => {
-        if (autoRefreshCheckbox.checked) {
-          startAutoRefresh();
-          showToast('Auto-refresh enabled (every 30s)', 3000);
+        // Prefill from the shared session so a logged-in admin can just press Load.
+        var stored = readStoredToken();
+        if (stored) {
+          tokenInput.value = stored;
+          setStatus("Using the session token already stored in this browser.");
         } else {
-          stopAutoRefresh();
-          showToast('Auto-refresh disabled', 3000);
-        }
-      });
-
-      // ── Manual refresh ───────────────────────────────────────────────
-      refreshBtn.addEventListener('click', () => fetchProblems());
-
-      // ── Init ─────────────────────────────────────────────────────────
-      function init() {
-        if (!readSession()) {
-          showError('You are not signed in. Please log in at /login.html, then return to this page.');
-          listContainer.innerHTML = `
-            <div class="empty-state">
-              <i>🔒</i>
-              Please <a href="/login.html" style="color:#7ec8ff;">log in</a> first.
-            </div>`;
-          return;
+          setStatus("Paste a token to load problems. The API rejects requests without one.", "err");
         }
 
-        fetchProblems();
-        startAutoRefresh();
-
-        window.addEventListener('beforeunload', stopAutoRefresh);
-      }
-
-      init();
-    })();
-  </script>
-</body>
+        loadButton.addEventListener("click", loadProblems);
+        clearButton.addEventListener("click", function () {
+          tokenInput.value = "";
+          listEl.replaceChildren();
+          setStatus("Token cleared.", "");
+        });
+      })();
+    </script>
+  </body>
 </html>
