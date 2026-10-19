@@ -2,112 +2,84 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Problem · Practice</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Testing Problems</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
     <style>
-      /* Mobile-first layout for the practice problem page. */
-      html, body { min-height: 100%; }
-      body {
+      .cat-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+      }
+      .cat-empty {
         margin: 0;
-        padding: 0;
-        padding-bottom: calc(96px + env(safe-area-inset-bottom));
-        background: #060910;
+        color: var(--muted);
+        font-family: var(--font-ui);
+        font-size: 13px;
       }
-      .practice-answer {
-        max-width: 40rem;
-        margin: 0 auto;
-        padding: 16px 12px 24px;
-      }
-      .practice-answer h1 {
-        margin: 0 0 12px;
-        font-size: 22px;
-        line-height: 1.3;
-      }
-      #student-problem-prompt {
-        margin: 0 0 16px;
-        overflow-x: auto;
-      }
-      #student-problem-prompt .statement-frame {
-        width: 100%;
-        min-height: 60px;
-        border: 0;
-        background: #081220;
-      }
-      /* Sticky submit bar so it is always reachable on a phone. */
-      .practice-submit-bar {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 20;
+      /* Difficulty accent on the card. */
+      .practice-card {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-        background: rgba(6, 9, 16, 0.96);
-        border-top: 1px solid var(--line);
-      }
-      .practice-submit-bar input {
-        width: 100%;
-        padding: 10px 12px;
+        gap: 10px;
+        padding: 14px 16px;
         border: 1px solid var(--line);
-        background: rgba(4, 12, 22, 0.95);
+        border-left-width: 6px;
+        background: #101820;
         color: var(--ink);
-        font: inherit;
-        font-size: 16px; /* prevents iOS zoom on focus */
-        border-radius: 4px;
-      }
-      .practice-submit-bar button {
-        width: 100%;
-        padding: 12px 16px;
-        border: 1px solid var(--cyan);
-        background: rgba(62, 224, 255, 0.14);
-        color: var(--cyan);
-        font-family: var(--font-ui);
-        font-size: 16px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        border-radius: 4px;
+        text-align: left;
+        text-decoration: none;
         cursor: pointer;
       }
-      .practice-submit-bar button:disabled { opacity: 0.5; cursor: wait; }
-      .practice-submit-bar #student-answer-error {
-        margin: 0;
-        text-align: center;
+      .practice-card.easy   { border-left-color: #3ddc6a; }
+      .practice-card.normal { border-left-color: #ffe14a; }
+      .practice-card.hard   { border-left-color: #ff3b4e; }
+      .practice-card.insane { border-left-color: #c084fc; }
+      .practice-card:hover { outline: 2px solid var(--cyan); outline-offset: -4px; }
+      .practice-card .tag {
+        font-family: var(--font-ui);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: .04em;
       }
-      /* Hide the answer row for puzzle problems that take over the input. */
-      .practice-submit-bar.puzzle input { display: none; }
-      @media (min-width: 720px) {
-        .practice-submit-bar {
-          position: static;
-          flex-direction: row;
-          flex-wrap: wrap;
-          align-items: center;
-          background: transparent;
-          border-top: 0;
-          padding: 16px 0 0;
-        }
-        .practice-submit-bar input { flex: 1 1 16rem; width: auto; }
-        .practice-submit-bar button { width: auto; }
-        body { padding-bottom: 24px; }
+      .practice-card .preview {
+        font-family: var(--font-ui);
+        font-size: 13px;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
       }
     </style>
   </head>
   <body>
-    <main class="practice-answer">
-      <p id="answer-status" class="form-error" hidden></p>
-      <h1 id="student-problem-tag"></h1>
-      <div id="student-problem-prompt"></div>
-      <form id="student-answer-form" class="practice-submit-bar">
-        <input id="student-answer" type="text" maxlength="5000" aria-label="Answer" />
-        <button type="submit">Submit</button>
-        <p id="student-answer-error" class="form-error" hidden></p>
-      </form>
+    <main class="practice" style="max-width:56rem;margin:0 auto;padding:24px 16px 64px;">
+      <p class="eyebrow">Practice</p>
+      <h1>Testing Problems</h1>
+
+      <div class="kind-choices" id="practice-categories" role="group" aria-label="Choose a category" style="margin:16px 0;">
+        <button type="button" data-cat="M" aria-pressed="false">Math (M)</button>
+        <button type="button" data-cat="O" aria-pressed="false">OI (O)</button>
+        <button type="button" data-cat="P" aria-pressed="false">Puzzle (P)</button>
+        <button type="button" data-cat="S" aria-pressed="false">Science (S)</button>
+      </div>
+
+      <ul class="legend">
+        <li><span class="swatch fill easy"></span>Easy</li>
+        <li><span class="swatch fill normal"></span>Normal</li>
+        <li><span class="swatch fill hard"></span>Hard</li>
+        <li><span class="swatch fill insane"></span>Insane</li>
+      </ul>
+
+      <p id="practice-error" class="form-error" hidden></p>
+      <p id="practice-hint" class="field-note">Choose a category above to see its problems.</p>
+      <p id="practice-empty" class="field-note" hidden>No problems in this category.</p>
+      <div id="practice-grid" class="cat-grid" aria-live="polite"></div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -120,334 +92,104 @@
         var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
         var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
+        var TAG_TO_TYPE = { M: "math", O: "oi", S: "science", P: "puzzle" };
 
-        var params = new URLSearchParams(location.search);
-        var index = Number(params.get("index"));
-        var type = params.get("type") || "";
+        var grid = document.getElementById("practice-grid");
+        var errorEl = document.getElementById("practice-error");
+        var emptyEl = document.getElementById("practice-empty");
+        var hintEl = document.getElementById("practice-hint");
+        var categoryBar = document.getElementById("practice-categories");
 
-        var status = document.getElementById("answer-status");
-        var title = document.getElementById("student-problem-tag");
-        var prompt = document.getElementById("student-problem-prompt");
-        var form = document.getElementById("student-answer-form");
-        var answer = document.getElementById("student-answer");
-        var error = document.getElementById("student-answer-error");
+        var allProblems = [];
+        var activeCat = null;
 
-        function showStatus(message) {
-          status.hidden = false;
-          status.textContent = message;
-        }
         function tagOf(p) { return (TYPE_TAG[p.type] || "?") + p.index; }
 
-        // ── buildStatementDocument / setRichText copied from script.js ──
-        var STATEMENT_KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
-        var STATEMENT_KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
-        var STATEMENT_AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
-        var statementFrames = new WeakMap();
-        var activeStatementFrame = null;
-        var pendingStatementSubmit = null;
-
-        function escapeStatementText(value) {
-          return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-        function containsHtml(source) {
-          return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
-        }
-        function buildStatementDocument(source, tag) {
-          tag = tag || "";
-          var text = String(source || "");
-          var tagText = escapeStatementText(tag);
-          var body = containsHtml(text)
-            ? text
-            : '<pre class="statement-text">' + escapeStatementText(text) + "</pre>";
-          return '<!doctype html><html><head><meta charset="utf-8">'
-            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-            + '<link rel="stylesheet" href="' + STATEMENT_KATEX_CSS + '" crossorigin="anonymous">'
-            + '<style>'
-            + "html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }"
-            + 'body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }'
-            + "#territory-bridge { display: none; }"
-            + ".statement-content { overflow-wrap: anywhere; font-size: 16px; }"
-            + ".katex { font-size: 1em; }"
-            + ".statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }"
-            + ".statement-content img, .statement-content video,"
-            + ".statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }"
-            + ".statement-content table { max-width: 100%; border-collapse: collapse; }"
-            + ".statement-content a { color: #3ee0ff; }"
-            + "</style>"
-            + '<script src="' + STATEMENT_KATEX_JS + '" crossorigin="anonymous"><\/script>'
-            + '<script src="' + STATEMENT_AUTO_RENDER_JS + '" crossorigin="anonymous"><\/script>'
-            + "<script>"
-            + "(function () {"
-            + "  function report() {"
-            + "    try {"
-            + "      const height = Math.max("
-            + "        document.documentElement.scrollHeight,"
-            + "        document.body ? document.body.scrollHeight : 0"
-            + "      );"
-            + "      parent.postMessage({ type: \"territory-statement-height\", height: height }, \"*\");"
-            + "    } catch (error) {}"
-            + "  }"
-            + "  function renderMath() {"
-            + "    if (typeof renderMathInElement !== \"function\") return;"
-            + "    try {"
-            + "      renderMathInElement(document.querySelector(\".statement-content\"), {"
-            + "        delimiters: ["
-            + "          { left: \"$$\", right: \"$$\", display: true },"
-            + "          { left: \"\\\\[\", right: \"\\\\]\", display: true },"
-            + "          { left: \"$\", right: \"$\", display: false },"
-            + "          { left: \"\\\\(\", right: \"\\\\)\", display: false }"
-            + "        ],"
-            + "        throwOnError: false,"
-            + "        strict: \"ignore\""
-            + "      });"
-            + "    } catch (error) {}"
-            + "  }"
-            + "  let booted = false;"
-            + "  function boot() {"
-            + "    if (booted) return;"
-            + "    booted = true;"
-            + "    renderMath();"
-            + "    report();"
-            + "    try { if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement); } catch (error) {}"
-            + "    try { new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true }); } catch (error) {}"
-            + "  }"
-            + "  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", boot);"
-            + "  else boot();"
-            + "  window.addEventListener(\"load\", boot);"
-            + "})();"
-            + "<\/script>"
-            + "</head><body>"
-            + '<div id="territory-bridge" aria-hidden="true">'
-            + '  <span id="student-problem-tag">' + tagText + "</span>"
-            + '  <form id="student-answer-form"><button type="submit">Submit</button></form>'
-            + '  <input id="student-answer" type="text" />'
-            + '  <p id="student-answer-error" hidden></p>'
-            + "</div>"
-            + "<script>"
-            + "(function () {"
-            + "  var input = document.getElementById(\"student-answer\");"
-            + "  var form = document.getElementById(\"student-answer-form\");"
-            + "  var err = document.getElementById(\"student-answer-error\");"
-            + "  if (!input || !form || !err) return;"
-            + "  var answer = \"\";"
-            + "  var readOnly = false;"
-            + "  var errorHidden = true;"
-            + "  var errorText = \"\";"
-            + "  function post(type, data) {"
-            + "    try {"
-            + "      var message = { type: type };"
-            + "      if (data) for (var key in data) if (Object.prototype.hasOwnProperty.call(data, key)) message[key] = data[key];"
-            + "      parent.postMessage(message, \"*\");"
-            + "    } catch (error) {}"
-            + "  }"
-            + "  Object.defineProperty(input, \"value\", {"
-            + "    get: function () { return answer; },"
-            + "    set: function (next) { answer = String(next == null ? \"\" : next); post(\"territory-answer-value\", { value: answer }); }"
-            + "  });"
-            + "  var styleProxy = {};"
-            + "  Object.defineProperty(styleProxy, \"cssText\", {"
-            + "    get: function () { return input.getAttribute(\"style\") || \"\"; },"
-            + "    set: function (next) {"
-            + "      var css = String(next == null ? \"\" : next);"
-            + "      input.setAttribute(\"style\", css);"
-            + "      post(\"territory-answer-style\", { cssText: css });"
-            + "    }"
-            + "  });"
-            + "  Object.defineProperty(input, \"style\", { get: function () { return styleProxy; } });"
-            + "  Object.defineProperty(input, \"readOnly\", {"
-            + "    get: function () { return readOnly; },"
-            + "    set: function (next) {"
-            + "      readOnly = !!next;"
-            + "      if (readOnly) input.setAttribute(\"readonly\", \"readonly\");"
-            + "      else input.removeAttribute(\"readonly\");"
-            + "      post(\"territory-answer-readonly\", { readOnly: readOnly });"
-            + "    }"
-            + "  });"
-            + "  function postError() { post(\"territory-answer-error\", { hidden: errorHidden, text: errorText }); }"
-            + "  Object.defineProperty(err, \"hidden\", {"
-            + "    get: function () { return errorHidden; },"
-            + "    set: function (next) { errorHidden = !!next; postError(); }"
-            + "  });"
-            + "  Object.defineProperty(err, \"textContent\", {"
-            + "    get: function () { return errorText; },"
-            + "    set: function (next) { errorText = String(next == null ? \"\" : next); postError(); }"
-            + "  });"
-            + "  window.addEventListener(\"message\", function (event) {"
-            + "    var data = event.data;"
-            + "    if (!data || data.type !== \"territory-before-submit\") return;"
-            + "    var blocked = false;"
-            + "    var button = form.querySelector(\"button\");"
-            + "    if (button) {"
-            + "      var click = new MouseEvent(\"click\", { bubbles: true, cancelable: true, view: window });"
-            + "      button.dispatchEvent(click);"
-            + "      blocked = click.defaultPrevented;"
-            + "    }"
-            + "    post(\"territory-submit-result\", { id: data.id, blocked: blocked, message: errorHidden ? \"\" : errorText });"
-            + "  });"
-            + "})();"
-            + "<\/script>"
-            + '<div class="statement-content">' + body + "</div>"
-            + "</body></html>";
+        function plainText(source) {
+          return String(source || "")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<[^>]*>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
         }
 
-        function setRichText(element, source, options) {
-          options = options || {};
-          var text = String(source || "");
-          element.replaceChildren();
-          element.classList.add("rich-html", "isolated-statement");
-          var frame = document.createElement("iframe");
-          frame.className = "statement-frame";
-          frame.setAttribute("sandbox", "allow-scripts");
-          frame.setAttribute("title", "Problem statement");
-          frame.style.height = "120px";
-          frame.srcdoc = buildStatementDocument(text, options.tag || "");
-          element.append(frame);
-          if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
-          return frame;
+        function card(problem) {
+          var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
+          var link = document.createElement("a");
+          link.href = "/testing/problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
+          link.target = "_blank";
+          link.rel = "noopener";
+          // Difficulty is carried by the card border color (class), matching
+          // the legend swatches in style.css.
+          link.className = "practice-card " + level;
+          link.setAttribute("aria-label", tagOf(problem) + ", " + DIFFICULTY_NAME[level] + ", open in a new tab");
+
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = tagOf(problem);
+
+          // Reuse the shared difficulty chip styling from style.css.
+          var diff = document.createElement("span");
+          diff.className = "difficulty-chip " + level;
+          diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+
+          var preview = document.createElement("span");
+          preview.className = "preview";
+          preview.textContent = plainText(problem.prompt) || "(empty)";
+
+          link.append(tag, diff, preview);
+          return link;
         }
 
-        function approveStatementSubmit() {
-          var frame = activeStatementFrame;
-          if (!frame || !frame.contentWindow) return Promise.resolve({ blocked: false, message: "" });
-          if (pendingStatementSubmit) {
-            clearTimeout(pendingStatementSubmit.timer);
-            pendingStatementSubmit.resolve({ blocked: false, message: "" });
-            pendingStatementSubmit = null;
-          }
-          return new Promise(function (resolve) {
-            var id = "statement-" + Date.now() + "-" + Math.random().toString(36).slice(2);
-            var timer = setTimeout(function () {
-              if (pendingStatementSubmit && pendingStatementSubmit.id === id) {
-                pendingStatementSubmit = null;
-                resolve({ blocked: false, message: "" });
-              }
-            }, 300);
-            pendingStatementSubmit = {
-              id: id,
-              timer: timer,
-              resolve: function (result) { clearTimeout(timer); resolve(result); }
-            };
-            try {
-              frame.contentWindow.postMessage({ type: "territory-before-submit", id: id }, "*");
-            } catch (e) {
-              clearTimeout(timer);
-              pendingStatementSubmit = null;
-              resolve({ blocked: false, message: "" });
-            }
-          });
-        }
-
-        window.addEventListener("message", function (event) {
-          var data = event.data;
-          if (!data || typeof data.type !== "string") return;
-          var frame = statementFrames.get(event.source);
-          if (!frame) return;
-          if (data.type === "territory-statement-height") {
-            var height = Number(data.height);
-            if (!Number.isFinite(height)) return;
-            frame.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
+        function render() {
+          grid.replaceChildren();
+          emptyEl.hidden = true;
+          hintEl.hidden = true;
+          if (!activeCat) {
+            hintEl.hidden = false;
             return;
           }
-          if (frame !== activeStatementFrame) return;
-          if (data.type === "territory-answer-value") {
-            answer.value = String(data.value == null ? "" : data.value);
-          } else if (data.type === "territory-answer-style") {
-            answer.style.cssText = String(data.cssText == null ? "" : data.cssText);
-            // Puzzle statements hide the answer input; reflect that on the bar.
-            form.classList.toggle("puzzle", /display\s*:\s*none/.test(answer.style.cssText));
-          } else if (data.type === "territory-answer-readonly") {
-            answer.readOnly = data.readOnly === true;
-          } else if (data.type === "territory-answer-error") {
-            error.hidden = data.hidden === true;
-            error.textContent = String(data.text == null ? "" : data.text);
-          } else if (data.type === "territory-submit-result" && pendingStatementSubmit && pendingStatementSubmit.id === data.id) {
-            var pending = pendingStatementSubmit;
-            pendingStatementSubmit = null;
-            clearTimeout(pending.timer);
-            pending.resolve({
-              blocked: data.blocked === true,
-              message: String(data.message == null ? "" : data.message)
-            });
+          var type = TAG_TO_TYPE[activeCat];
+          var items = allProblems.filter(function (p) { return p.type === type; });
+          items.sort(function (a, b) { return a.index - b.index; });
+          if (items.length === 0) { emptyEl.hidden = false; return; }
+          for (var i = 0; i < items.length; i += 1) grid.append(card(items[i]));
+        }
+
+        function syncButtons() {
+          var buttons = categoryBar.querySelectorAll("[data-cat]");
+          for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].setAttribute("aria-pressed", String(buttons[i].dataset.cat === activeCat));
           }
+        }
+
+        categoryBar.addEventListener("click", function (event) {
+          var button = event.target.closest("[data-cat]");
+          if (!button) return;
+          var cat = button.dataset.cat;
+          activeCat = activeCat === cat ? null : cat;
+          syncButtons();
+          render();
         });
-        // ────────────────────────────────────────────────────────────
 
-        async function loadProblem() {
-          if (!Number.isInteger(index) || !type) {
-            showStatus("This problem link is not valid.");
-            form.hidden = true;
-            return;
-          }
+        async function load() {
+          errorEl.hidden = true;
           try {
             var res = await fetch(API_BASE + "?action=public-problems", { method: "GET" });
             var data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
-            var list = Array.isArray(data.problems) ? data.problems : [];
-            var problem = list.find(function (p) { return p.index === index && p.type === type; });
-            if (!problem) {
-              showStatus("That problem is not available.");
-              form.hidden = true;
-              return;
-            }
-            var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
-            title.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
-            document.title = tagOf(problem) + " · Practice";
-            activeStatementFrame = setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
-            if (answer.offsetParent !== null) answer.focus();
-          } catch (e) {
-            showStatus(e.message || "The problem could not be opened.");
-            form.hidden = true;
+            allProblems = Array.isArray(data.problems) ? data.problems : [];
+            render();
+          } catch (error) {
+            errorEl.hidden = false;
+            errorEl.textContent = error.message || "Could not load problems.";
           }
         }
 
-        form.addEventListener("submit", async function (event) {
-          event.preventDefault();
-          error.hidden = true;
-          error.style.color = "";
-          var button = form.querySelector("button");
-          if (button.disabled) return;
-          var label = button.textContent;
-          button.disabled = true;
-          button.textContent = "Checking...";
-
-          var approval = await approveStatementSubmit();
-          if (approval.blocked) {
-            button.disabled = false;
-            button.textContent = label;
-            error.hidden = false;
-            error.textContent = approval.message || "Finish the problem before submitting.";
-            return;
-          }
-
-          try {
-            var res = await fetch(API_BASE + "?action=public-check", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ index: index, type: type, answer: answer.value })
-            });
-            var data = await res.json().catch(function () { return {}; });
-            if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
-            if (data.systemError) {
-              error.hidden = false;
-              error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
-            } else if (data.correct) {
-              error.hidden = false;
-              error.style.color = "#3ddc6a";
-              error.textContent = "AC";
-            } else {
-              error.hidden = false;
-              error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
-            }
-          } catch (e) {
-            error.hidden = false;
-            error.textContent = e.message;
-          } finally {
-            button.disabled = false;
-            button.textContent = label;
-          }
-        });
-
-        loadProblem();
+        syncButtons();
+        load();
       })();
     </script>
   </body>
