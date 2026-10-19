@@ -1,75 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Credits · Territory Game</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-  </head>
-  <body>
-    <div class="app">
-      <header class="mobile-bar">
-        <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
-        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
-          <span class="menu-bars" aria-hidden="true"></span>
-          Menu
-        </button>
-      </header>
-      <aside class="sidebar">
-        <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
-        <nav id="site-nav" aria-label="Sections">
-          <ul>
-            <li><a id="maps-button" href="/admin/maps.html">Maps</a></li>
-            <li><a id="problems-button" href="/admin/problems.html">Problems</a></li>
-            <li><a id="competitions-button" href="/admin/contest.html">Contests</a></li>
-            <li><a id="tutorial-button" href="/admin/tutorial.html">Tutorial</a></li>
-            <li><a id="credits-button" href="/admin/credits.html">Credits</a></li>
-            <li><a id="settings-button" href="/admin/settings.html">Settings</a></li>
-          </ul>
-        </nav>
-        <div class="account">
-          <img id="account-pfp" class="account-pfp" alt="" hidden />
-          <p id="account-name" hidden></p>
-          <button id="account-button" type="button">Log out</button>
-          <p id="account-role"></p>
-        </div>
-      </aside>
-      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
-      <main>
-        <p id="load-error" class="form-error" hidden></p>
-<section id="credits-view" hidden>
-          <p class="eyebrow">Credits</p>
-          <h1>Versions</h1>
-          <p class="lead">Each note is shown exactly as it was typed.</p>
-          <form id="version-form" class="create-map">
-            <label>
-              Version
-              <input id="version-name" class="contest-name" type="text" maxlength="40" required />
-            </label>
-            <label>
-              Message
-              <textarea id="version-message" rows="5" maxlength="4000"></textarea>
-            </label>
-            <button type="submit">Add version</button>
-            <p id="version-form-error" class="form-error" hidden></p>
-          </form>
-          <p id="version-empty">No versions yet.</p>
-          <ol id="version-list" class="version-list" hidden></ol>
-        </section>
-      </main>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
-      <p id="page-toast-message"></p>
-      <button id="page-toast-close" type="button">Close</button>
-    </div>
-    <script src="/scripts/batch-problems.js"></script>
-    <script src="/script.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Credits · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/credits.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <p class="eyebrow">Changelog</p>
+      <h1>Credits</h1>
+      <p class="lead">Version history and release notes.</p>
+
+      <form id="version-form" class="create-map">
+        <label>Version <input id="version-name" type="text" maxlength="40" required /></label>
+        <label>Message <textarea id="version-message" rows="4" maxlength="4000" required></textarea></label>
+        <button type="submit">Add version</button>
+        <p id="version-form-error" class="form-error" hidden></p>
+      </form>
+
+      <p id="version-empty">No versions yet.</p>
+      <ul id="version-list" class="version-list" hidden></ul>
+    </main>
+  </div>
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+  <script type="module" src="/app/admin-credits.js"></script>
+</body>
 </html>

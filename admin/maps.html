@@ -1,184 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Maps · Territory Game</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-  </head>
-  <body>
-    <div class="app">
-      <header class="mobile-bar">
-        <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
-        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
-          <span class="menu-bars" aria-hidden="true"></span>
-          Menu
-        </button>
-      </header>
-      <aside class="sidebar">
-        <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
-        <nav id="site-nav" aria-label="Sections">
-          <ul>
-            <li><a id="maps-button" href="/admin/maps.html">Maps</a></li>
-            <li><a id="problems-button" href="/admin/problems.html">Problems</a></li>
-            <li><a id="competitions-button" href="/admin/contest.html">Contests</a></li>
-            <li><a id="tutorial-button" href="/admin/tutorial.html">Tutorial</a></li>
-            <li><a id="credits-button" href="/admin/credits.html">Credits</a></li>
-            <li><a id="settings-button" href="/admin/settings.html">Settings</a></li>
-          </ul>
-        </nav>
-        <div class="account">
-          <img id="account-pfp" class="account-pfp" alt="" hidden />
-          <p id="account-name" hidden></p>
-          <button id="account-button" type="button">Log out</button>
-          <p id="account-role"></p>
-        </div>
-      </aside>
-      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
-      <main>
-        <p id="load-error" class="form-error" hidden></p>
-<section id="maps-view" hidden>
-          <p class="eyebrow">Problem map</p>
-          <h1>Problem map</h1>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maps · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <p id="load-error" class="form-error" hidden></p>
+      <p class="eyebrow">Admin</p>
+      <h1>Maps</h1>
+      <p class="lead">Create maps, paint problems, obstacles, and spawn points.</p>
 
+      <div class="kind-choices" id="map-mode-choices" role="group" aria-label="Map mode">
+        <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
+        <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
+      </div>
 
-          <form id="create-map-form" class="create-map">
-            <label>
-              Name
-              <input id="map-name" class="contest-name" name="name" type="text" maxlength="60" required />
-            </label>
-            <label>
-              Width
-              <input id="map-cols" name="cols" type="number" min="1" max="40" value="8" required />
-            </label>
-            <label>
-              Height
-              <input id="map-rows" name="rows" type="number" min="1" max="40" value="8" required />
-            </label>
-            <div class="kind-choices" id="create-map-mode">
-              <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
-              <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
-            </div>
-            <button type="submit">Create map</button>
-            <p id="map-form-error" class="form-error" hidden></p>
-          </form>
+      <form id="create-map-form" class="create-map">
+        <label>Name <input id="map-name" type="text" maxlength="60" required /></label>
+        <label>Width <input id="map-cols" type="number" min="1" max="40" value="8" required /></label>
+        <label>Height <input id="map-rows" type="number" min="1" max="40" value="8" required /></label>
+        <button type="submit">Create map</button>
+        <p id="map-form-error" class="form-error" hidden></p>
+      </form>
 
-          <h2>Created maps</h2>
-          <p id="map-empty">No maps yet.</p>
-          <ul id="map-list" class="map-list" hidden></ul>
-        </section>
-        <section id="editor-view" hidden>
-          <div class="editor-toolbar">
-            <button class="back-button" id="back-button" type="button">Back to maps</button>
-            <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
-          </div>
-          <p class="eyebrow">Problem map</p>
-          <h1 id="editor-title"></h1>
-          <p id="editor-size" class="field-note"></p>
-          <div id="map-counts" class="map-counts" aria-live="polite"></div>
-          <label class="map-name-field">
-            Name
-            <input id="map-name-input" type="text" maxlength="60" />
-          </label>
-
-          <div class="kind-choices editor-tools">
-            <button id="kind-problem" type="button" aria-pressed="true">Problem</button>
-            <button id="kind-spawnpoint" type="button" aria-pressed="false">Spawn point</button>
-            <button id="kind-obstacle" type="button" aria-pressed="false">Obstacle</button>
-            <button id="kind-empty" type="button" aria-pressed="false">Clear</button>
-          </div>
-          <div id="problem-options" class="problem-options">
-            <div class="kind-choices" id="place-mode-choices">
-              <button type="button" data-place-mode="manual" aria-pressed="true">Manual number</button>
-              <button type="button" data-place-mode="pick" aria-pressed="false">Random</button>
-            </div>
-            <div id="place-manual">
-              <div class="kind-choices place-types" id="place-type-choices">
-                <button type="button" data-place-type="math" aria-pressed="true">Math</button>
-                <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
-                <button type="button" data-place-type="science" aria-pressed="false">Science</button>
-                <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
-                <button type="button" data-place-type="testing" aria-pressed="false" hidden>Testing</button>
-              </div>
-              <label id="problem-no-field">
-                Problem no.
-                <input id="problem-no" type="number" min="1" max="99999" value="1" />
-              </label>
-              <label class="next-number">
-                <input id="next-number" type="checkbox" checked />
-                Use the next number for each cell
-              </label>
-            </div>
-            <div id="place-pick" hidden>
-              <p class="field-note">Each empty cell gets one saved problem. A problem that is not on this map is used first. If every match is already on the map, the one that appears least often is used.</p>
-              <div class="kind-choices" id="place-pick-types">
-                <button type="button" data-pick-type="math" aria-pressed="true">Math</button>
-                <button type="button" data-pick-type="oi" aria-pressed="false">OI</button>
-                <button type="button" data-pick-type="science" aria-pressed="false">Science</button>
-                <button type="button" data-pick-type="puzzle" aria-pressed="false">Puzzle</button>
-                <button type="button" data-pick-type="testing" aria-pressed="false" hidden>Testing</button>
-              </div>
-              <div class="kind-choices" id="place-pick-difficulties">
-                <button type="button" data-pick-difficulty="easy" aria-pressed="true">Easy</button>
-                <button type="button" data-pick-difficulty="normal" aria-pressed="true">Normal</button>
-                <button type="button" data-pick-difficulty="hard" aria-pressed="true">Hard</button>
-                <button type="button" data-pick-difficulty="insane" aria-pressed="true">Insane</button>
-              </div>
-              <div class="kind-choices" id="place-pick-source">
-                <button type="button" data-pick-source="random" aria-pressed="true">Random</button>
-                <button type="button" data-pick-source="fixed" aria-pressed="false">Fixed index</button>
-                <button type="button" data-pick-source="range" aria-pressed="false">Index range</button>
-              </div>
-              <label id="place-fixed-field" hidden>
-                Index
-                <input id="place-fixed-index" type="number" min="1" max="99999" value="1" />
-              </label>
-              <div id="place-range-field" class="place-range" hidden>
-                <label>
-                  From
-                  <input id="place-range-from" type="number" min="1" max="99999" value="1" />
-                </label>
-                <label>
-                  To
-                  <input id="place-range-to" type="number" min="1" max="99999" value="20" />
-                </label>
-              </div>
-            </div>
-            <p id="problem-no-error" class="form-error" hidden></p>
-          </div>
-          <ul class="legend">
-            <li><span class="swatch problem math"></span>Math</li>
-            <li><span class="swatch problem oi"></span>OI</li>
-            <li><span class="swatch problem science"></span>Science</li>
-            <li><span class="swatch problem puzzle"></span>Puzzle</li>
-            <li><span class="swatch problem testing"></span>Testing</li>
-            <li><span class="swatch difficulty easy"></span>Easy</li>
-            <li><span class="swatch difficulty normal"></span>Normal</li>
-            <li><span class="swatch difficulty hard"></span>Hard</li>
-            <li><span class="swatch difficulty insane"></span>Insane</li>
-            <li><span class="swatch spawnpoint"></span>Spawn point</li>
-            <li><span class="swatch obstacle"></span>Obstacle</li>
-            <li><span class="swatch empty"></span>Empty</li>
-          </ul>
-          <div class="grid-scroll">
-            <div id="editor-grid" class="editor-grid"></div>
-          </div>
-          <button id="save-map-button" class="save-changes" type="button" disabled>Save changes</button>
-        </section>
-      </main>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
-      <p id="page-toast-message"></p>
-      <button id="page-toast-close" type="button">Close</button>
-    </div>
-    <script src="/scripts/batch-problems.js"></script>
-    <script src="/script.js"></script>
-  </body>
+      <p id="map-empty">No maps yet.</p>
+      <ul id="map-list" class="map-list" hidden></ul>
+    </main>
+  </div>
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+  <script type="module" src="/app/admin-maps.js"></script>
+</body>
 </html>

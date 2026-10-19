@@ -1,114 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tutorial · Territory Game</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-  </head>
-  <body>
-    <div class="app">
-      <header class="mobile-bar">
-        <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
-        <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
-          <span class="menu-bars" aria-hidden="true"></span>
-          Menu
-        </button>
-      </header>
-      <aside class="sidebar">
-        <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
-        <nav id="site-nav" aria-label="Sections">
-          <ul>
-            <li><a id="maps-button" href="/admin/maps.html">Maps</a></li>
-            <li><a id="problems-button" href="/admin/problems.html">Problems</a></li>
-            <li><a id="competitions-button" href="/admin/contest.html">Contests</a></li>
-            <li><a id="tutorial-button" href="/admin/tutorial.html">Tutorial</a></li>
-            <li><a id="credits-button" href="/admin/credits.html">Credits</a></li>
-            <li><a id="settings-button" href="/admin/settings.html">Settings</a></li>
-          </ul>
-        </nav>
-        <div class="account">
-          <img id="account-pfp" class="account-pfp" alt="" hidden />
-          <p id="account-name" hidden></p>
-          <button id="account-button" type="button">Log out</button>
-          <p id="account-role"></p>
-        </div>
-      </aside>
-      <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
-      <main>
-        <p id="load-error" class="form-error" hidden></p>
-<section id="tutorial-view" class="tutorial" hidden>
-          <p class="eyebrow">Admin</p>
-          <h1>Tutorial</h1>
-          <p class="lead">Logic is the optional grader on a problem. Leave it empty and the student's text is compared with the saved answer, ignoring capital letters and spaces around it. Paste one of the scripts below into Logic when the answer needs a custom check.</p>
-          <h2>What the script can use</h2>
-          <ul>
-            <li><code>answer</code> is the text the student submitted.</li>
-            <li><code>expected</code> is the answer saved on the problem.</li>
-            <li>Set <code>result.score</code> from 0 to 100. A score of 100 accepts the answer and the team claims the cell.</li>
-            <li>Set <code>result.comment</code> to the message the student sees when the answer is not accepted.</li>
-          </ul>
-          <p>You can also return <code>true</code>, <code>false</code>, a number, or <code>{ score, comment }</code>. The cell still scores by difficulty: Easy 1, Normal 2, Hard 3, Insane 4. The script has math, JSON, strings, numbers, and arrays. It cannot read files or use the network, and it stops after one second. Students never see the script or the saved answer. A problem still needs both a question and an answer before it can be saved.</p>
-          <h2>Exact text</h2>
-          <pre>const given = answer.trim().toLowerCase();
-const want = expected.trim().toLowerCase();
-if (given === want) {
-  result.score = 100;
-} else {
-  result.score = 0;
-  result.comment = "That answer is not right.";
-}</pre>
-          <h2>Several accepted answers</h2>
-          <p>Put one accepted answer on each line of the Answer field.</p>
-          <pre>const given = answer.trim().toLowerCase();
-const accepted = expected
-  .split(/\r?\n/)
-  .map((line) => line.trim().toLowerCase())
-  .filter(Boolean);
-if (accepted.includes(given)) {
-  result.score = 100;
-} else {
-  result.score = 0;
-  result.comment = "Try another form of the answer.";
-}</pre>
-          <h2>A number, with a little room</h2>
-          <p>Put the target in Answer, such as 3.14. This accepts anything within 0.01.</p>
-          <pre>const given = Number(answer);
-const want = Number(expected);
-if (!Number.isFinite(given)) {
-  result.score = 0;
-  result.comment = "Enter a number.";
-} else if (Math.abs(given - want) &lt;= 0.01) {
-  result.score = 100;
-} else {
-  result.score = 0;
-  result.comment = "Not close enough.";
-}</pre>
-          <h2>A list of values</h2>
-          <p>Ask the student to separate values with |. Save the solution the same way, such as 8|1|6|3|5|7|4|9|2.</p>
-          <pre>const given = answer.split("|").map((part) => part.trim());
-const want = expected.split("|").map((part) => part.trim());
-if (given.length === want.length && given.every((part, i) => part === want[i])) {
-  result.score = 100;
-} else {
-  result.score = 0;
-  result.comment = "Check the values and try again.";
-}</pre>
-        </section>
-      </main>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-    <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
-      <p id="page-toast-message"></p>
-      <button id="page-toast-close" type="button">Close</button>
-    </div>
-    <script src="/scripts/batch-problems.js"></script>
-    <script src="/script.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tutorial · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <section class="tutorial">
+        <p class="eyebrow">Guide</p>
+        <h1>Tutorial</h1>
+        <h2>Maps</h2>
+        <p>Create a map in <strong>Maps</strong>, then paint it. Each cell can hold a problem, a spawn point, an obstacle, or be left empty.</p>
+        <ul>
+          <li><strong>Problem</strong> cells are solved by students to claim territory.</li>
+          <li><strong>Spawn points</strong> are where teams start.</li>
+          <li><strong>Obstacles</strong> cannot be claimed.</li>
+        </ul>
+        <h2>Problems</h2>
+        <p>Add problems from <strong>Problems</strong>. Each has a type, a difficulty, a prompt, an answer, and optional server-side logic.</p>
+        <pre><code>// Example logic: case-insensitive compare
+const normalize = (s) => s.trim().toLowerCase();
+if (normalize(answer) === normalize(expected)) {
+  return { score: 100, comment: "AC" };
+}
+return { score: 0, comment: "WA" };</code></pre>
+        <h2>Contests</h2>
+        <p>Create a contest in <strong>Contests</strong>, choose a map, set a schedule, then add teams. Each team has 1–5 students.</p>
+        <h2>During a contest</h2>
+        <ul>
+          <li><strong>Spawn phase</strong>: every team member picks a spawn point; the team agrees when everyone picks the same cell.</li>
+          <li><strong>Ready phase</strong>: spawn points are locked.</li>
+          <li><strong>Live phase</strong>: click a problem next to your territory, solve it, and claim that cell.</li>
+        </ul>
+        <p>Easy problems are worth 1 point, normal 2, hard 3, and insane 4.</p>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/app/admin-tutorial.js"></script>
+</body>
 </html>

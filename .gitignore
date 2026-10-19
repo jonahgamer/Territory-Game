@@ -4,3 +4,5 @@ node_modules/
 private/
 .audit/
 _env
+.vercel
+.env*

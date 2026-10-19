@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contests · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/contests.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <p id="load-error" class="form-error" hidden></p>
+      <p class="eyebrow">Admin</p>
+      <h1>Contests</h1>
+      <p class="lead" id="competitions-lead">Contests, schedules, teams, and scores.</p>
+
+      <div class="kind-choices" id="create-contest-mode" role="group" aria-label="Contest mode">
+        <button type="button" data-contest-mode="competition" aria-pressed="true">Competition</button>
+        <button type="button" data-contest-mode="testing" aria-pressed="false">Testing</button>
+      </div>
+
+      <form id="create-contest-form" class="create-map">
+        <label>Name <input id="contest-name" type="text" maxlength="60" required /></label>
+        <label>Map
+          <select id="contest-map"></select>
+        </label>
+        <p id="contest-map-note" class="field-note"></p>
+        <fieldset class="contest-schedule">
+          <legend>Schedule</legend>
+          <label>Start <input id="contest-start" type="datetime-local" step="1" required /></label>
+          <label>Duration (min) <input id="contest-duration" type="number" min="1" max="10080" required /></label>
+          <label>Spawn time (min) <input id="contest-spawn" type="number" min="0" max="10080" value="10" required /></label>
+          <label>Wait after spawn (min) <input id="contest-ready" type="number" min="0" max="10080" value="5" required /></label>
+        </fieldset>
+        <button type="submit">Create contest</button>
+        <p id="contest-form-error" class="form-error" hidden></p>
+      </form>
+
+      <p id="contest-empty">No contests yet.</p>
+      <ul id="contest-list" class="problem-list" hidden></ul>
+    </main>
+  </div>
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+  <script type="module" src="/app/admin-contests.js"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": null,
+  "installCommand": "npm install",
+
+  "cleanUrls": false,
+  "trailingSlash": false,
+
+  "regions": ["hkg1"],
+
+
+
+  "redirects": [
+    { "source": "/admin",        "destination": "/admin/maps.html", "permanent": false },
+    { "source": "/admin/",       "destination": "/admin/maps.html", "permanent": false },
+    { "source": "/student",      "destination": "/index.html",      "permanent": false },
+    { "source": "/student/",     "destination": "/index.html",      "permanent": false },
+    { "source": "/student/:contest", "destination": "/play.html?contest=:contest", "permanent": false },
+    { "source": "/play",         "destination": "/index.html",      "permanent": false }
+  ],
+
+  "rewrites": [
+    { "source": "/api/_db",   "destination": "/__blocked__" },
+    { "source": "/api/logic", "destination": "/__blocked__" }
+  ],
+
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy",        "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy",     "value": "camera=(), microphone=(), geolocation=()" },
+        { "key": "X-Robots-Tag",           "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/(.*).html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*).js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*).css",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}
