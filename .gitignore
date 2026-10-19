@@ -6,4 +6,4 @@ private/
 _env
 .vercel
 .env*
-_env
+_env 
