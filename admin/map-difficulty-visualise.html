@@ -34,6 +34,7 @@
       <div class="editor-toolbar">
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
+          <a class="terrain-view-button" id="difficulty-view-button" href="map-difficulty-visualise.html" title="Open difficulty map"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>Difficulty map</a>
           <span id="problem-save-state" class="problem-save-state"></span>
           <button class="save-changes" id="save-map-button" type="button" disabled>Save map</button>
           <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
@@ -106,11 +107,12 @@
   </div>
   <script type="module">
     // The map editor is opened with ?id=<mapId>.
-    // This script updates the difficulty visualiser link so it carries the same map id.
-    (function () {
+    // Configure the difficulty visualiser link and fetch the map via API.
+    (async function () {
       const params = new URLSearchParams(window.location.search);
-      const mapId = params.get('id');  // use only ?id=
+      const mapId = params.get('id');
 
+      // 1. Update difficulty view link
       const difficultyBtn = document.getElementById('difficulty-view-button');
       if (difficultyBtn) {
         if (mapId) {
@@ -118,6 +120,63 @@
           difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
         } else {
           difficultyBtn.href = 'map-difficulty-visualise.html';
+        }
+      }
+
+      // 2. Fetch map data via API
+      if (!mapId) {
+        document.getElementById('load-error').textContent = 'Missing map id in URL (?id=...).';
+        document.getElementById('load-error').hidden = false;
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/maps/${encodeURIComponent(mapId)}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to load map (HTTP ${res.status})`);
+        }
+        const map = await res.json();
+
+        // Populate title, size, name, mode, counts
+        const titleEl = document.getElementById('editor-title');
+        const sizeEl = document.getElementById('editor-size');
+        const nameInput = document.getElementById('map-name-input');
+        const countsEl = document.getElementById('map-counts');
+
+        if (titleEl) titleEl.textContent = map.name || map.id || 'Untitled map';
+        if (sizeEl) {
+          const w = map.width ?? map.cols ?? '?';
+          const h = map.height ?? map.rows ?? '?';
+          sizeEl.textContent = `${w} × ${h} grid`;
+        }
+        if (nameInput && map.name) nameInput.value = map.name;
+
+        // Map mode toggle
+        const modeButtons = document.querySelectorAll('#map-mode-choices [data-map-mode]');
+        modeButtons.forEach(btn => {
+          btn.setAttribute('aria-pressed', btn.dataset.mapMode === (map.mode || 'official') ? 'true' : 'false');
+        });
+
+        // Counts (problem / spawn / obstacle / empty) if provided
+        if (countsEl && map.counts) {
+          const parts = [];
+          if (map.counts.problem != null) parts.push(`Problems: ${map.counts.problem}`);
+          if (map.counts.spawnpoint != null) parts.push(`Spawn points: ${map.counts.spawnpoint}`);
+          if (map.counts.obstacle != null) parts.push(`Obstacles: ${map.counts.obstacle}`);
+          if (map.counts.empty != null) parts.push(`Empty: ${map.counts.empty}`);
+          countsEl.textContent = parts.join(' · ');
+        }
+
+        // Let the main editor script know the loaded map is ready
+        window.__loadedMap = map;
+        window.dispatchEvent(new CustomEvent('map-loaded', { detail: map }));
+      } catch (err) {
+        const errEl = document.getElementById('load-error');
+        if (errEl) {
+          errEl.textContent = err.message || 'Failed to load map.';
+          errEl.hidden = false;
         }
       }
     })();
