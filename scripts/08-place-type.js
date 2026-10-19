@@ -5,13 +5,15 @@
 function onPlaceTypeClick(event) {
   const button = event.target.closest("[data-place-type]");
   if (!button || !typeInfo(button.dataset.placeType)) return;
+  if (button.dataset.placeType === "testing" && mapMode(currentMap()) !== "testing") return;
   placeType = button.dataset.placeType;
   renderPlaceType();
   if (nextNumberInput.checked) problemNoInput.value = nextProblemLabel(placeType);
 }
 
 function renderPlaceType() {
-  for (const button of placeTypeChoices.querySelectorAll("[data-place-type]")) {
+  syncTestingPlaceTools();
+  for (const button of placeTypeChoices?.querySelectorAll("[data-place-type]") || []) {
     button.setAttribute("aria-pressed", String(button.dataset.placeType === placeType));
   }
 }
@@ -26,6 +28,7 @@ function onPlaceModeClick(event) {
 function onPlacePickTypeClick(event) {
   const button = event.target.closest("[data-pick-type]");
   if (!button || !typeInfo(button.dataset.pickType)) return;
+  if (button.dataset.pickType === "testing" && mapMode(currentMap()) !== "testing") return;
   if (placePickTypes.has(button.dataset.pickType)) placePickTypes.delete(button.dataset.pickType);
   else placePickTypes.add(button.dataset.pickType);
   renderPlacePick();
@@ -49,6 +52,7 @@ function onPlacePickSourceClick(event) {
 }
 
 function renderPlacePick() {
+  syncTestingPlaceTools();
   if (placeModeChoices) {
     for (const button of placeModeChoices.querySelectorAll("[data-place-mode]")) {
       button.setAttribute("aria-pressed", String(button.dataset.placeMode === placeMode));
@@ -75,6 +79,17 @@ function renderPlacePick() {
   if (placeRangeField) placeRangeField.hidden = placePickSource !== "range";
 }
 
+function syncTestingPlaceTools() {
+  const testingMap = mapMode(currentMap()) === "testing";
+  for (const button of document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']")) {
+    button.hidden = !testingMap;
+  }
+  if (!testingMap) {
+    placePickTypes.delete("testing");
+    if (placeType === "testing") placeType = "math";
+  }
+}
+
 function mapProblemUseCounts(map) {
   const counts = new Map();
   for (const cell of map?.cells || []) {
@@ -89,7 +104,11 @@ function pickProblemForMap(map) {
   if (placePickTypes.size === 0 || placePickDifficulties.size === 0) {
     return { error: "Choose at least one type and one difficulty." };
   }
+  if (mapMode(map) !== "testing" && [...placePickTypes].every((type) => type === "testing")) {
+    return { error: "Testing problems can only be placed on a testing map." };
+  }
   let pool = problems.filter((problem) => placePickTypes.has(problem.type) && placePickDifficulties.has(problemDifficulty(problem)));
+  if (mapMode(map) !== "testing") pool = pool.filter((problem) => problem.type !== "testing");
   if (placePickSource === "fixed") {
     const index = readProblemNo(placeFixedIndex?.value);
     if (index === null) return { error: `Index must be a whole number from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.` };

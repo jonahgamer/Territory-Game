@@ -767,7 +767,7 @@ function closeStudentProblem() {
 
 function showStudentProblem(contest, map, phase, frozen) {
   const team = teamForUser(contest);
-  const cell = selectedStudentCell === null ? null : map.cells[selectedStudentCell];
+  const cell = selectedStudentCell === null ? null : cellInContest(contest, map.cells[selectedStudentCell]);
   const claim = (contest.claims || []).find((item) => item.cell === selectedStudentCell);
   const playable = phase === "live" && !frozen && cell?.kind === "problem" && !claim
     && adjacentToTeam(map, contest, team?.id, selectedStudentCell);

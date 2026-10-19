@@ -14,10 +14,11 @@ const YEAR_INDEX_START = PROBLEM_YEAR * 1000;
 const YEAR_INDEX_END = PROBLEM_YEAR * 1000 + 999;
 const MAX_CONTEST_MINUTES = 10080;
 const PROBLEM_TYPES = [
-  { id: "math", name: "Math", tag: "MO" },
-  { id: "oi", name: "OI", tag: "OI" },
-  { id: "science", name: "Science", tag: "SCI" },
-  { id: "puzzle", name: "Puzzle", tag: "PUZ" },
+  { id: "math", name: "Math", tag: "M" },
+  { id: "oi", name: "OI", tag: "O" },
+  { id: "science", name: "Science", tag: "S" },
+  { id: "puzzle", name: "Puzzle", tag: "P" },
+  { id: "testing", name: "Testing", tag: "T" },
 ];
 const DIFFICULTIES = ["easy", "normal", "hard", "insane"];
 const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };

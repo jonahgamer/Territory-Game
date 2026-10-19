@@ -37,10 +37,15 @@ function onMapModeClick(event) {
   if (!button || !map) return;
   const mode = button.dataset.mapMode === "testing" ? "testing" : "official";
   if (mapMode(map) === mode) return;
+  if (mode === "official" && (map.cells || []).some((cell) => cell?.kind === "problem" && cell.type === "testing")) {
+    showPageToast("Remove Testing problems before making this map official.", "warn");
+    return;
+  }
   map.mode = mode;
   renderMapModeButtons(mapModeChoices, mode);
   markMapDirty();
   renderMaps();
+  syncTestingPlaceTools();
 }
 
 function renderMapModeButtons(container, mode) {

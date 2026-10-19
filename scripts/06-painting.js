@@ -122,6 +122,12 @@ function applyTool(index, mode) {
     const picked = placeMode === "pick" ? pickProblemForMap(map) : null;
     const problemNo = placeMode === "pick" ? picked?.index : readProblemNo(problemNoInput.value);
     const type = placeMode === "pick" ? picked?.type : placeType;
+    if (type === "testing" && mapMode(map) !== "testing") {
+      problemNoError.hidden = false;
+      problemNoError.textContent = "Testing problems can only be placed on a testing map.";
+      stopPaint();
+      return;
+    }
     if (placeMode === "pick" && picked?.error) {
       problemNoError.hidden = false;
       problemNoError.textContent = picked.error;

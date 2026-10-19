@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 function mapKindCounts(map) {
-  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0 };
+  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0, testing: 0 };
   for (const cell of map?.cells || []) {
     if (Object.prototype.hasOwnProperty.call(counts, cell.kind)) counts[cell.kind] += 1;
     if (cell.kind === "problem" && Object.prototype.hasOwnProperty.call(counts, cell.type)) counts[cell.type] += 1;
@@ -24,6 +24,7 @@ function renderMapCounts(map) {
     ["oi", "OI", counts.oi],
     ["science", "Science", counts.science],
     ["puzzle", "Puzzle", counts.puzzle],
+    ["testing", "Testing", counts.testing],
     ["obstacle", "Obstacles", counts.obstacle],
     ["spawnpoint", "Spawn points", counts.spawnpoint],
     ["empty", "Empty", counts.empty],
@@ -91,6 +92,7 @@ function renderEditor() {
   renderMapCounts(map);
   if (editorNameInput) editorNameInput.value = map.name;
   renderMapModeButtons(mapModeChoices, mapMode(map));
+  syncTestingPlaceTools();
   if (deleteOpenMapButton) deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);
   editorGrid.dataset.rows = String(map.rows);

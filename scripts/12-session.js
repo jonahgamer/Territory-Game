@@ -307,6 +307,11 @@ function renderTerritoryLines(grid, contest, recentClaims) {
   grid.append(overlay);
 }
 
+function cellInContest(contest, cell) {
+  if (cell?.kind === "problem" && cell.type === "testing" && !isTestingContest(contest)) return { kind: "empty" };
+  return cell;
+}
+
 function paintPlayGrid(grid, contest, map, options) {
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
@@ -314,7 +319,8 @@ function paintPlayGrid(grid, contest, map, options) {
   grid.replaceChildren();
   const recentClaims = collectRecentClaims(contest);
   const choosing = options.student && options.phase === "spawn" && !contest.spawnResolved;
-  map.cells.forEach((cell, index) => {
+  map.cells.forEach((rawCell, index) => {
+    const cell = cellInContest(contest, rawCell);
     const button = document.createElement("button");
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;

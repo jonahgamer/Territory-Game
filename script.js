@@ -16,10 +16,11 @@ const YEAR_INDEX_START = PROBLEM_YEAR * 1000;
 const YEAR_INDEX_END = PROBLEM_YEAR * 1000 + 999;
 const MAX_CONTEST_MINUTES = 10080;
 const PROBLEM_TYPES = [
-  { id: "math", name: "Math", tag: "MO" },
-  { id: "oi", name: "OI", tag: "OI" },
-  { id: "science", name: "Science", tag: "SCI" },
-  { id: "puzzle", name: "Puzzle", tag: "PUZ" },
+  { id: "math", name: "Math", tag: "M" },
+  { id: "oi", name: "OI", tag: "O" },
+  { id: "science", name: "Science", tag: "S" },
+  { id: "puzzle", name: "Puzzle", tag: "P" },
+  { id: "testing", name: "Testing", tag: "T" },
 ];
 const DIFFICULTIES = ["easy", "normal", "hard", "insane"];
 const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
@@ -2414,10 +2415,15 @@ function onMapModeClick(event) {
   if (!button || !map) return;
   const mode = button.dataset.mapMode === "testing" ? "testing" : "official";
   if (mapMode(map) === mode) return;
+  if (mode === "official" && (map.cells || []).some((cell) => cell?.kind === "problem" && cell.type === "testing")) {
+    showPageToast("Remove Testing problems before making this map official.", "warn");
+    return;
+  }
   map.mode = mode;
   renderMapModeButtons(mapModeChoices, mode);
   markMapDirty();
   renderMaps();
+  syncTestingPlaceTools();
 }
 
 function renderMapModeButtons(container, mode) {
@@ -2606,6 +2612,12 @@ function applyTool(index, mode) {
     const picked = placeMode === "pick" ? pickProblemForMap(map) : null;
     const problemNo = placeMode === "pick" ? picked?.index : readProblemNo(problemNoInput.value);
     const type = placeMode === "pick" ? picked?.type : placeType;
+    if (type === "testing" && mapMode(map) !== "testing") {
+      problemNoError.hidden = false;
+      problemNoError.textContent = "Testing problems can only be placed on a testing map.";
+      stopPaint();
+      return;
+    }
     if (placeMode === "pick" && picked?.error) {
       problemNoError.hidden = false;
       problemNoError.textContent = picked.error;
@@ -2669,7 +2681,7 @@ function cellIndexFromPoint(x, y) {
 // ═══════════════════════════════════════════════════════════════════
 
 function mapKindCounts(map) {
-  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0 };
+  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0, testing: 0 };
   for (const cell of map?.cells || []) {
     if (Object.prototype.hasOwnProperty.call(counts, cell.kind)) counts[cell.kind] += 1;
     if (cell.kind === "problem" && Object.prototype.hasOwnProperty.call(counts, cell.type)) counts[cell.type] += 1;
@@ -2690,6 +2702,7 @@ function renderMapCounts(map) {
     ["oi", "OI", counts.oi],
     ["science", "Science", counts.science],
     ["puzzle", "Puzzle", counts.puzzle],
+    ["testing", "Testing", counts.testing],
     ["obstacle", "Obstacles", counts.obstacle],
     ["spawnpoint", "Spawn points", counts.spawnpoint],
     ["empty", "Empty", counts.empty],
@@ -2757,6 +2770,7 @@ function renderEditor() {
   renderMapCounts(map);
   if (editorNameInput) editorNameInput.value = map.name;
   renderMapModeButtons(mapModeChoices, mapMode(map));
+  syncTestingPlaceTools();
   if (deleteOpenMapButton) deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);
   editorGrid.dataset.rows = String(map.rows);
@@ -2826,13 +2840,15 @@ function nextProblemLabel(type) {
 function onPlaceTypeClick(event) {
   const button = event.target.closest("[data-place-type]");
   if (!button || !typeInfo(button.dataset.placeType)) return;
+  if (button.dataset.placeType === "testing" && mapMode(currentMap()) !== "testing") return;
   placeType = button.dataset.placeType;
   renderPlaceType();
   if (nextNumberInput.checked) problemNoInput.value = nextProblemLabel(placeType);
 }
 
 function renderPlaceType() {
-  for (const button of placeTypeChoices.querySelectorAll("[data-place-type]")) {
+  syncTestingPlaceTools();
+  for (const button of placeTypeChoices?.querySelectorAll("[data-place-type]") || []) {
     button.setAttribute("aria-pressed", String(button.dataset.placeType === placeType));
   }
 }
@@ -2847,6 +2863,7 @@ function onPlaceModeClick(event) {
 function onPlacePickTypeClick(event) {
   const button = event.target.closest("[data-pick-type]");
   if (!button || !typeInfo(button.dataset.pickType)) return;
+  if (button.dataset.pickType === "testing" && mapMode(currentMap()) !== "testing") return;
   if (placePickTypes.has(button.dataset.pickType)) placePickTypes.delete(button.dataset.pickType);
   else placePickTypes.add(button.dataset.pickType);
   renderPlacePick();
@@ -2870,6 +2887,7 @@ function onPlacePickSourceClick(event) {
 }
 
 function renderPlacePick() {
+  syncTestingPlaceTools();
   if (placeModeChoices) {
     for (const button of placeModeChoices.querySelectorAll("[data-place-mode]")) {
       button.setAttribute("aria-pressed", String(button.dataset.placeMode === placeMode));
@@ -2896,6 +2914,17 @@ function renderPlacePick() {
   if (placeRangeField) placeRangeField.hidden = placePickSource !== "range";
 }
 
+function syncTestingPlaceTools() {
+  const testingMap = mapMode(currentMap()) === "testing";
+  for (const button of document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']")) {
+    button.hidden = !testingMap;
+  }
+  if (!testingMap) {
+    placePickTypes.delete("testing");
+    if (placeType === "testing") placeType = "math";
+  }
+}
+
 function mapProblemUseCounts(map) {
   const counts = new Map();
   for (const cell of map?.cells || []) {
@@ -2910,7 +2939,11 @@ function pickProblemForMap(map) {
   if (placePickTypes.size === 0 || placePickDifficulties.size === 0) {
     return { error: "Choose at least one type and one difficulty." };
   }
+  if (mapMode(map) !== "testing" && [...placePickTypes].every((type) => type === "testing")) {
+    return { error: "Testing problems can only be placed on a testing map." };
+  }
   let pool = problems.filter((problem) => placePickTypes.has(problem.type) && placePickDifficulties.has(problemDifficulty(problem)));
+  if (mapMode(map) !== "testing") pool = pool.filter((problem) => problem.type !== "testing");
   if (placePickSource === "fixed") {
     const index = readProblemNo(placeFixedIndex?.value);
     if (index === null) return { error: `Index must be a whole number from ${MIN_PROBLEM_NO} to ${MAX_PROBLEM_NO}.` };
@@ -3741,7 +3774,10 @@ function createProblemEntity(problem) {
     : "Not placed on any map");
 
   if (problemSelectMode) {
-    item.append(check, openButton, usage);
+    const main = document.createElement("div");
+    main.className = "problem-row-main";
+    main.append(check, openButton);
+    item.append(main, usage);
   } else {
     const editButton = document.createElement("button");
     editButton.type = "button";
@@ -3769,7 +3805,10 @@ function createProblemEntity(problem) {
 
     actions.className = "problem-row-actions";
     actions.append(editButton, duplicateButton, deleteButton);
-    item.append(openButton, usage, actions);
+    const main = document.createElement("div");
+    main.className = "problem-row-main";
+    main.append(openButton, actions);
+    item.append(main, usage);
   }
   return item;
 }
@@ -4645,6 +4684,11 @@ function renderTerritoryLines(grid, contest, recentClaims) {
   grid.append(overlay);
 }
 
+function cellInContest(contest, cell) {
+  if (cell?.kind === "problem" && cell.type === "testing" && !isTestingContest(contest)) return { kind: "empty" };
+  return cell;
+}
+
 function paintPlayGrid(grid, contest, map, options) {
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
@@ -4652,7 +4696,8 @@ function paintPlayGrid(grid, contest, map, options) {
   grid.replaceChildren();
   const recentClaims = collectRecentClaims(contest);
   const choosing = options.student && options.phase === "spawn" && !contest.spawnResolved;
-  map.cells.forEach((cell, index) => {
+  map.cells.forEach((rawCell, index) => {
+    const cell = cellInContest(contest, rawCell);
     const button = document.createElement("button");
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
@@ -5593,7 +5638,7 @@ function closeStudentProblem() {
 
 function showStudentProblem(contest, map, phase, frozen) {
   const team = teamForUser(contest);
-  const cell = selectedStudentCell === null ? null : map.cells[selectedStudentCell];
+  const cell = selectedStudentCell === null ? null : cellInContest(contest, map.cells[selectedStudentCell]);
   const claim = (contest.claims || []).find((item) => item.cell === selectedStudentCell);
   const playable = phase === "live" && !frozen && cell?.kind === "problem" && !claim
     && adjacentToTeam(map, contest, team?.id, selectedStudentCell);

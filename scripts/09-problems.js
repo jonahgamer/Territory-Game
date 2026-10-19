@@ -805,7 +805,10 @@ function createProblemEntity(problem) {
     : "Not placed on any map");
 
   if (problemSelectMode) {
-    item.append(check, openButton, usage);
+    const main = document.createElement("div");
+    main.className = "problem-row-main";
+    main.append(check, openButton);
+    item.append(main, usage);
   } else {
     const editButton = document.createElement("button");
     editButton.type = "button";
@@ -833,7 +836,10 @@ function createProblemEntity(problem) {
 
     actions.className = "problem-row-actions";
     actions.append(editButton, duplicateButton, deleteButton);
-    item.append(openButton, usage, actions);
+    const main = document.createElement("div");
+    main.className = "problem-row-main";
+    main.append(openButton, actions);
+    item.append(main, usage);
   }
   return item;
 }

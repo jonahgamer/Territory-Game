@@ -51,6 +51,7 @@
             <button type="button" data-section="oi" aria-pressed="false">OI</button>
             <button type="button" data-section="science" aria-pressed="false">Science</button>
             <button type="button" data-section="puzzle" aria-pressed="false">Puzzle</button>
+            <button type="button" data-section="testing" aria-pressed="false">Testing</button>
           </div>
           <div id="problem-section" class="problem-section" hidden>
             <div class="problem-group-head">
@@ -124,14 +125,16 @@
               Index
               <input id="problem-index-input" type="number" min="1" max="99999" />
             </label>
-            <p id="problem-index-note" class="field-note">An index is the year and the problem number, such as 26000 for year 26, problem 000. The map shows the type tag in front, such as MO26000. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
+            <p id="problem-index-note" class="field-note">An index is the year and the problem number, such as 26000 for year 26, problem 000. The map shows the type tag in front, such as M26000. The same index can be used in another type. Choosing an index that already exists in this type swaps the two problems.</p>
             <p id="problem-index-error" class="form-error" hidden></p>
             <div class="kind-choices" id="problem-type-choices">
               <button type="button" data-problem-type="math">Math</button>
               <button type="button" data-problem-type="oi">OI</button>
               <button type="button" data-problem-type="science">Science</button>
               <button type="button" data-problem-type="puzzle">Puzzle</button>
+              <button type="button" data-problem-type="testing">Testing</button>
             </div>
+            <p class="field-note">Testing problems can be placed only on a testing map. A testing map can also use Math, OI, Science, and Puzzle. An official contest never includes Testing problems.</p>
             <div class="kind-choices" id="problem-difficulty-choices">
               <button type="button" data-problem-difficulty="easy">Easy</button>
               <button type="button" data-problem-difficulty="normal">Normal</button>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Problem browser · M260xx / OI260xx / SCI260xx / PUZ260xx</title>
+  <title>Problem browser · M260xx / O260xx / S260xx / P260xx</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
@@ -304,9 +304,9 @@
     <div class="subhead">
       Showing problems with prefix
       <span class="prefix-badge">M260xx</span>
-      <span class="prefix-badge">OI260xx</span>
-      <span class="prefix-badge">SCI260xx</span>
-      <span class="prefix-badge">PUZ260xx</span>
+      <span class="prefix-badge">O260xx</span>
+      <span class="prefix-badge">S260xx</span>
+      <span class="prefix-badge">P260xx</span>
       <br />
       <small style="color:#6a8aaa;">xx = any two digits (00–99) · data loaded from the Territory Game API</small>
     </div>
@@ -353,7 +353,7 @@
       // ── Configuration ────────────────────────────────────────────────
       const API_BASE = '/api/territory';
       const SESSION_KEY = 'territory-game-session';
-      const PREFIX_PATTERN = /^(M|OI|SCI|PUZ)260\d{2}$/;
+      const PREFIX_PATTERN = /^(M|O|S|P)260\d{2}$/;
       const AUTO_REFRESH_MS = 30000;
 
       // ── State ────────────────────────────────────────────────────────
@@ -427,9 +427,9 @@
         if (!tag) return 'unknown';
         const t = tag.trim().toUpperCase();
         if (t.startsWith('M260')) return 'math';
-        if (t.startsWith('OI260')) return 'oi';
-        if (t.startsWith('SCI260')) return 'science';
-        if (t.startsWith('PUZ260')) return 'puzzle';
+        if (t.startsWith('O260')) return 'oi';
+        if (t.startsWith('S260')) return 'science';
+        if (t.startsWith('P260')) return 'puzzle';
         return 'unknown';
       }
 
@@ -571,7 +571,7 @@
             <div class="empty-state">
               <i>🔍</i>
               No problems found with the requested prefixes.<br />
-              <small style="color:#5a7a9a;">Try refreshing — or check that the backend has problems tagged M260xx, OI260xx, SCI260xx, or PUZ260xx.</small>
+              <small style="color:#5a7a9a;">Try refreshing — or check that the backend has problems tagged M260xx, O260xx, S260xx, or P260xx.</small>
             </div>`;
           return;
         }

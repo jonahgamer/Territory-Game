@@ -63,7 +63,7 @@ const MAX_CONTESTANT_ID_LEN = 80;
 const MAX_CONTEST_MINUTES = 10080;
 const MIN_START_AT = Date.parse('2000-01-01T00:00:00Z');
 const MAX_START_AT = Date.parse('2100-01-01T00:00:00Z');
-const PROBLEM_TYPES = ['math', 'oi', 'science', 'puzzle'];
+const PROBLEM_TYPES = ['math', 'oi', 'science', 'puzzle', 'testing'];
 const DIFFICULTIES = ['easy', 'normal', 'hard', 'insane'];
 const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
 
@@ -375,7 +375,18 @@ function cleanResolvedTeams(value) {
   return ids;
 }
 
+function playableContestMap(map, contest) {
+  if (!map || isTestingContest(contest) || map.mode === 'testing') return map;
+  return {
+    ...map,
+    cells: (map.cells || []).map((cell) => (
+      cell?.kind === 'problem' && cell.type === 'testing' ? { kind: 'empty' } : cell
+    )),
+  };
+}
+
 function contestPayload(contest, map, problems, user) {
+  map = playableContestMap(map, contest);
   const admin = isAdmin(user);
   const testing = isTestingContest(contest);
   const team = teamForUser(contest, user?.username);
@@ -583,6 +594,8 @@ async function handleBootstrap(req, res, db, user) {
     for (const map of sourceMaps) {
       for (const cell of map.cells || []) {
         if (cell?.kind === 'problem' && PROBLEM_TYPES.includes(cell.type) && Number.isInteger(cell.problemNo)) {
+          const contest = contests.find((item) => item.mapId === map.id);
+          if (cell.type === 'testing' && map.mode !== 'testing' && !isTestingContest(contest)) continue;
           neededProblems.add(`${cell.type}:${cell.problemNo}`);
         }
       }
@@ -653,6 +666,9 @@ async function handleSaveMaps(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const parsed = collectUnique(body.maps, normalizeMap, (map) => map.id, 'Maps');
   if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+  if (parsed.items.some((map) => map.mode !== 'testing' && map.cells.some((cell) => cell.kind === 'problem' && cell.type === 'testing'))) {
+    return res.status(400).json({ success: false, message: 'Testing problems can only be placed on a testing map.' });
+  }
   try {
     const revision = await saveCollection(db, 'maps', parsed.items, (map) => map.id, body.revision);
     return res.status(200).json({ success: true, count: parsed.items.length, revision });
@@ -1082,7 +1098,7 @@ async function handleSolve(req, res, db, user, body) {
   const team = teamForUser(contest, username);
   if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
 
-  const map = await loadContestMap(db, contest);
+  const map = playableContestMap(await loadContestMap(db, contest), contest);
   const problems = await db.collection('problems').find({}).toArray();
   const now = Date.now();
   contest = await maybeResolveSpawns(db, contest, map, now);
