@@ -13,8 +13,7 @@
   <body>
     <main class="practice" style="max-width:56rem;margin:0 auto;padding:24px 16px 64px;">
       <p class="eyebrow">Practice</p>
-      <h1>260xx Problems</h1>
-      <p class="lead">Guests can view and submit. Math (M) problems are hidden here. Answers are checked by the saved grader; nothing is written to the database.</p>
+      <h1>Testing Problems</h1>
       <ul class="legend">
         <li><span class="swatch fill easy"></span>Easy</li>
         <li><span class="swatch fill normal"></span>Normal</li>
@@ -35,7 +34,8 @@
         var API_BASE = "/api/territory";
         var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
-        var TYPE_TAG = { oi: "O", science: "S", puzzle: "P", testing: "T" };
+        var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
+
 
         var grid = document.getElementById("practice-grid");
         var errorEl = document.getElementById("practice-error");

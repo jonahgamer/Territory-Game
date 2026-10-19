@@ -1461,13 +1461,12 @@ function isPublicProblem(problem) {
   return problem
     && Number.isInteger(problem.index)
     && problem.index >= PUBLIC_INDEX_MIN
-    && problem.index <= PUBLIC_INDEX_MAX
-    && problem.type !== PUBLIC_EXCLUDED_TYPE;
+    && problem.index <= PUBLIC_INDEX_MAX;
 }
 
 async function handlePublicProblems(req, res, db) {
   const problems = await db.collection('problems')
-    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
+    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX } })
     .toArray();
   return res.status(200).json({
     success: true,
