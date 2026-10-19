@@ -13,7 +13,7 @@
   <body>
     <main class="practice" style="max-width:56rem;margin:0 auto;padding:24px 16px 64px;">
       <p class="eyebrow">Practice</p>
-      <h1>Testing Problems 6767</h1>
+      <h1>Testing Problems</h1>
       <ul class="legend">
         <li><span class="swatch fill easy"></span>Easy</li>
         <li><span class="swatch fill normal"></span>Normal</li>
@@ -198,7 +198,7 @@
                 function card(problem) {
           var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
           var link = document.createElement("a");
-          link.href = "problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
+          link.href = "testing/problem.html?index=" + problem.index + "&type=" + encodeURIComponent(problem.type);
           link.target = "_blank";
           link.rel = "noopener";
           link.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;text-decoration:none;cursor:pointer;";
