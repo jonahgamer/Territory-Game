@@ -23,14 +23,12 @@ const HEIGHT = {
 };
 
 // ── Flat, maximally‑distinct difficulty colours ────────────
-// Green → Yellow → Red → White: four primaries chosen so that
-// even adjacent bands have huge hue/value separation.
 const BAND_COLOURS = {
-  easy:   "#00e676", // vivid emerald green
-  normal: "#ffea00", // vivid pure yellow
-  hard:   "#ff1744", // vivid crimson red
+  easy:   "#00e676", // vivid emerald
+  normal: "#ffea00", // vivid yellow
+  hard:   "#ff1744", // vivid crimson
   insane: "#ffffff", // pure white
-  empty:  "#0d2818", // very dark forest — clearly below easy
+  empty:  "#0d2818", // dark forest
 };
 
 const LEGEND = [
@@ -44,11 +42,6 @@ const LEGEND = [
 ];
 
 // Band boundaries: smoothed height → difficulty band.
-//   < 0.75         → empty
-//   0.75 – 1.75    → easy
-//   1.75 – 2.75    → normal
-//   2.75 – 3.75    → hard
-//   ≥ 3.75         → insane
 function bandFor(h) {
   if (h < 0.75) return "empty";
   if (h < 1.75) return "easy";
@@ -57,12 +50,65 @@ function bandFor(h) {
   return "insane";
 }
 
-// Contour lines are drawn at the band boundaries, so they line up
-// exactly with the colour changes.
+// Contour lines are drawn at the band boundaries.
 const CONTOUR_LEVELS = [0.75, 1.75, 2.75, 3.75];
 
-// ── Height field + smoothing (unchanged) ───────────────────
-function buildHeightField(map, findProblem) {
+// ── Hillshade tuning ───────────────────────────────────────
+const LIGHT_DIR   = { x: -1, y: -1 }; // light from NW (top-left)
+const SHADE_RANGE = 0.30;             // ±30% lightness at strongest slope
+const SHADE_PASSES = 2;               // extra blur passes on the shade field
+
+// ── Robust difficulty resolution ───────────────────────────
+function resolveDifficulty(cell, problems) {
+  if (!cell || cell.kind !== "problem") return null;
+  const wantedType = String(cell.type || "").toLowerCase();
+  const wantedNo = Number(cell.problemNo);
+
+  let prob = problems.find(
+    (p) => Number(p.index) === wantedNo &&
+           String(p.type || "").toLowerCase() === wantedType
+  );
+  if (!prob) {
+    prob = problems.find((p) => Number(p.index) === wantedNo);
+    if (prob) {
+      console.warn(
+        `[difficulty-view] cell type "${cell.type}" did not match problem #${wantedNo}; ` +
+        `using problem.type "${prob.type}" instead`
+      );
+    }
+  }
+  if (!prob) {
+    console.warn(
+      `[difficulty-view] no problem found for cell #${wantedNo} (type "${cell.type}")`
+    );
+    return null;
+  }
+
+  let diff = null;
+  try { diff = problemDifficulty(prob); } catch { /* fall through */ }
+  if (!diff || !["easy", "normal", "hard", "insane"].includes(String(diff).toLowerCase())) {
+    try { diff = problemDifficulty(prob.difficulty); } catch { /* fall through */ }
+  }
+  if (!diff || !["easy", "normal", "hard", "insane"].includes(String(diff).toLowerCase())) {
+    const raw =
+      prob.difficulty ?? prob.diff ?? prob.level ??
+      (prob.problem && prob.problem.difficulty) ?? null;
+    if (raw && ["easy", "normal", "hard", "insane"].includes(String(raw).toLowerCase())) {
+      diff = raw;
+    }
+  }
+  if (!diff) {
+    console.warn(
+      `[difficulty-view] problem #${wantedNo} (type "${prob.type}") has no resolvable difficulty:`,
+      prob
+    );
+    return null;
+  }
+  return String(diff).toLowerCase();
+}
+
+// ── Height field + smoothing ───────────────────────────────
+function buildHeightField(map, problems) {
   const { cols, rows, cells } = map;
   const n = rows * cols;
   const raw = new Float32Array(n);
@@ -75,10 +121,14 @@ function buildHeightField(map, findProblem) {
     if (cell.kind === "spawnpoint") { raw[i] = HEIGHT.spawnpoint; kindOf[i] = "spawnpoint"; continue; }
     if (cell.kind === "empty")      { raw[i] = HEIGHT.empty;      kindOf[i] = "empty"; continue; }
     if (cell.kind === "problem") {
-      const prob = findProblem(cell.problemNo, cell.type);
-      const diff = problemDifficulty(prob) || "unknown";
-      raw[i] = HEIGHT[diff] ?? HEIGHT.unknown;
-      kindOf[i] = diff;
+      const diff = resolveDifficulty(cell, problems);
+      if (diff) {
+        raw[i] = HEIGHT[diff];
+        kindOf[i] = diff;
+      } else {
+        raw[i] = HEIGHT.easy;
+        kindOf[i] = "easy";
+      }
       continue;
     }
     raw[i] = HEIGHT.unknown;
@@ -130,10 +180,84 @@ function buildHeightField(map, findProblem) {
   return { height: field, kind: kindOf };
 }
 
-// Contrast text on light vs dark backgrounds.
-function textColourFor(hex) {
+// ── Hillshade field ────────────────────────────────────────
+// Compute per‑cell shade multiplier by dotting the height gradient
+// with the light direction. Negative gradient (slope facing the
+// light) brightens; positive (slope facing away) darkens.
+function buildShadeField(height, cols, rows) {
+  const n = rows * cols;
+  const shade = new Float32Array(n);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      const hL = c > 0        ? height[i - 1] : height[i];
+      const hR = c < cols - 1 ? height[i + 1] : height[i];
+      const hT = r > 0        ? height[i - cols] : height[i];
+      const hB = r < rows - 1 ? height[i + cols] : height[i];
+
+      // Central differences → gradient. We also scale by grid spacing
+      // implicitly (both directions have same spacing, so slope = Δh).
+      const gx = (hR - hL) * 0.5;
+      const gy = (hB - hT) * 0.5;
+
+      // Dot with light direction. Light "coming from NW" means the
+      // gradient pointing NW (negative gx, negative gy) is lit.
+      // Using -gx and -gy so that slopes descending toward the light
+      // get positive dot (brighter).
+      const dot = (-gx) * LIGHT_DIR.x + (-gy) * LIGHT_DIR.y;
+
+      // Clamp and scale to shade range.
+      const s = Math.max(-1, Math.min(1, dot));
+      shade[i] = 1 + s * SHADE_RANGE;
+    }
+  }
+
+  // Blur the shade field so it reads as continuous terrain light,
+  // not blocky per‑cell steps. A couple of passes is enough.
+  let field = shade;
+  for (let iter = 0; iter < SHADE_PASSES; iter++) {
+    const next = new Float32Array(n);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        let sum = field[i] * 2, count = 2;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (!dr && !dc) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+            sum += field[nr * cols + nc]; count++;
+          }
+        }
+        next[i] = sum / count;
+      }
+    }
+    field = next;
+  }
+
+  return field; // multiplier around 1.0 (±SHADE_RANGE)
+}
+
+// ── Colour helpers ─────────────────────────────────────────
+function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+  return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+}
+function rgbToHex({ r, g, b }) {
+  const f = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return "#" + ((1 << 24) | (f(r) << 16) | (f(g) << 8) | f(b)).toString(16).slice(1);
+}
+function applyShade(hex, multiplier) {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex({
+    r: r * multiplier,
+    g: g * multiplier,
+    b: b * multiplier,
+  });
+}
+function textColourFor(hex) {
+  const { r, g, b } = hexToRgb(hex);
   const lum = 0.299 * r + 0.587 * g + 0.114 * b;
   return lum > 150 ? "#111" : "#fff";
 }
@@ -165,15 +289,13 @@ async function run() {
   const map = data.maps.find((m) => m.id === mapId);
   if (!map) throw new Error("That map was not found.");
 
-  const findProblem = (index, type) =>
-    data.problems.find((p) => p.index === index && p.type === type) || null;
-
   titleEl.textContent = map.name;
   sizeEl.textContent = `${map.cols} × ${map.rows}`;
   modeEl.textContent = (mapMode(map) || "official").replace(/^\w/, (c) => c.toUpperCase());
   renderMapCounts(countsEl, map);
 
-  const { height, kind } = buildHeightField(map, findProblem);
+  const { height, kind } = buildHeightField(map, data.problems);
+  const shade = buildShadeField(height, map.cols, map.rows);
 
   layoutMapGrid(gridEl, map.cols, map.rows);
   gridEl.replaceChildren();
@@ -191,25 +313,25 @@ async function run() {
     const k = kind[i];
     const band = bandFor(h);
 
-    // Snap to the flat difficulty colour — no interpolation.
-    let colour = BAND_COLOURS[band] || BAND_COLOURS.empty;
+    // Base flat difficulty colour, then modulate by the hillshade.
+    let baseColour = BAND_COLOURS[band] || BAND_COLOURS.empty;
+    let fillColour = applyShade(baseColour, shade[i]);
 
     const tile = document.createElement("div");
     tile.className = "grid-cell difficulty-cell";
     tile.style.position = "relative";
     tile.style.aspectRatio = "1 / 1";
-    tile.style.background = colour;
+    tile.style.background = fillColour;
     tile.style.display = "flex";
     tile.style.alignItems = "center";
     tile.style.justifyContent = "center";
     tile.style.fontFamily = '"Share Tech Mono", monospace';
     tile.style.fontSize = "0.72rem";
     tile.style.fontWeight = "700";
-    tile.style.color = textColourFor(colour);
+    tile.style.color = textColourFor(fillColour);
     tile.style.boxSizing = "border-box";
 
-    // Contour lines at band boundaries — thicker and darker so they
-    // visually reinforce the hard colour transition.
+    // Contour lines at band boundaries.
     const sides = contourSides(height, map.cols, map.rows, i);
     if (sides.length > 0) {
       const shadows = [];
@@ -234,11 +356,11 @@ async function run() {
       tile.style.textShadow = "0 1px 2px rgba(0,0,0,0.8)";
     }
 
-    tile.title = labelFor(cell, k, row, column, findProblem, h, band);
+    tile.title = labelFor(cell, k, row, column, h, band);
     gridEl.appendChild(tile);
   }
 
-  // Faint hairline grid so cells remain countable.
+  // Faint hairline grid.
   gridEl.style.backgroundImage =
     "linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px)," +
     "linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)";
@@ -247,10 +369,10 @@ async function run() {
   renderLegend();
 }
 
-function labelFor(cell, kind, row, column, findProblem, h, band) {
+function labelFor(cell, kind, row, column, h, band) {
   const base = cell
     ? cell.kind === "problem"
-      ? `${cell.type} #${cell.problemNo} — ${problemDifficulty(findProblem(cell.problemNo, cell.type)) || "unknown"}`
+      ? `${cell.type} #${cell.problemNo}`
       : cell.kind
     : "empty";
   return `${base} (r${row} c${column}) · band ${band} · elevation ${h.toFixed(2)}`;
