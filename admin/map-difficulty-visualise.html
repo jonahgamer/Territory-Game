@@ -105,13 +105,12 @@
     <button id="page-toast-close" type="button">Close</button>
   </div>
   <script type="module">
-    // Pass the current map ID (from the editor's URL) to the difficulty visualiser.
-    // The map editor is opened with ?map=<mapId> (or ?id=<mapId>).
+    // The map editor is opened with ?id=<mapId>.
+    // This script updates the difficulty visualiser link so it carries the same map id.
     (function () {
       const params = new URLSearchParams(window.location.search);
-      const mapId = params.get('id') || params.get('map');
+      const mapId = params.get('id');  // use only ?id=
 
-      // No terrain view button, so only difficulty link is configured.
       const difficultyBtn = document.getElementById('difficulty-view-button');
       if (difficultyBtn) {
         if (mapId) {
