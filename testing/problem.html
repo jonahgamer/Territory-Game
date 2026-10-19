@@ -401,6 +401,84 @@
         });
         // ────────────────────────────────────────────────────────────
 
+	function showNekosWidget() {
+  // Avoid duplicate instances if the user submits multiple times
+  if (document.getElementById("nekos-best-widget")) return;
+
+  // 1. Insert the markup
+  var section = document.createElement("section");
+  section.id = "nekos-best-widget";
+  section.className = "nekos-best-api";
+  section.style.cssText =
+    "max-width:40rem;margin:2rem auto;padding:1.5rem;" +
+    "border:1px solid #333;border-radius:12px;background:#0d1117;" +
+    "color:#c9d1d9;font-family:system-ui,sans-serif;";
+  section.innerHTML =
+    '<h2 style="margin-top:0;color:#58a6ff;">Nekos.best Random Image</h2>' +
+    '<p style="font-size:0.9rem;color:#8b949e;">Fetches a random image or GIF from a selected category.</p>' +
+    '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">' +
+    '  <label for="nekos-category" style="display:flex;align-items:center;gap:0.4rem;">Category:' +
+    '    <select id="nekos-category" style="padding:0.4rem 0.6rem;border-radius:6px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;">' +
+    '      <option value="neko">neko</option>' +
+    '      <option value="waifu">waifu</option>' +
+    '      <option value="husbando">husbando</option>' +
+    '      <option value="kitsune">kitsune</option>' +
+    '      <option value="hug">hug</option>' +
+    '      <option value="pat">pat</option>' +
+    '      <option value="wink">wink</option>' +
+    '    </select>' +
+    '  </label>' +
+    '  <button id="nekos-refresh" style="padding:0.4rem 1rem;border:1px solid #30363d;border-radius:6px;background:#238636;color:#fff;cursor:pointer;font-weight:600;">Refresh</button>' +
+    '</div>' +
+    '<div id="nekos-result" style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;min-height:200px;">' +
+    '  <p style="color:#8b949e;">Click Refresh to load an image.</p>' +
+    '</div>';
+
+  // Place it right after the answer form area
+  var main = document.querySelector(".practice-answer");
+  main.appendChild(section);
+
+  // 2. Run the widget logic (same as your snippet)
+  var categorySelect = section.querySelector("#nekos-category");
+  var refreshBtn = section.querySelector("#nekos-refresh");
+  var resultDiv = section.querySelector("#nekos-result");
+
+  async function fetchRandomImage() {
+    var category = categorySelect.value;
+    var userAgent = "TerritoryGame-Admin-Panel/1.0 (contact: admin@example.com)";
+
+    resultDiv.innerHTML = '<p style="color:#8b949e;">Loading...</p>';
+
+    try {
+      var response = await fetch("https://nekos.best/api/v2/" + category, {
+        headers: { "User-Agent": userAgent }
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status + ": " + response.statusText);
+
+      var data = await response.json();
+      var result = data.results && data.results[0];
+      if (!result || !result.url) throw new Error("No image URL found in response.");
+
+      resultDiv.innerHTML =
+        '<img src="' + result.url + '" alt="' + category + ' image" ' +
+        'style="max-width:100%;border-radius:8px;border:1px solid #30363d;" />' +
+        '<div style="font-size:0.85rem;color:#8b949e;text-align:center;">' +
+        '  <div><strong>Category:</strong> ' + category + '</div>' +
+        (result.artist_name ? '<div><strong>Artist:</strong> ' + result.artist_name + '</div>' : '') +
+        (result.anime_name ? '<div><strong>Anime:</strong> ' + result.anime_name + '</div>' : '') +
+        (result.source_url ? '<div><a href="' + result.source_url + '" target="_blank" rel="noopener" style="color:#58a6ff;">Source</a></div>' : '') +
+        '</div>';
+    } catch (err) {
+      console.error("Nekos.best fetch error:", err);
+      resultDiv.innerHTML = '<p style="color:#f85149;">Failed to load image: ' + err.message + '</p>';
+    }
+  }
+
+  refreshBtn.addEventListener("click", fetchRandomImage);
+  // Auto-load the first image right away:
+  fetchRandomImage();
+}
+	
         async function loadProblem() {
           if (!Number.isInteger(index) || !type) {
             showStatus("This problem link is not valid.");
@@ -462,7 +540,8 @@
             } else if (data.correct) {
               error.hidden = false;
               error.style.color = "#3ddc6a";
-              error.textContent = "AC";
+              error.textContent = "Accepted";
+              showNekosWidget();
             } else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
