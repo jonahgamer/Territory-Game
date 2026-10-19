@@ -110,6 +110,8 @@ async function onCreateMap(event) {
     rows,
     cells: emptyCells(cols * rows),
     mode: state.newMode,
+    backdrop: "terrain",
+    photo: "",
   };
 
   state.maps.unshift(newMap);

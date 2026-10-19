@@ -52,6 +52,8 @@ A contest is `competition` or `testing`. A competition shares one map, so the fi
 
 Admin only. Every map must be valid. If one map is invalid, nothing is saved. Body may include `revision` from `bootstrap`. The save runs in one database transaction, upserts the maps sent, and removes only maps that are no longer in the list. If `revision` does not match the current revision, the request returns 409 and nothing changes.
 
+A map’s `backdrop` is `terrain` or `photo`. Photo mode stores `photo` as a `data:image/jpeg`, `png`, or `webp` base64 URL no longer than 700000 characters. Terrain mode stores an empty `photo`. Contestants receive the same backdrop so the board can draw the picture. The picture is scaled to cover the grid.
+
 ### `POST { "action": "save-problems", "problems": [...] }`
 
 Admin only. Same rule: an invalid problem rejects the whole save. Body may include `revision`; a stale revision returns 409. Problems are identified by `type` and `index`, so the save is incremental in the same way as maps.

@@ -59,6 +59,7 @@ const MAX_PROBLEM_TEXT = 50000;
 const MAX_PROBLEM_LOGIC = 10000;
 const MAX_TEST_TEXT = 10000;
 const MAX_NAME_LEN = 60;
+const MAX_MAP_PHOTO = 700000;
 const MAX_CONTESTANT_ID_LEN = 80;
 const MAX_CONTEST_MINUTES = 10080;
 const MIN_START_AT = Date.parse('2000-01-01T00:00:00Z');
@@ -110,6 +111,12 @@ function cleanCell(cell) {
   return null;
 }
 
+function cleanMapPhoto(value) {
+  if (typeof value !== 'string' || !value || value.length > MAX_MAP_PHOTO) return '';
+  if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) return '';
+  return value;
+}
+
 function normalizeMap(v) {
   if (!v || typeof v !== 'object') return null;
   if (typeof v.id !== 'string' || !v.id || v.id.length > 80) return null;
@@ -121,7 +128,18 @@ function normalizeMap(v) {
   if (!Array.isArray(v.cells) || v.cells.length !== v.cols * v.rows) return null;
   const cells = v.cells.map(cleanCell);
   if (cells.some((cell) => !cell)) return null;
-  return { id: v.id, name, cols: v.cols, rows: v.rows, cells, mode: v.mode === 'testing' ? 'testing' : 'official' };
+  const photo = cleanMapPhoto(v.photo);
+  const backdrop = v.backdrop === 'photo' && photo ? 'photo' : 'terrain';
+  return {
+    id: v.id,
+    name,
+    cols: v.cols,
+    rows: v.rows,
+    cells,
+    mode: v.mode === 'testing' ? 'testing' : 'official',
+    backdrop,
+    photo: backdrop === 'photo' ? photo : '',
+  };
 }
 
 function normalizeProblem(v) {
@@ -612,6 +630,8 @@ async function handleBootstrap(req, res, db, user) {
     rows: m.rows,
     cells: m.cells,
     mode: m.mode === 'testing' ? 'testing' : 'official',
+    backdrop: m.backdrop === 'photo' && typeof m.photo === 'string' && m.photo ? 'photo' : 'terrain',
+    photo: m.backdrop === 'photo' && typeof m.photo === 'string' ? m.photo : '',
   }));
   const cleanProblems = sourceProblems.map(p => {
     const problem = {

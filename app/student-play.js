@@ -5,11 +5,12 @@ import { loadBootstrap } from "../shared/data.js";
 import { api } from "../shared/api.js";
 import { el, renderList } from "../shared/dom.js";
 import {
-  contestPhase, phaseSentence, phaseClock, noteServerTime,
+  contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
 } from "../shared/contest-time.js";
 import { teamForUser, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
-import { layoutMapGrid, cellClassName, cellText, cellLabel } from "../shared/map-render.js";
+import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_NAME, DIFFICULTY_SCORE, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
+import { problemDifficulty, problemTag } from "../shared/difficulty.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -50,7 +51,15 @@ async function run() {
 
 function bindEvents() {
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
-  document.querySelector("#student-grid")?.addEventListener("click", onGridClick);
+  const grid = document.querySelector("#student-grid");
+  grid?.addEventListener("click", onGridClick);
+  grid?.addEventListener("pointerover", showCellTip);
+  grid?.addEventListener("pointermove", showCellTip);
+  grid?.addEventListener("pointerout", (event) => {
+    if (event.target.closest(".grid-cell") && event.relatedTarget?.closest?.("#student-grid .grid-cell") === event.target.closest(".grid-cell")) return;
+    const tip = document.querySelector("#cell-tooltip");
+    if (tip && !event.relatedTarget?.closest?.("#student-grid")) tip.hidden = true;
+  });
   document.querySelector("#student-answer-form")?.addEventListener("submit", submitAnswer);
   document.addEventListener("mousemove", () => {
     const wasIdle = Date.now() - state.lastMouse >= 5000;
@@ -233,13 +242,63 @@ function renderGrid(contest, map, phase, frozen, team) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
         if (myVote && myVote.cell === index) button.classList.add("mine");
       }
-      button.textContent = cell.kind === "problem" ? "" : cellText(cell);
+      button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
     }
 
     if (state.selectedCell === index) button.setAttribute("aria-pressed", "true");
     button.setAttribute("aria-label", cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1));
     grid.append(button);
   });
+  paintPhotoGrid(grid, map, findProblem);
+}
+
+function showCellTip(event) {
+  const tip = document.querySelector("#cell-tooltip");
+  const button = event.target.closest?.(".grid-cell");
+  if (!tip || !button) return;
+  const contest = state.contest;
+  const map = state.maps.find((m) => m.id === contest?.mapId);
+  const index = Number(button.dataset.index);
+  const cell = map?.cells?.[index];
+  if (!map || !cell) { tip.hidden = true; return; }
+  tip.replaceChildren(...cellTipLines(contest, map, index, cell).map((line) => el("p", "", line)));
+  tip.hidden = false;
+  const pad = 14;
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+  const box = tip.getBoundingClientRect();
+  let x = event.clientX + pad;
+  let y = event.clientY + pad;
+  if (x + box.width > window.innerWidth - 8) x = event.clientX - box.width - pad;
+  if (y + box.height > window.innerHeight - 8) y = event.clientY - box.height - pad;
+  tip.style.left = `${Math.max(8, x)}px`;
+  tip.style.top = `${Math.max(8, y)}px`;
+}
+
+function cellTipLines(contest, map, index, cell) {
+  const row = Math.floor(index / map.cols) + 1;
+  const column = (index % map.cols) + 1;
+  const lines = [`Row ${row}, column ${column}`];
+  if (cell.kind === "problem") {
+    const problem = findProblem(cell.problemNo, cell.type);
+    const difficulty = problemDifficulty(problem);
+    const points = DIFFICULTY_SCORE[difficulty] || 0;
+    lines.push(`${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`);
+  } else if (cell.kind === "obstacle") lines.push("Obstacle");
+  else if (cell.kind === "spawnpoint") lines.push("Spawn point");
+  else lines.push("Empty");
+  const claim = (contest.claims || []).find((c) => c.cell === index);
+  if (claim) {
+    const team = (contest.teams || []).find((t) => t.id === claim.teamId);
+    const when = claim.solvedAt ? formatContestTime(claim.solvedAt) : "";
+    const who = claim.solvedBy ? ` · ${claim.solvedBy}` : "";
+    lines.push(`Occupied by ${team?.name || "a team"}${who}${when ? ` at ${when}` : ""}`);
+  } else if (cell.kind === "spawnpoint" && contest.spawnResolved) {
+    const spawn = (contest.spawns || []).find((s) => s.cell === index);
+    const team = spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) : null;
+    if (team) lines.push(`Held by ${team.name}`);
+  }
+  return lines;
 }
 
 function findProblem(index, type) {

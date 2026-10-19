@@ -13,6 +13,8 @@ const CONFLICT_FIELDS = {
     { key: "name", label: "Name" },
     { key: "mode", label: "Type" },
     { key: "geometry", label: "Size and cells" },
+    { key: "backdrop", label: "View" },
+    { key: "photo", label: "Photo" },
   ],
   problems: [
     { key: "prompt", label: "Problem" },
@@ -87,6 +89,8 @@ function fieldValue(name, item, field) {
 function formatValue(name, field, value) {
   if (value === undefined || value === null) return "(empty)";
   if (name === "maps" && field === "mode") return value === "testing" ? "Testing" : "Official";
+  if (name === "maps" && field === "backdrop") return value === "photo" ? "Photo" : "Terrain";
+  if (name === "maps" && field === "photo") return value ? "Photo set" : "(none)";
   if (name === "maps" && field === "geometry") return mapSummary(value);
   if (field === "startAt" && Number.isFinite(Number(value))) {
     return `${new Date(Number(value)).toLocaleString()} (${value})`;

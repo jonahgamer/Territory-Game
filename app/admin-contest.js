@@ -9,10 +9,9 @@ import {
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
 import { normalizeContest, teamForUser } from "../shared/contest-data.js";
-import { layoutMapGrid } from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_SCORE, DIFFICULTY_NAME } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { mapMode } from "../shared/map-render.js";
 
 
 
@@ -364,7 +363,7 @@ function renderBoard() {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.index = String(index);
-    button.className = `grid-cell ${cell.kind}${cell.kind === "problem" ? ` ${cell.type}` : ""}`;
+    button.className = `grid-cell ${cell.kind}${cell.kind === "problem" ? ` ${cell.type} ${problemDifficulty(findBoardProblem(cell))}` : ""}`;
     const owner = ownerAt(contest, index, cell);
     if (owner) {
       button.classList.add("owned");
@@ -373,6 +372,11 @@ function renderBoard() {
     button.disabled = true;
     grid.append(button);
   });
+  paintPhotoGrid(grid, state.map, findBoardProblem);
+}
+
+function findBoardProblem(index, type) {
+  return state.problems.find((p) => p.index === index && p.type === type) || null;
 }
 
 function ownerAt(contest, index, cell) {

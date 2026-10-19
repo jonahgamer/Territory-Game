@@ -129,3 +129,92 @@ export function renderMapCounts(container, map) {
 export function emptyCells(count) {
   return Array.from({ length: count }, () => ({ kind: "empty" }));
 }
+
+export function mapBackdrop(map) {
+  return map?.backdrop === "photo" && typeof map.photo === "string" && map.photo.startsWith("data:image/")
+    ? "photo"
+    : "terrain";
+}
+
+export function photoCover(imgW, imgH, gridW, gridH) {
+  const scale = Math.max(gridW / imgW, gridH / imgH);
+  const drawW = imgW * scale;
+  const drawH = imgH * scale;
+  return { drawW, drawH, offsetX: (gridW - drawW) / 2, offsetY: (gridH - drawH) / 2 };
+}
+
+export function readMapPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = Math.min(1, 640 / longest);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      let quality = 0.72;
+      let data = canvas.toDataURL("image/jpeg", quality);
+      while (data.length > 650000 && quality > 0.4) {
+        quality = Math.round((quality - 0.08) * 100) / 100;
+        data = canvas.toDataURL("image/jpeg", quality);
+      }
+      if (data.length > 650000) reject(new Error("That photo is too large."));
+      else resolve(data);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That file is not an image."));
+    };
+    img.src = url;
+  });
+}
+
+export function paintPhotoGrid(grid, map, findProblem) {
+  if (!grid) return;
+  for (const badge of grid.querySelectorAll(".cell-difficulty")) badge.remove();
+  const buttons = [...grid.querySelectorAll(".grid-cell")];
+  if (mapBackdrop(map) !== "photo") {
+    delete grid.dataset.photoSrc;
+    for (const button of buttons) {
+      button.classList.remove("photo-cell");
+      button.style.backgroundImage = "";
+      button.style.backgroundSize = "";
+      button.style.backgroundPosition = "";
+    }
+    return;
+  }
+  const photo = map.photo;
+  const img = new Image();
+  img.onload = () => {
+    if (!grid.isConnected || grid.dataset.photoSrc !== photo) return;
+    const styles = getComputedStyle(grid);
+    const cell = parseFloat(styles.getPropertyValue("--cell")) || CELL_SIZE;
+    const gap = parseFloat(styles.columnGap) || 0;
+    const gridW = map.cols * cell + gap * Math.max(0, map.cols - 1);
+    const gridH = map.rows * cell + gap * Math.max(0, map.rows - 1);
+    const cover = photoCover(img.naturalWidth, img.naturalHeight, gridW, gridH);
+    for (const button of buttons) {
+      const index = Number(button.dataset.index);
+      if (!Number.isInteger(index)) continue;
+      const col = index % map.cols;
+      const row = Math.floor(index / map.cols);
+      button.classList.add("photo-cell");
+      button.style.backgroundImage = `url("${photo}")`;
+      button.style.backgroundRepeat = "no-repeat";
+      button.style.backgroundSize = `${cover.drawW}px ${cover.drawH}px`;
+      button.style.backgroundPosition = `${cover.offsetX - col * (cell + gap)}px ${cover.offsetY - row * (cell + gap)}px`;
+      const cellData = map.cells?.[index];
+      if (cellData?.kind !== "problem" || !findProblem) continue;
+      const difficulty = problemDifficulty(findProblem(cellData.problemNo, cellData.type));
+      const badge = document.createElement("span");
+      badge.className = `cell-difficulty ${difficulty}`;
+      badge.textContent = DIFFICULTY_NAME[difficulty] || "Normal";
+      button.append(badge);
+    }
+  };
+  grid.dataset.photoSrc = photo;
+  img.src = photo;
+}

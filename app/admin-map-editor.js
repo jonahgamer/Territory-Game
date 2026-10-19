@@ -6,7 +6,7 @@ import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { layoutMapGrid, mapMode, cellClassName, cellText, cellLabel, renderMapCounts } from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, cellText, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -48,6 +48,7 @@ async function run() {
   sizeEl.textContent = `${state.current.cols} × ${state.current.rows}`;
   renderMapCounts(countsEl, state.current);
   renderMode();
+  renderBackdrop();
   chooseTool("problem");
   renderGrid();
   if (state.current.mode === "testing") {
@@ -61,6 +62,35 @@ function bindEvents() {
   document.querySelector("#kind-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-tool]");
     if (btn) chooseTool(btn.dataset.tool);
+  });
+  document.querySelector("#map-backdrop-choices")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-backdrop]");
+    if (!btn || !state.current) return;
+    const next = btn.dataset.backdrop === "photo" ? "photo" : "terrain";
+    if (next === "terrain") {
+      if (mapBackdrop(state.current) === "terrain" && !state.current.photo) return;
+      state.current.backdrop = "terrain";
+      state.current.photo = "";
+      markDirty();
+      renderBackdrop();
+      renderGrid();
+      return;
+    }
+    document.querySelector("#map-photo-input")?.click();
+  });
+  document.querySelector("#map-photo-input")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !state.current) return;
+    try {
+      state.current.photo = await readMapPhoto(file);
+      state.current.backdrop = "photo";
+      markDirty();
+      renderBackdrop();
+      renderGrid();
+    } catch (error) {
+      showPageToast(error.message || "That photo could not be used.", "warn");
+    }
   });
   document.querySelector("#map-mode-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-map-mode]");
@@ -179,6 +209,20 @@ function renderPlaceMode() {
   document.querySelector("#place-range-field").hidden = state.placePickSource !== "range";
 }
 
+function renderBackdrop() {
+  const photo = mapBackdrop(state.current) === "photo";
+  for (const btn of document.querySelectorAll("[data-backdrop]")) {
+    btn.setAttribute("aria-pressed", String((btn.dataset.backdrop === "photo") === photo));
+  }
+  const field = document.querySelector("#map-photo-field");
+  if (field) field.hidden = !photo;
+}
+
+function cellFace(cell) {
+  if (mapBackdrop(state.current) === "photo" && cell?.kind === "problem") return "";
+  return cellText(cell);
+}
+
 function renderGrid() {
   const map = state.current;
   mapEl.dataset.cols = String(map.cols);
@@ -189,12 +233,13 @@ function renderGrid() {
     if (!cell) return;
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
-    const button = el("button", cellClassName(cell, findProblem, "grid-cell"), cellText(cell));
+    const button = el("button", cellClassName(cell, findProblem, "grid-cell"), cellFace(cell));
     button.type = "button";
     button.dataset.index = String(index);
     button.setAttribute("aria-label", cellLabel(cell, row, column));
     mapEl.append(button);
   });
+  paintPhotoGrid(mapEl, map, findProblem);
   renderMapCounts(countsEl, map);
 }
 
@@ -210,8 +255,9 @@ function paintCell(index) {
   const row = Math.floor(index / map.cols) + 1;
   const column = (index % map.cols) + 1;
   button.className = cellClassName(cell, findProblem, "grid-cell");
-  button.textContent = cellText(cell);
+  button.textContent = cellFace(cell);
   button.setAttribute("aria-label", cellLabel(cell, row, column));
+  paintPhotoGrid(mapEl, map, findProblem);
   renderMapCounts(countsEl, map);
 }
 
@@ -411,6 +457,7 @@ async function save() {
           updateSaveButton();
           titleEl.textContent = state.current.name;
           nameInput.value = state.current.name;
+          renderBackdrop();
           renderGrid();
         },
         persist: async () => {

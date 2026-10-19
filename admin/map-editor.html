@@ -34,7 +34,13 @@
       <div class="editor-toolbar">
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
-          <a class="terrain-view-button" id="terrain-view-button" href="terrain-view.html" title="Open terrain view"><i class="fa-solid fa-mountain-sun" style="margin-right:6px;"></i>Terrain view</a>
+          <div class="kind-choices map-backdrop-choices" id="map-backdrop-choices" role="group" aria-label="Map view">
+            <button type="button" data-backdrop="terrain" aria-pressed="true">Terrain</button>
+            <button type="button" data-backdrop="photo" aria-pressed="false">Photo</button>
+          </div>
+          <label class="map-photo-field" id="map-photo-field" hidden>Photo
+            <input id="map-photo-input" type="file" accept="image/*" />
+          </label>
           <a class="terrain-view-button" id="difficulty-view-button" href="map-difficulty-visualise.html" title="Open difficulty map"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>Difficulty map</a>
           <span id="problem-save-state" class="problem-save-state"></span>
           <button class="save-changes" id="save-map-button" type="button" disabled>Save map</button>
@@ -121,24 +127,14 @@
     <button id="page-toast-close" type="button">Close</button>
   </div>
   <script type="module">
-    // Pass the current map ID (from the editor's URL) to the terrain view
-    // and the difficulty visualiser.
-    // The map editor is opened with ?map=<mapId> (or ?id=<mapId>).
     (function () {
       const params = new URLSearchParams(window.location.search);
       const mapId = params.get('id') || params.get('map');
-
-      const terrainBtn = document.getElementById('terrain-view-button');
       const difficultyBtn = document.getElementById('difficulty-view-button');
-
-      if (mapId) {
-        const enc = encodeURIComponent(mapId);
-        if (terrainBtn)    terrainBtn.href    = `terrain-view.html?id=${enc}`;
-        if (difficultyBtn) difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
-      } else {
-        if (terrainBtn)    terrainBtn.href    = 'terrain-view.html';
-        if (difficultyBtn) difficultyBtn.href = 'map-difficulty-visualise.html';
-      }
+      if (!difficultyBtn) return;
+      difficultyBtn.href = mapId
+        ? `map-difficulty-visualise.html?id=${encodeURIComponent(mapId)}`
+        : 'map-difficulty-visualise.html';
     })();
   </script>
   <script type="module" src="/app/admin-map-editor.js"></script>
