@@ -107,79 +107,79 @@
   </div>
   <script type="module">
     // The map editor is opened with ?id=<mapId>.
-    // Configure the difficulty visualiser link and fetch the map via API.
+    // Loads the map from the bootstrap payload and configures the difficulty link.
     (async function () {
       const params = new URLSearchParams(window.location.search);
       const mapId = params.get('id');
+      const errEl = document.getElementById('load-error');
 
-      // 1. Update difficulty view link
+      // 1. Difficulty visualiser link
       const difficultyBtn = document.getElementById('difficulty-view-button');
       if (difficultyBtn) {
-        if (mapId) {
-          const enc = encodeURIComponent(mapId);
-          difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
-        } else {
-          difficultyBtn.href = 'map-difficulty-visualise.html';
-        }
+        difficultyBtn.href = mapId
+          ? `map-difficulty-visualise.html?id=${encodeURIComponent(mapId)}`
+          : 'map-difficulty-visualise.html';
       }
 
-      // 2. Fetch map data via API
+      // 2. Guard: map id required
       if (!mapId) {
-        const errEl = document.getElementById('load-error');
-        errEl.textContent = 'Missing map id in URL (?id=...).';
-        errEl.hidden = false;
+        if (errEl) {
+          errEl.textContent = 'Missing map id in URL (?id=...).';
+          errEl.hidden = false;
+        }
         return;
       }
 
-      const errEl = document.getElementById('load-error');
-
       try {
-        // Use the admin API endpoint (adjust if your backend uses a different path)
-        const res = await fetch(`/api/admin/maps/${encodeURIComponent(mapId)}`, {
+        // 3. Fetch bootstrap payload
+        const res = await fetch('/api/territory?action=bootstrap', {
           headers: { 'Accept': 'application/json' },
           credentials: 'same-origin'
         });
 
-        if (res.status === 404) {
-          throw new Error(`Map "${mapId}" not found. It may have been deleted.`);
+        if (res.status === 401) {
+          throw new Error('Not logged in — please log in again.');
         }
         if (!res.ok) {
-          throw new Error(`Failed to load map (HTTP ${res.status})`);
+          throw new Error(`Bootstrap request failed (HTTP ${res.status})`);
         }
 
-        const map = await res.json();
+        const data = await res.json();
 
-        // Populate title, size, name, mode, counts
-        const titleEl = document.getElementById('editor-title');
-        const sizeEl = document.getElementById('editor-size');
+        // 4. Find the map in the bootstrap payload
+        const maps = Array.isArray(data.maps) ? data.maps : [];
+        const map = maps.find(m => m.id === mapId);
+
+        if (!map) {
+          throw new Error(`Map "${mapId}" not found in bootstrap data. It may have been deleted.`);
+        }
+
+        // 5. Populate header fields
+        const titleEl   = document.getElementById('editor-title');
+        const sizeEl    = document.getElementById('editor-size');
         const nameInput = document.getElementById('map-name-input');
-        const countsEl = document.getElementById('map-counts');
+        const countsEl  = document.getElementById('map-counts');
 
-        if (titleEl) titleEl.textContent = map.name || map.id || 'Untitled map';
-        if (sizeEl) {
-          const w = map.width ?? map.cols ?? '?';
-          const h = map.height ?? map.rows ?? '?';
-          sizeEl.textContent = `${w} × ${h} grid`;
-        }
-        if (nameInput && map.name) nameInput.value = map.name;
+        if (titleEl)   titleEl.textContent = map.name || map.id || 'Untitled map';
+        if (sizeEl)    sizeEl.textContent  = `${map.cols} × ${map.rows} grid`;
+        if (nameInput) nameInput.value     = map.name || '';
 
-        // Map mode toggle
+        // Map mode toggle (falls back to 'official')
         const modeButtons = document.querySelectorAll('#map-mode-choices [data-map-mode]');
         modeButtons.forEach(btn => {
           btn.setAttribute('aria-pressed', btn.dataset.mapMode === (map.mode || 'official') ? 'true' : 'false');
         });
 
-        // Counts (problem / spawn / obstacle / empty) if provided
-        if (countsEl && map.counts) {
-          const parts = [];
-          if (map.counts.problem != null) parts.push(`Problems: ${map.counts.problem}`);
-          if (map.counts.spawnpoint != null) parts.push(`Spawn points: ${map.counts.spawnpoint}`);
-          if (map.counts.obstacle != null) parts.push(`Obstacles: ${map.counts.obstacle}`);
-          if (map.counts.empty != null) parts.push(`Empty: ${map.counts.empty}`);
-          countsEl.textContent = parts.join(' · ');
+        // Tile counts computed client-side from cells
+        if (countsEl && Array.isArray(map.cells)) {
+          const tally = {};
+          for (const c of map.cells) tally[c.kind] = (tally[c.kind] || 0) + 1;
+          countsEl.textContent = Object.entries(tally)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(' · ');
         }
 
-        // Let the main editor script know the loaded map is ready
+        // 6. Hand the map to the editor script
         window.__loadedMap = map;
         window.dispatchEvent(new CustomEvent('map-loaded', { detail: map }));
       } catch (err) {
