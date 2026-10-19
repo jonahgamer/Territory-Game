@@ -125,18 +125,28 @@
 
       // 2. Fetch map data via API
       if (!mapId) {
-        document.getElementById('load-error').textContent = 'Missing map id in URL (?id=...).';
-        document.getElementById('load-error').hidden = false;
+        const errEl = document.getElementById('load-error');
+        errEl.textContent = 'Missing map id in URL (?id=...).';
+        errEl.hidden = false;
         return;
       }
 
+      const errEl = document.getElementById('load-error');
+
       try {
-        const res = await fetch(`/api/maps/${encodeURIComponent(mapId)}`, {
-          headers: { 'Accept': 'application/json' }
+        // Use the admin API endpoint (adjust if your backend uses a different path)
+        const res = await fetch(`/api/admin/maps/${encodeURIComponent(mapId)}`, {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
         });
+
+        if (res.status === 404) {
+          throw new Error(`Map "${mapId}" not found. It may have been deleted.`);
+        }
         if (!res.ok) {
           throw new Error(`Failed to load map (HTTP ${res.status})`);
         }
+
         const map = await res.json();
 
         // Populate title, size, name, mode, counts
@@ -173,7 +183,6 @@
         window.__loadedMap = map;
         window.dispatchEvent(new CustomEvent('map-loaded', { detail: map }));
       } catch (err) {
-        const errEl = document.getElementById('load-error');
         if (errEl) {
           errEl.textContent = err.message || 'Failed to load map.';
           errEl.hidden = false;
