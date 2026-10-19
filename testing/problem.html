@@ -36,7 +36,6 @@
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
         var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
 
-
         var params = new URLSearchParams(location.search);
         var index = Number(params.get("index"));
         var type = params.get("type") || "";
@@ -52,7 +51,6 @@
           status.hidden = false;
           status.textContent = message;
         }
-
         function tagOf(p) { return (TYPE_TAG[p.type] || "?") + p.index; }
 
         // ── buildStatementDocument / setRichText copied from script.js ──
@@ -60,6 +58,8 @@
         var STATEMENT_KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
         var STATEMENT_AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
         var statementFrames = new WeakMap();
+        var activeStatementFrame = null;
+        var pendingStatementSubmit = null;
 
         function escapeStatementText(value) {
           return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -137,9 +137,74 @@
             + '  <input id="student-answer" type="text" />'
             + '  <p id="student-answer-error" hidden></p>'
             + "</div>"
+            // Bridge: forwards input value/style/readOnly/error to the parent.
+            + "<script>"
+            + "(function () {"
+            + "  var input = document.getElementById(\"student-answer\");"
+            + "  var form = document.getElementById(\"student-answer-form\");"
+            + "  var err = document.getElementById(\"student-answer-error\");"
+            + "  if (!input || !form || !err) return;"
+            + "  var answer = \"\";"
+            + "  var readOnly = false;"
+            + "  var errorHidden = true;"
+            + "  var errorText = \"\";"
+            + "  function post(type, data) {"
+            + "    try {"
+            + "      var message = { type: type };"
+            + "      if (data) for (var key in data) if (Object.prototype.hasOwnProperty.call(data, key)) message[key] = data[key];"
+            + "      parent.postMessage(message, \"*\");"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  Object.defineProperty(input, \"value\", {"
+            + "    get: function () { return answer; },"
+            + "    set: function (next) { answer = String(next == null ? \"\" : next); post(\"territory-answer-value\", { value: answer }); }"
+            + "  });"
+            + "  var styleProxy = {};"
+            + "  Object.defineProperty(styleProxy, \"cssText\", {"
+            + "    get: function () { return input.getAttribute(\"style\") || \"\"; },"
+            + "    set: function (next) {"
+            + "      var css = String(next == null ? \"\" : next);"
+            + "      input.setAttribute(\"style\", css);"
+            + "      post(\"territory-answer-style\", { cssText: css });"
+            + "    }"
+            + "  });"
+            + "  Object.defineProperty(input, \"style\", { get: function () { return styleProxy; } });"
+            + "  Object.defineProperty(input, \"readOnly\", {"
+            + "    get: function () { return readOnly; },"
+            + "    set: function (next) {"
+            + "      readOnly = !!next;"
+            + "      if (readOnly) input.setAttribute(\"readonly\", \"readonly\");"
+            + "      else input.removeAttribute(\"readonly\");"
+            + "      post(\"territory-answer-readonly\", { readOnly: readOnly });"
+            + "    }"
+            + "  });"
+            + "  function postError() { post(\"territory-answer-error\", { hidden: errorHidden, text: errorText }); }"
+            + "  Object.defineProperty(err, \"hidden\", {"
+            + "    get: function () { return errorHidden; },"
+            + "    set: function (next) { errorHidden = !!next; postError(); }"
+            + "  });"
+            + "  Object.defineProperty(err, \"textContent\", {"
+            + "    get: function () { return errorText; },"
+            + "    set: function (next) { errorText = String(next == null ? \"\" : next); postError(); }"
+            + "  });"
+            + "  window.addEventListener(\"message\", function (event) {"
+            + "    var data = event.data;"
+            + "    if (!data || data.type !== \"territory-before-submit\") return;"
+            + "    var blocked = false;"
+            + "    var button = form.querySelector(\"button\");"
+            + "    if (button) {"
+            + "      var click = new MouseEvent(\"click\", { bubbles: true, cancelable: true, view: window });"
+            + "      button.dispatchEvent(click);"
+            + "      blocked = click.defaultPrevented;"
+            + "    }"
+            + "    post(\"territory-submit-result\", { id: data.id, blocked: blocked, message: errorHidden ? \"\" : errorText });"
+            + "  });"
+            + "})();"
+            + "<\/script>"
             + '<div class="statement-content">' + body + "</div>"
             + "</body></html>";
         }
+
         function setRichText(element, source, options) {
           options = options || {};
           var text = String(source || "");
@@ -155,6 +220,39 @@
           if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
           return frame;
         }
+
+        // Ask the statement iframe to approve submission (puzzles may block it).
+        function approveStatementSubmit() {
+          var frame = activeStatementFrame;
+          if (!frame || !frame.contentWindow) return Promise.resolve({ blocked: false, message: "" });
+          if (pendingStatementSubmit) {
+            clearTimeout(pendingStatementSubmit.timer);
+            pendingStatementSubmit.resolve({ blocked: false, message: "" });
+            pendingStatementSubmit = null;
+          }
+          return new Promise(function (resolve) {
+            var id = "statement-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+            var timer = setTimeout(function () {
+              if (pendingStatementSubmit && pendingStatementSubmit.id === id) {
+                pendingStatementSubmit = null;
+                resolve({ blocked: false, message: "" });
+              }
+            }, 300);
+            pendingStatementSubmit = {
+              id: id,
+              timer: timer,
+              resolve: function (result) { clearTimeout(timer); resolve(result); }
+            };
+            try {
+              frame.contentWindow.postMessage({ type: "territory-before-submit", id: id }, "*");
+            } catch (e) {
+              clearTimeout(timer);
+              pendingStatementSubmit = null;
+              resolve({ blocked: false, message: "" });
+            }
+          });
+        }
+
         window.addEventListener("message", function (event) {
           var data = event.data;
           if (!data || typeof data.type !== "string") return;
@@ -164,6 +262,26 @@
             var height = Number(data.height);
             if (!Number.isFinite(height)) return;
             frame.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
+            return;
+          }
+          if (frame !== activeStatementFrame) return;
+          if (data.type === "territory-answer-value") {
+            answer.value = String(data.value == null ? "" : data.value);
+          } else if (data.type === "territory-answer-style") {
+            answer.style.cssText = String(data.cssText == null ? "" : data.cssText);
+          } else if (data.type === "territory-answer-readonly") {
+            answer.readOnly = data.readOnly === true;
+          } else if (data.type === "territory-answer-error") {
+            error.hidden = data.hidden === true;
+            error.textContent = String(data.text == null ? "" : data.text);
+          } else if (data.type === "territory-submit-result" && pendingStatementSubmit && pendingStatementSubmit.id === data.id) {
+            var pending = pendingStatementSubmit;
+            pendingStatementSubmit = null;
+            clearTimeout(pending.timer);
+            pending.resolve({
+              blocked: data.blocked === true,
+              message: String(data.message == null ? "" : data.message)
+            });
           }
         });
         // ────────────────────────────────────────────────────────────
@@ -188,7 +306,7 @@
             var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
             title.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
             document.title = tagOf(problem) + " · Practice";
-            setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
+            activeStatementFrame = setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
             if (answer.offsetParent !== null) answer.focus();
           } catch (e) {
             showStatus(e.message || "The problem could not be opened.");
@@ -204,11 +322,22 @@
           var label = button.textContent;
           button.disabled = true;
           button.textContent = "Checking...";
+
+          // Let the puzzle refuse submission if its own validation fails.
+          var approval = await approveStatementSubmit();
+          if (approval.blocked) {
+            button.disabled = false;
+            button.textContent = label;
+            error.hidden = false;
+            error.textContent = approval.message || "Finish the problem before submitting.";
+            return;
+          }
+
           try {
             var res = await fetch(API_BASE + "?action=public-check", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ index: index, type: type, answer: answer.value }),
+              body: JSON.stringify({ index: index, type: type, answer: answer.value })
             });
             var data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
