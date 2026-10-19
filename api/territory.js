@@ -24,6 +24,7 @@
 
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { ObjectId } from 'mongodb';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 import { runProblemLogic } from './logic.js';
 
@@ -1399,10 +1400,11 @@ async function handleUpdateAccount(req, res, db, user, body) {
 async function listVersions(db) {
   const docs = await db.collection('versions').find({}).sort({ createdAt: -1 }).limit(100).toArray();
   return docs.map((doc) => ({
-    id: String(doc.id || ''),
+    id: String(doc.id || doc._id || ''),
     version: String(doc.version || '').slice(0, 40),
     message: String(doc.message || '').slice(0, 4000),
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.getTime() : Number(doc.createdAt) || 0,
+    createdBy: String(doc.createdBy || '').slice(0, 80),
   })).filter((item) => item.version && item.message);
 }
 
@@ -1420,6 +1422,17 @@ async function handleAddVersion(req, res, db, user, body) {
     createdAt: new Date(),
     createdBy: String(user.username || ''),
   });
+  return res.status(200).json({ success: true, versions: await listVersions(db) });
+}
+
+async function handleDeleteVersion(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  if (!id || id.length > 80) return res.status(400).json({ success: false, message: 'Missing version' });
+  const query = [{ id }];
+  if (ObjectId.isValid(id) && String(new ObjectId(id)) === id) query.push({ _id: new ObjectId(id) });
+  const result = await db.collection('versions').deleteOne({ $or: query });
+  if (!result.deletedCount) return res.status(404).json({ success: false, message: 'That version was not found.' });
   return res.status(200).json({ success: true, versions: await listVersions(db) });
 }
 
@@ -1619,6 +1632,7 @@ export default async function handler(req, res) {
       case 'update-account': return await handleUpdateAccount(req, res, db, user, body);
       case 'delete-account': return await handleDeleteAccount(req, res, db, user, body);
       case 'add-version': return await handleAddVersion(req, res, db, user, body);
+      case 'delete-version': return await handleDeleteVersion(req, res, db, user, body);
       default:
         return res.status(400).json({ success: false, message: 'Unknown action' });
     }

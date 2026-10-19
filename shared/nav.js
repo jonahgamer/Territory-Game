@@ -42,8 +42,14 @@ export function initNav(activePage) {
   const role = document.querySelector("#account-role");
   const pfp = document.querySelector("#account-pfp");
   const user = session.user;
-  if (name) { name.hidden = false; name.textContent = user.displayName || user.username; }
-  if (role) role.textContent = user.role === "admin" ? "Admin" : "Student";
+  const shownName = user.displayName || user.username;
+  const roleLabel = user.role === "admin" ? "Admin" : "Student";
+  if (name) { name.hidden = false; name.textContent = shownName; }
+  if (role) {
+    const same = shownName.trim().toLowerCase() === roleLabel.toLowerCase();
+    role.hidden = same;
+    role.textContent = same ? "" : roleLabel;
+  }
   if (pfp) {
     const safe = safePfp(user.pfp);
     pfp.hidden = !safe;

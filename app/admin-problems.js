@@ -347,13 +347,19 @@ function createProblemRow(problem) {
   openBtn.append(
     el("span", `problem-key ${problem.type}`, tag),
     el("span", `difficulty-chip ${level}`, DIFFICULTY_NAME[level]),
-    el("span", "problem-snippet", plainText(problem.prompt).slice(0, 120) || "(empty)")
+    el("span", "problem-snippet", plainText(problem.prompt) || "(empty)")
   );
   openBtn.addEventListener("click", () => {
     location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(problem.type)}&index=${problem.index}`);
   });
   main.append(openBtn);
+  item.append(main);
 
+  const second = el("div", "problem-row-second");
+  second.append(el("p", `problem-usage-chip ${usage.cells > 0 ? "" : "unused"}`,
+    usage.cells > 0
+      ? `${usage.maps} map${usage.maps === 1 ? "" : "s"} · ${usage.cells} cell${usage.cells === 1 ? "" : "s"}`
+      : "Not placed"));
   if (!state.selectMode) {
     const actions = el("div", "problem-row-actions");
     const edit = el("button", "account-action", "Edit");
@@ -368,14 +374,9 @@ function createProblemRow(problem) {
     del.type = "button";
     del.addEventListener("click", () => deleteProblem(problem));
     actions.append(edit, dup, del);
-    main.append(actions);
+    second.append(actions);
   }
-
-  item.append(main);
-  item.append(el("p", `problem-usage-chip ${usage.cells > 0 ? "" : "unused"}`,
-    usage.cells > 0
-      ? `${usage.maps} map${usage.maps === 1 ? "" : "s"} · ${usage.cells} cell${usage.cells === 1 ? "" : "s"}`
-      : "Not placed"));
+  item.append(second);
   return item;
 }
 

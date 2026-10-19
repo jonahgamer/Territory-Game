@@ -82,6 +82,31 @@ export function cellText(cell) {
   return "";
 }
 
+export function fillCellLabel(button, cell) {
+  button.replaceChildren();
+  if (!cell || cell.kind === "empty" || cell.kind === "obstacle") return;
+  if (cell.kind === "spawnpoint") {
+    button.textContent = "S";
+    return;
+  }
+  if (cell.kind !== "problem") return;
+  const info = typeInfo(cell.type) || typeInfo("math");
+  const index = Number(cell.problemNo);
+  const label = document.createElement("span");
+  label.className = "cell-label";
+  const top = document.createElement("span");
+  const bottom = document.createElement("span");
+  if (Number.isInteger(index) && index >= 1000) {
+    top.textContent = `${info.tag}${String(Math.floor(index / 1000)).padStart(2, "0")}`;
+    bottom.textContent = String(index % 1000).padStart(3, "0");
+  } else {
+    top.textContent = info.tag;
+    bottom.textContent = String(index);
+  }
+  label.append(top, bottom);
+  button.append(label);
+}
+
 export function cellLabel(cell, row, column) {
   if (cell.kind === "problem") return `Row ${row}, column ${column}, problem ${problemTag(cell.problemNo, cell.type)}`;
   if (cell.kind === "obstacle") return `Row ${row}, column ${column}, obstacle`;

@@ -6,7 +6,7 @@ import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, cellText, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -218,9 +218,12 @@ function renderBackdrop() {
   if (field) field.hidden = !photo;
 }
 
-function cellFace(cell) {
-  if (mapBackdrop(state.current) === "photo" && cell?.kind === "problem") return "";
-  return cellText(cell);
+function applyCellFace(button, cell) {
+  if (mapBackdrop(state.current) === "photo" && cell?.kind === "problem") {
+    button.replaceChildren();
+    return;
+  }
+  fillCellLabel(button, cell);
 }
 
 function renderGrid() {
@@ -233,7 +236,8 @@ function renderGrid() {
     if (!cell) return;
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
-    const button = el("button", cellClassName(cell, findProblem, "grid-cell"), cellFace(cell));
+    const button = el("button", cellClassName(cell, findProblem, "grid-cell"));
+    applyCellFace(button, cell);
     button.type = "button";
     button.dataset.index = String(index);
     button.setAttribute("aria-label", cellLabel(cell, row, column));
@@ -255,7 +259,7 @@ function paintCell(index) {
   const row = Math.floor(index / map.cols) + 1;
   const column = (index % map.cols) + 1;
   button.className = cellClassName(cell, findProblem, "grid-cell");
-  button.textContent = cellFace(cell);
+  applyCellFace(button, cell);
   button.setAttribute("aria-label", cellLabel(cell, row, column));
   paintPhotoGrid(mapEl, map, findProblem);
   renderMapCounts(countsEl, map);

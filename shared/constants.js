@@ -20,7 +20,7 @@ export const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
 export const DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
 
 export const TEAM_COLOR_LIMIT = 256;
-export const CELL_SIZE = 64;
+export const CELL_SIZE = 50;
 export const PROBLEM_PAGE_SIZE = 20;
 export const RECENT_CLAIM_MS = 20000;
 

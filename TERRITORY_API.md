@@ -133,7 +133,11 @@ Admin only. Deletes a student account and removes that username from every conte
 
 ### `POST { "action": "add-version", "version": "...", "message": "..." }`
 
-Admin only. Adds a Credits note. `version` is at most 40 characters and `message` is at most 4000. The text is stored and shown as plain text. The response includes the newest notes first.
+Admin only. Adds a Credits note. `version` is at most 40 characters and `message` is at most 4000. The text is stored and shown as plain text, with the username of the admin who posted it. The response includes the newest notes first.
+
+### `POST { "action": "delete-version", "id": "..." }`
+
+Admin only. Deletes one Credits note by its `id`. The response includes the remaining notes, newest first.
 
 ## Team and territory rules
 

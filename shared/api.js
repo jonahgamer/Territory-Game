@@ -79,5 +79,6 @@ export const api = {
   updateAccount: (body) => apiCall("update-account", body),
   deleteAccount: (username) => apiCall("delete-account", { username }),
   addVersion: (version, message) => apiCall("add-version", { version, message }),
+  deleteVersion: (id) => apiCall("delete-version", { id }),
   testProblem: (logic, expected, answer) => apiCall("test-problem", { logic, expected, answer }),
 };

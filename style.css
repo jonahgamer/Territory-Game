@@ -253,6 +253,7 @@ nav button[aria-current="page"] {
 main {
   min-width: 0;
   padding: 56px 64px;
+  overflow-x: auto;
 }
 
 main > section {
@@ -945,10 +946,12 @@ button[type="submit"],
 
 .grid-cell.student-cell.territory-dot::after {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
   border-radius: 50%;
   background: var(--team, #3ee0ff);
+  box-shadow: 0 0 10px #fff;
 }
 
 .answer-page {
@@ -995,9 +998,30 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: clamp(7px, calc(var(--cell) * 0.2), 13px);
+  font-size: 16px;
   letter-spacing: 0;
   white-space: nowrap;
+}
+
+.cell-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+  max-width: 100%;
+  line-height: 1;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.cell-label span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .grid-cell.student-cell:disabled {
@@ -1049,15 +1073,18 @@ button[type="submit"],
 
 .grid-cell.student-cell.problem.owned,
 .grid-cell.student-cell.spawnpoint.owned {
-  background: #101820;
-  color: var(--team, #3ee0ff);
-  box-shadow: inset 0 0 0 3px var(--team, #3ee0ff);
+  background: color-mix(in srgb, var(--team, #3ee0ff) 78%, #ffffff);
+  color: #041018;
+  box-shadow:
+    inset 0 0 0 4px #ffffff,
+    0 0 16px var(--team, #3ee0ff);
   font-size: 13px;
 }
 
 .grid-cell.student-cell.mine {
-  outline: 2px solid #f7feff;
-  outline-offset: -7px;
+  outline: 3px solid #ffffff;
+  outline-offset: -3px;
+  z-index: 1;
 }
 
 .grid-cell.student-cell.proposed {
@@ -1499,6 +1526,7 @@ button[type="submit"],
   padding: 0;
   display: grid;
   gap: 8px;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
 }
@@ -1664,6 +1692,7 @@ button[type="submit"],
 .version-list li {
   display: grid;
   gap: 8px;
+  justify-items: start;
   padding: 14px 16px;
   border: 1px solid var(--line);
   background: rgba(8, 18, 32, 0.72);
@@ -1955,6 +1984,8 @@ button[type="submit"],
   flex-direction: column;
   align-items: stretch;
   flex-wrap: nowrap;
+  width: 100%;
+  min-width: 32rem;
 }
 
 .problem-row-main {
@@ -2019,9 +2050,23 @@ button[type="submit"],
   opacity: 0.55;
 }
 
+.problem-row-second {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.problem-row-second .problem-usage-chip {
+  margin: 0;
+}
+
 .problem-row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-left: auto;
 }
@@ -2452,12 +2497,14 @@ button[type="submit"],
   }
 
   .problem-row-actions {
-    width: 100%;
-    margin-left: 0;
+    width: auto;
+    margin-left: auto;
   }
 
   .problem-row .open-problem {
-    flex-basis: 100%;
+    flex: 1 1 auto;
+    flex-basis: auto;
+    min-width: 0;
   }
 
 
@@ -2902,6 +2949,14 @@ button[type="submit"],
   color: #f4feff;
   text-shadow: 0 1px 2px #000;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.grid-cell.photo-cell.student-cell.mine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--team, #3ee0ff) 48%, transparent);
+  pointer-events: none;
 }
 
 .cell-difficulty {
