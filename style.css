@@ -904,10 +904,10 @@ button[type="submit"],
 
 .grid-scroll {
   margin-top: 28px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   max-width: 100%;
-  max-height: min(70dvh, 720px);
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .editor-grid {
@@ -1001,7 +1001,7 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 12px;
+  font-size: clamp(7px, calc(var(--cell) * 0.2), 13px);
   letter-spacing: 0;
   white-space: nowrap;
 }
