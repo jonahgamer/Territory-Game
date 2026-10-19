@@ -9,111 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-    <style>
-      /* Reuse the contest board look: same grid, legend, leaderboard-ish cards. */
-      .practice { max-width: 56rem; margin: 0 auto; padding: 24px 16px 64px; }
-      .practice-grid {
-        display: grid;
-        gap: 18px;
-        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-      }
-      .practice-card {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding: 14px 16px;
-        border: 1px solid var(--line);
-        background: #101820;
-        color: var(--ink);
-        cursor: pointer;
-        text-align: left;
-      }
-      .practice-card:hover { outline: 2px solid var(--cyan); outline-offset: -4px; }
-      .practice-card .tag {
-        font-family: var(--font-ui);
-        font-size: 18px;
-        font-weight: 700;
-        letter-spacing: .04em;
-      }
-      .practice-card .tag.oi { color: #7d9dff; }
-      .practice-card .tag.science { color: #ff9a1a; }
-      .practice-card .tag.puzzle { color: #ff7eb6; }
-      .practice-card .tag.testing { color: #b7ff4a; }
-      .practice-card .diff {
-        align-self: flex-start;
-        padding: 2px 7px;
-        border: 1px solid currentColor;
-        font-family: var(--font-ui);
-        font-size: 11px;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-      }
-      .practice-card .diff.easy { color: #3ddc6a; }
-      .practice-card .diff.normal { color: #ffe14a; }
-      .practice-card .diff.hard { color: #ff3b4e; }
-      .practice-card .diff.insane { color: #c084fc; }
-      .practice-card .preview {
-        font-family: var(--font-ui);
-        font-size: 13px;
-        color: var(--muted);
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-      }
-
-      /* Modal mirrors .student-problem-card */
-      .practice-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 50;
-        display: grid;
-        place-items: center;
-        padding: 16px;
-        background: rgba(0, 0, 0, 0.62);
-      }
-      .practice-modal-card {
-        width: min(100%, 40rem);
-        max-height: min(90dvh, 800px);
-        overflow: auto;
-        padding: 20px 22px;
-        border: 1px solid var(--line);
-        background: rgba(8, 18, 32, 0.96);
-        box-shadow: 0 0 48px rgba(62, 224, 255, 0.12);
-      }
-      .practice-modal-close {
-        position: sticky;
-        top: 0;
-        float: right;
-        z-index: 6;
-        margin: 0 0 8px 12px;
-        padding: 4px 8px;
-        border: 1px solid var(--line);
-        background: rgba(8, 18, 32, 0.96);
-        color: var(--cyan);
-        font: inherit;
-        text-decoration: underline;
-        cursor: pointer;
-      }
-      .practice-modal h2 { margin: 0 0 12px; font-size: 28px; }
-      .practice-modal .frame-wrap { min-height: 60px; }
-      .practice-modal .frame-wrap .statement-frame {
-        width: 100%;
-        border: 0;
-        background: #081220;
-      }
-      .practice-modal form { display: grid; gap: 10px; margin-top: 16px; }
-      .practice-modal label { display: grid; gap: 6px; font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-      .practice-modal input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; font-size: 16px; }
-      .practice-modal .status { margin: 0; font-family: var(--font-ui); font-size: 14px; }
-      .practice-modal .status.ac { color: #3ddc6a; }
-      .practice-modal .status.wa { color: #ffe14a; }
-      .practice-modal .status.err { color: var(--danger); }
-    </style>
   </head>
   <body>
-    <main class="practice">
+    <main class="practice" style="max-width:56rem;margin:0 auto;padding:24px 16px 64px;">
       <p class="eyebrow">Practice</p>
       <h1>260xx Problems</h1>
       <p class="lead">Guests can view and submit. Math (M) problems are hidden here. Answers are checked by the saved grader; nothing is written to the database.</p>
@@ -125,7 +23,7 @@
       </ul>
       <p id="practice-error" class="form-error" hidden></p>
       <p id="practice-empty" class="field-note" hidden>No problems available in this range.</p>
-      <div id="practice-grid" class="practice-grid" aria-live="polite"></div>
+      <div id="practice-grid" style="display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));" aria-live="polite"></div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -133,69 +31,142 @@
     <script>
       (function () {
         "use strict";
+
         var API_BASE = "/api/territory";
         var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
         var TYPE_TAG = { oi: "O", science: "S", puzzle: "P", testing: "T" };
-        var KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
-        var KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
-        var AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
 
         var grid = document.getElementById("practice-grid");
         var errorEl = document.getElementById("practice-error");
         var emptyEl = document.getElementById("practice-empty");
 
-        function tagOf(problem) { return (TYPE_TAG[problem.type] || "?") + problem.index; }
+        // ── Exact copies from script.js: buildStatementDocument / setRichText ──
+        var STATEMENT_KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
+        var STATEMENT_KATEX_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js";
+        var STATEMENT_AUTO_RENDER_JS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js";
+        var statementFrames = new WeakMap();
 
-        function problemHtml(source) {
-          // Render HTML statements in a sandboxed frame, same as the app.
+        function escapeStatementText(value) {
+          return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        }
+
+        function containsHtml(source) {
           return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
         }
 
-        function buildFrame(src, tag) {
-          var doc = "<!doctype html><html><head><meta charset='utf-8'>"
-            + "<link rel='stylesheet' href='" + KATEX_CSS + "' crossorigin='anonymous'>"
-            + "<style>html,body{margin:0;padding:0;background:#081220;color:#d7f6ff;}"
-            + "body{font-family:'Share Tech Mono',ui-monospace,Menlo,Consolas,monospace;font-size:16px;line-height:1.55;}"
-            + ".statement-content{overflow-wrap:anywhere;}"
-            + ".statement-content img,.statement-content video,.statement-content canvas,.statement-content svg{max-width:100%;height:auto;}"
-            + ".statement-content table{max-width:100%;border-collapse:collapse;}"
-            + ".statement-content a{color:#3ee0ff;}"
-            + ".katex{font-size:1em;}"
+        function buildStatementDocument(source, tag) {
+          tag = tag || "";
+          var text = String(source || "");
+          var tagText = escapeStatementText(tag);
+          var body = containsHtml(text)
+            ? text
+            : '<pre class="statement-text">' + escapeStatementText(text) + "</pre>";
+          return '<!doctype html><html><head><meta charset="utf-8">'
+            + '<link rel="stylesheet" href="' + STATEMENT_KATEX_CSS + '" crossorigin="anonymous">'
+            + '<style>'
+            + "html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }"
+            + 'body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }'
+            + "#territory-bridge { display: none; }"
+            + ".statement-content { overflow-wrap: anywhere; font-size: 16px; }"
+            + ".katex { font-size: 1em; }"
+            + ".statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }"
+            + ".statement-content img, .statement-content video,"
+            + ".statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }"
+            + ".statement-content table { max-width: 100%; border-collapse: collapse; }"
+            + ".statement-content a { color: #3ee0ff; }"
             + "</style>"
-            + "<script src='" + KATEX_JS + "' crossorigin='anonymous'><\/script>"
-            + "<script src='" + AUTO_RENDER_JS + "' crossorigin='anonymous'><\/script>"
-            + "<script>(function(){function report(){try{var h=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);parent.postMessage({type:'practice-height',height:h},'*');}catch(e){}}"
-            + "function render(){if(typeof renderMathInElement!=='function')return;try{renderMathInElement(document.querySelector('.statement-content'),{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\\\[',right:'\\\\]',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false}],throwOnError:false,strict:'ignore'});}catch(e){}}"
-            + "function boot(){render();report();try{if(window.ResizeObserver)new ResizeObserver(report).observe(document.documentElement);}catch(e){}"
-            + "try{new MutationObserver(report).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true});}catch(e){}}"
-            + "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();window.addEventListener('load',boot);})();<\/script>"
-            + "</head><body><div class='statement-content'>"
-            + (problemHtml(src) ? src : "<pre>" + String(src).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</pre>")
-            + "</div></body></html>";
+            + '<script src="' + STATEMENT_KATEX_JS + '" crossorigin="anonymous"><\/script>'
+            + '<script src="' + STATEMENT_AUTO_RENDER_JS + '" crossorigin="anonymous"><\/script>'
+            + "<script>"
+            + "(function () {"
+            + "  function report() {"
+            + "    try {"
+            + "      const height = Math.max("
+            + "        document.documentElement.scrollHeight,"
+            + "        document.body ? document.body.scrollHeight : 0"
+            + "      );"
+            + "      parent.postMessage({ type: \"territory-statement-height\", height: height }, \"*\");"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  function renderMath() {"
+            + "    if (typeof renderMathInElement !== \"function\") return;"
+            + "    try {"
+            + "      renderMathInElement(document.querySelector(\".statement-content\"), {"
+            + "        delimiters: ["
+            + "          { left: \"$$\", right: \"$$\", display: true },"
+            + "          { left: \"\\\\[\", right: \"\\\\]\", display: true },"
+            + "          { left: \"$\", right: \"$\", display: false },"
+            + "          { left: \"\\\\(\", right: \"\\\\)\", display: false }"
+            + "        ],"
+            + "        throwOnError: false,"
+            + "        strict: \"ignore\""
+            + "      });"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  let booted = false;"
+            + "  function boot() {"
+            + "    if (booted) return;"
+            + "    booted = true;"
+            + "    renderMath();"
+            + "    report();"
+            + "    try {"
+            + "      if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement);"
+            + "    } catch (error) {}"
+            + "    try {"
+            + "      new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });"
+            + "    } catch (error) {}"
+            + "  }"
+            + "  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", boot);"
+            + "  else boot();"
+            + "  window.addEventListener(\"load\", boot);"
+            + "})();"
+            + "<\/script>"
+            + "</head><body>"
+            + '<div id="territory-bridge" aria-hidden="true">'
+            + '  <span id="student-problem-tag">' + tagText + "</span>"
+            + '  <form id="student-answer-form"><button type="submit">Submit</button></form>'
+            + '  <input id="student-answer" type="text" />'
+            + '  <p id="student-answer-error" hidden></p>'
+            + "</div>"
+            + '<div class="statement-content">' + body + "</div>"
+            + "</body></html>";
+        }
+
+        function setRichText(element, source, options) {
+          options = options || {};
+          var text = String(source || "");
+          element.replaceChildren();
+          element.classList.add("rich-html", "isolated-statement");
           var frame = document.createElement("iframe");
           frame.className = "statement-frame";
           frame.setAttribute("sandbox", "allow-scripts");
           frame.setAttribute("title", "Problem statement");
           frame.style.height = "120px";
-          frame.srcdoc = doc;
+          frame.srcdoc = buildStatementDocument(text, options.tag || "");
+          element.append(frame);
+          if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
           return frame;
         }
 
+        // Same height handler as script.js, keyed by the statementFrames WeakMap.
         window.addEventListener("message", function (event) {
           var data = event.data;
-          if (!data || data.type !== "practice-height") return;
-          var height = Number(data.height);
-          if (!Number.isFinite(height)) return;
-          // The frame that sent this is found by scanning; small page, fine.
-          for (var i = 0; i < grid.querySelectorAll("iframe.statement-frame").length; i += 1) {
-            var f = grid.querySelectorAll("iframe.statement-frame")[i];
-            if (f.contentWindow === event.source) {
-              f.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
-              break;
-            }
+          if (!data || typeof data.type !== "string") return;
+          var frame = statementFrames.get(event.source);
+          if (!frame) return;
+          if (data.type === "territory-statement-height") {
+            var height = Number(data.height);
+            if (!Number.isFinite(height)) return;
+            frame.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
           }
         });
+        // ────────────────────────────────────────────────────────────
+
+        function tagOf(problem) { return (TYPE_TAG[problem.type] || "?") + problem.index; }
 
         function plainText(source) {
           return String(source || "")
@@ -207,14 +178,10 @@
             .trim();
         }
 
-        function showError(message) {
-          errorEl.hidden = false;
-          errorEl.textContent = message || "Could not load problems.";
-        }
-
         async function load() {
           grid.replaceChildren();
           emptyEl.hidden = true;
+          errorEl.hidden = true;
           try {
             var res = await fetch(API_BASE + "?action=public-problems", { method: "GET" });
             var data = await res.json().catch(function () { return {}; });
@@ -223,7 +190,8 @@
             if (problems.length === 0) { emptyEl.hidden = false; return; }
             for (var i = 0; i < problems.length; i += 1) grid.append(card(problems[i]));
           } catch (error) {
-            showError(error.message);
+            errorEl.hidden = false;
+            errorEl.textContent = error.message || "Could not load problems.";
           }
         }
 
@@ -231,17 +199,21 @@
           var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
           var card = document.createElement("button");
           card.type = "button";
-          card.className = "practice-card";
+          card.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--line);background:#101820;color:var(--ink);text-align:left;cursor:pointer;";
           card.setAttribute("aria-label", "Open " + tagOf(problem));
+
           var tag = document.createElement("span");
-          tag.className = "tag " + problem.type;
+          tag.style.cssText = "font-family:var(--font-ui);font-size:18px;font-weight:700;letter-spacing:.04em;";
           tag.textContent = tagOf(problem);
+
           var diff = document.createElement("span");
-          diff.className = "diff " + level;
+          diff.style.cssText = "align-self:flex-start;padding:2px 7px;border:1px solid currentColor;font-family:var(--font-ui);font-size:11px;letter-spacing:.08em;text-transform:uppercase;";
           diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+
           var preview = document.createElement("span");
-          preview.className = "preview";
+          preview.style.cssText = "font-family:var(--font-ui);font-size:13px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;";
           preview.textContent = plainText(problem.prompt) || "(empty)";
+
           card.append(tag, diff, preview);
           card.addEventListener("click", function () { openModal(problem); });
           return card;
@@ -249,20 +221,28 @@
 
         function openModal(problem) {
           var overlay = document.createElement("div");
-          overlay.className = "practice-modal";
+          overlay.className = "student-problem";
           overlay.setAttribute("role", "dialog");
           overlay.setAttribute("aria-modal", "true");
+
+          // Use the same card markup/class as the contest view.
           var card = document.createElement("div");
-          card.className = "practice-modal-card";
+          card.className = "student-problem-card";
+
           var close = document.createElement("button");
           close.type = "button";
-          close.className = "practice-modal-close";
+          close.className = "student-problem-close";
           close.textContent = "Close";
+
           var heading = document.createElement("h2");
           heading.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[problem.difficulty] + " · " + DIFFICULTY_SCORE[problem.difficulty];
-          var wrap = document.createElement("div");
-          wrap.className = "frame-wrap";
-          wrap.append(buildFrame(problem.prompt || "", tagOf(problem)));
+
+          var prompt = document.createElement("div");
+          prompt.id = "practice-problem-prompt";
+
+          // Identical to the contest view: setRichText on the prompt element.
+          setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
+
           var form = document.createElement("form");
           var label = document.createElement("label");
           label.append("Answer");
@@ -274,7 +254,7 @@
           submit.type = "submit";
           submit.textContent = "Submit";
           var status = document.createElement("p");
-          status.className = "status";
+          status.className = "form-error";
           status.hidden = true;
           form.append(label, submit, status);
 
@@ -299,26 +279,27 @@
               var data = await res.json().catch(function () { return {}; });
               if (!res.ok) throw new Error(data.message || ("HTTP " + res.status));
               status.hidden = false;
+              status.className = "status-note";
               if (data.systemError) {
-                status.className = "status err";
+                status.style.color = "var(--danger)";
                 status.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
               } else if (data.correct) {
-                status.className = "status ac";
-                status.textContent = "AC";
+                status.style.color = "#3ddc6a";
+                status.textContent = "Answer accepted.";
               } else {
-                status.className = "status wa";
-                status.textContent = "WA" + (data.comment && data.comment !== "WA" ? " · " + data.comment : "");
+                status.style.color = "#ffe14a";
+                status.textContent = "Not accepted." + (data.comment && data.comment !== "WA" ? " " + data.comment : "");
               }
             } catch (error) {
               status.hidden = false;
-              status.className = "status err";
+              status.className = "form-error";
               status.textContent = error.message;
             } finally {
               submit.disabled = false;
             }
           });
 
-          card.append(close, heading, wrap, form);
+          card.append(close, heading, prompt, form);
           overlay.append(card);
           document.body.append(overlay);
           input.focus();
