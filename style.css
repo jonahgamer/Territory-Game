@@ -501,15 +501,21 @@ button[type="submit"],
   margin-top: 10px;
 }
 
-.map-group-label {
+.map-list li.map-group-label {
+  display: block;
   margin-top: 18px;
-  padding: 0 4px;
+  padding: 8px 4px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   font-family: var(--font-ui);
   font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
 }
+
+.map-count {
   display: inline-flex;
   align-items: center;
   gap: 8px;

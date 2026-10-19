@@ -95,8 +95,15 @@ function commitMapName() {
 function onMapListClick(event) {
   const openButton = event.target.closest("[data-open-id]");
   if (!openButton) return;
-  if (ROUTED) navigateTo(["maps", openButton.dataset.openId]);
-  else showEditor(openButton.dataset.openId);
+  const mapId = openButton.dataset.openId;
+  if (!maps.some((map) => map.id === mapId)) return;
+  try {
+    showEditor(mapId);
+    if (ROUTED) setHashSilently(["maps", mapId]);
+  } catch (error) {
+    console.error("[map]", error);
+    showPageToast(error?.message || "Could not open this map.", "warn");
+  }
 }
 
 

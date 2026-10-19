@@ -4,11 +4,11 @@
 
 function chooseTool(kind) {
   paintKind = kind;
-  kindProblem.setAttribute("aria-pressed", String(kind === "problem"));
-  kindSpawnpoint.setAttribute("aria-pressed", String(kind === "spawnpoint"));
-  kindObstacle.setAttribute("aria-pressed", String(kind === "obstacle"));
-  kindEmpty.setAttribute("aria-pressed", String(kind === "empty"));
-  problemOptions.hidden = kind !== "problem";
+  kindProblem?.setAttribute("aria-pressed", String(kind === "problem"));
+  kindSpawnpoint?.setAttribute("aria-pressed", String(kind === "spawnpoint"));
+  kindObstacle?.setAttribute("aria-pressed", String(kind === "obstacle"));
+  kindEmpty?.setAttribute("aria-pressed", String(kind === "empty"));
+  if (problemOptions) problemOptions.hidden = kind !== "problem";
 }
 
 function fingerMap() {

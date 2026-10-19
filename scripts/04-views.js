@@ -477,9 +477,9 @@ function showEditor(mapId, options = {}) {
   setCurrentSection(mapsButton);
   if (!options.keepTool) {
     chooseTool("problem");
-    problemNoInput.value = nextProblemLabel(placeType);
+    if (problemNoInput) problemNoInput.value = nextProblemLabel(placeType);
   }
-  problemNoError.hidden = true;
+  if (problemNoError) problemNoError.hidden = true;
   renderEditor();
   const map = currentMap();
   if (map && (!mapSnapshot || mapSnapshot.id !== map.id)) {

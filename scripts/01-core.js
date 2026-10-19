@@ -540,9 +540,11 @@ function applyRoute() {
     canonical = renderRoute(route) || hash;
   } catch (error) {
     console.error("[route]", error);
+    showPageToast(error?.message || "Could not open that page.", "warn");
     if (isContestant()) showStudent();
+    else if (route.name === "maps") showMaps();
     else showHome();
-    canonical = defaultRouteHash();
+    canonical = route.name === "maps" ? "#/maps" : defaultRouteHash();
   } finally {
     routeApplying = false;
   }

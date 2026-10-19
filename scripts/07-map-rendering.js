@@ -83,24 +83,22 @@ function mapListItem(map) {
 
 function renderEditor() {
   const map = currentMap();
-  if (!map) {
-    showMaps();
-    setHashSilently("maps");
-    return;
-  }
+  if (!map || !editorGrid || !editorTitle) return;
+  const cells = Array.isArray(map.cells) ? map.cells : [];
 
   editorTitle.textContent = map.name;
-  editorSize.textContent = `${map.cols} × ${map.rows}`;
+  if (editorSize) editorSize.textContent = `${map.cols} × ${map.rows}`;
   renderMapCounts(map);
-  editorNameInput.value = map.name;
+  if (editorNameInput) editorNameInput.value = map.name;
   renderMapModeButtons(mapModeChoices, mapMode(map));
-  deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
+  if (deleteOpenMapButton) deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);
   editorGrid.dataset.rows = String(map.rows);
   layoutMapGrid(editorGrid, map.cols, map.rows);
   editorGrid.replaceChildren();
 
-  map.cells.forEach((cell, index) => {
+  cells.forEach((cell, index) => {
+    if (!cell) return;
     const button = document.createElement("button");
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
@@ -122,7 +120,7 @@ function createPreview(map) {
   preview.style.gridTemplateRows = `repeat(${map.rows}, 1fr)`;
   if (map.cols > 16 || map.rows > 16) preview.style.gap = "0";
 
-  for (const cell of map.cells) {
+  for (const cell of map.cells || []) {
     const node = document.createElement("span");
     node.className = cellClassName(cell, "preview-cell");
     if (showNumbers) node.textContent = cellText(cell);
@@ -141,8 +139,8 @@ function nextProblemNo(type) {
     if (problem.type === type) used.add(problem.index);
   }
   for (const map of maps) {
-    for (const cell of map.cells) {
-      if (cell.kind === "problem" && cell.type === type) used.add(cell.problemNo);
+    for (const cell of map.cells || []) {
+      if (cell?.kind === "problem" && cell.type === type) used.add(cell.problemNo);
     }
   }
   for (let index = YEAR_INDEX_START; index <= YEAR_INDEX_END; index += 1) {
