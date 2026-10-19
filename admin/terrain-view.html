@@ -3,26 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Map viewer · Territory Game</title>
+  <title>Terrain view · Territory Game</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
   <style>
-    /* View-only specific overrides */
+    /* ---------- View-only specific styling ---------- */
     .viewer-badge {
-      display: inline-block;
-      background: rgba(255, 215, 0, 0.15);
-      border: 1px solid rgba(255, 215, 0, 0.5);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 215, 0, 0.12);
+      border: 1px solid rgba(255, 215, 0, 0.45);
       color: #f5d76e;
       font-family: 'Share Tech Mono', monospace;
-      font-size: 0.75rem;
-      padding: 2px 12px;
+      font-size: 0.72rem;
+      padding: 4px 12px;
       border-radius: 20px;
       letter-spacing: 1px;
       text-transform: uppercase;
-      margin-bottom: 0.5rem;
     }
 
     .viewer-toolbar {
@@ -31,39 +32,52 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .viewer-toolbar .back-button { margin-right: auto; }
 
-    .viewer-toolbar .back-button {
-      margin-right: auto;
+    .terrain-view-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      color: #c7d2fe;
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid rgba(199, 210, 254, 0.35);
+      border-radius: 8px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .terrain-view-button:hover {
+      background: rgba(199, 210, 254, 0.12);
+      border-color: rgba(199, 210, 254, 0.65);
     }
 
     .map-info-panel {
       display: flex;
       flex-wrap: wrap;
-      gap: 24px;
+      gap: 28px;
       margin: 16px 0 20px;
-      padding: 16px 20px;
+      padding: 16px 22px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 12px;
     }
-
     .map-info-panel .info-item {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 96px;
     }
-
     .map-info-panel .info-label {
       font-family: 'Share Tech Mono', monospace;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
       letter-spacing: 1.5px;
       color: rgba(255, 255, 255, 0.45);
     }
-
     .map-info-panel .info-value {
       font-family: 'Orbitron', sans-serif;
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       font-weight: 700;
       color: #e0e0e0;
     }
@@ -75,7 +89,6 @@
       margin: 12px 0 18px;
       align-items: center;
     }
-
     .legend-item {
       display: flex;
       align-items: center;
@@ -84,7 +97,6 @@
       font-size: 0.8rem;
       color: rgba(255, 255, 255, 0.75);
     }
-
     .legend-swatch {
       width: 18px;
       height: 18px;
@@ -92,81 +104,34 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
       flex-shrink: 0;
     }
+    .legend-swatch.spawn    { background: #4ade80; border-color: #22c55e; border-radius: 50%; }
+    .legend-swatch.obstacle { background: #78716c; border-color: #57534e; }
+    .legend-swatch.problem  { background: #3b82f6; border-color: #2563eb; }
+    .legend-swatch.diff-easy   { background: #22c55e; border-color: #16a34a; }
+    .legend-swatch.diff-normal { background: #eab308; border-color: #ca8a04; }
+    .legend-swatch.diff-hard   { background: #f97316; border-color: #ea580c; }
+    .legend-swatch.diff-insane { background: #ef4444; border-color: #dc2626; }
 
-    .legend-swatch.spawn {
-      background: #4ade80;
-      border-color: #22c55e;
-      border-radius: 50%;
+    /* ---------- Grid cell coloring (viewer only) ---------- */
+    #editor-grid .cell {
+      position: relative;
     }
-
-    .legend-swatch.obstacle {
-      background: #78716c;
-      border-color: #57534e;
-    }
-
-    .legend-swatch.problem {
-      background: #3b82f6;
-      border-color: #2563eb;
-    }
-
-    .legend-swatch.diff-easy {
-      background: #22c55e;
-      border-color: #16a34a;
-    }
-
-    .legend-swatch.diff-normal {
-      background: #eab308;
-      border-color: #ca8a04;
-    }
-
-    .legend-swatch.diff-hard {
-      background: #f97316;
-      border-color: #ea580c;
-    }
-
-    .legend-swatch.diff-insane {
-      background: #ef4444;
-      border-color: #dc2626;
-    }
-
-    /* Difficulty-based cell coloring (viewer only) */
-    #editor-grid .cell.difficulty-easy {
-      background: #22c55e !important;
-      border-color: #16a34a !important;
-    }
-
-    #editor-grid .cell.difficulty-normal {
-      background: #eab308 !important;
-      border-color: #ca8a04 !important;
-    }
-
-    #editor-grid .cell.difficulty-hard {
-      background: #f97316 !important;
-      border-color: #ea580c !important;
-    }
-
-    #editor-grid .cell.difficulty-insane {
-      background: #ef4444 !important;
-      border-color: #dc2626 !important;
-    }
-
-    #editor-grid .cell.difficulty-unknown {
-      background: #6b7280 !important;
-      border-color: #4b5563 !important;
-    }
+    #editor-grid .cell.difficulty-easy   { background: #22c55e !important; border-color: #16a34a !important; }
+    #editor-grid .cell.difficulty-normal { background: #eab308 !important; border-color: #ca8a04 !important; }
+    #editor-grid .cell.difficulty-hard   { background: #f97316 !important; border-color: #ea580c !important; }
+    #editor-grid .cell.difficulty-insane { background: #ef4444 !important; border-color: #dc2626 !important; }
+    #editor-grid .cell.difficulty-unknown{ background: #6b7280 !important; border-color: #4b5563 !important; }
 
     #editor-grid .cell.spawn-cell {
       background: #4ade80 !important;
       border-color: #22c55e !important;
       border-radius: 50% !important;
-      box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.55);
     }
-
     #editor-grid .cell.obstacle-cell {
       background: #78716c !important;
       border-color: #57534e !important;
     }
-
     #editor-grid .cell.spawn-cell::after {
       content: '';
       display: block;
@@ -174,13 +139,11 @@
       height: 8px;
       background: #fff;
       border-radius: 50%;
-      margin: auto;
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
     }
-
     #editor-grid .cell.obstacle-cell::after {
       content: '';
       display: block;
@@ -188,15 +151,10 @@
       height: 60%;
       border: 2px solid rgba(255, 255, 255, 0.4);
       border-radius: 2px;
-      margin: auto;
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) rotate(45deg);
-    }
-
-    #editor-grid .cell {
-      position: relative;
     }
 
     .no-edit-note {
@@ -204,6 +162,14 @@
       font-size: 0.75rem;
       color: rgba(255, 255, 255, 0.35);
       margin-top: 6px;
+    }
+    .no-edit-note i { margin-right: 4px; }
+
+    .grid-loading {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.55);
+      padding: 24px 0;
     }
   </style>
 </head>
@@ -233,11 +199,11 @@
       <div class="editor-toolbar viewer-toolbar">
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
-          <span class="viewer-badge"><i class="fa-solid fa-eye" style="margin-right: 4px;"></i> View only</span>
+          <span class="viewer-badge"><i class="fa-solid fa-eye"></i> View only</span>
         </div>
       </div>
 
-      <p class="eyebrow">Map viewer</p>
+      <p class="eyebrow">Terrain view</p>
       <h1 id="editor-title"></h1>
       <p class="lead" id="editor-size"></p>
 
@@ -274,8 +240,12 @@
 
       <p class="no-edit-note"><i class="fa-solid fa-lock"></i> Read-only view — problem types and IDs are hidden.</p>
 
-      <!-- Grid (same id as editor so JS can target it, but no editing controls) -->
-      <div class="grid-scroll"><div id="editor-grid" class="editor-grid"></div></div>
+      <!-- Grid -->
+      <div class="grid-scroll">
+        <div id="editor-grid" class="editor-grid">
+          <p class="grid-loading">Loading terrain…</p>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -284,304 +254,252 @@
     <button id="page-toast-close" type="button">Close</button>
   </div>
 
-  <!-- Viewer script: loads map data, renders grid with difficulty/spawn/obstacle colors -->
   <script type="module">
-    // ------------------------------------------------------------------
-    // Map viewer — read-only render
-    // Fetches map data from the API (or uses a sample if not available),
-    // then renders the grid with difficulty colours, spawns, obstacles.
-    // No editing, no problem type/ID display.
-    // ------------------------------------------------------------------
+    // ==================================================================
+    // Terrain viewer — read-only render
+    // Shows ONLY: difficulty (per-cell color + summary), spawns, obstacles.
+    // Never displays problem type or problem ID.
+    // ==================================================================
 
-    const gridEl = document.getElementById('editor-grid');
-    const titleEl = document.getElementById('editor-title');
-    const sizeEl = document.getElementById('editor-size');
-    const difficultyEl = document.getElementById('viewer-difficulty');
-    const spawnCountEl = document.getElementById('viewer-spawn-count');
-    const obstacleCountEl = document.getElementById('viewer-obstacle-count');
+    const gridEl         = document.getElementById('editor-grid');
+    const titleEl        = document.getElementById('editor-title');
+    const sizeEl         = document.getElementById('editor-size');
+    const difficultyEl   = document.getElementById('viewer-difficulty');
+    const spawnCountEl   = document.getElementById('viewer-spawn-count');
+    const obstacleCountEl= document.getElementById('viewer-obstacle-count');
     const problemCountEl = document.getElementById('viewer-problem-count');
-    const loadErrorEl = document.getElementById('load-error');
-    const pageToast = document.getElementById('page-toast');
-    const pageToastMessage = document.getElementById('page-toast-message');
+    const loadErrorEl    = document.getElementById('load-error');
+    const pageToast      = document.getElementById('page-toast');
+    const pageToastMsg   = document.getElementById('page-toast-message');
     const pageToastClose = document.getElementById('page-toast-close');
 
-    // ------------------------------------------------------------------
-    // Toast helper
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Toast
+    // ---------------------------------------------------------------
     function showToast(msg) {
-      pageToastMessage.textContent = msg;
+      if (!pageToast) return;
+      pageToastMsg.textContent = msg;
       pageToast.hidden = false;
-      clearTimeout(pageToast._hideTimer);
-      pageToast._hideTimer = setTimeout(() => { pageToast.hidden = true; }, 4000);
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { pageToast.hidden = true; }, 4500);
     }
     pageToastClose?.addEventListener('click', () => { pageToast.hidden = true; });
 
-    // ------------------------------------------------------------------
-    // Extract map ID from URL
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Map ID from URL (accept several common param names)
+    // ---------------------------------------------------------------
     function getMapId() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('id') || params.get('map') || null;
+      const p = new URLSearchParams(location.search);
+      return p.get('id') || p.get('map') || p.get('mapId') ||
+             p.get('uuid') || p.get('slug') || null;
     }
 
-    // ------------------------------------------------------------------
-    // Fetch map data
-    // ------------------------------------------------------------------
-    async function fetchMapData(mapId) {
-      if (!mapId) throw new Error('No map ID provided in URL. Use ?id=...');
-
-      // Try common API endpoints (adjust to match your backend)
-      const endpoints = [
-        `/api/admin/maps/${mapId}`,
-        `/api/maps/${mapId}`,
-        `/admin/maps/${mapId}.json`,
-        `/maps/${mapId}.json`
+    // ---------------------------------------------------------------
+    // Endpoint candidates — the FIRST one should match the endpoint
+    // used by /app/admin-map-editor.js. Copy it exactly from the
+    // Network tab while the editor loads a map, then keep fallbacks.
+    // ---------------------------------------------------------------
+    function mapEndpoints(id) {
+      const enc = encodeURIComponent(id);
+      return [
+        `/api/admin/maps/${enc}`,       // most likely for this admin app
+        `/admin/api/maps/${enc}`,
+        `/api/maps/${enc}`,
+        `/admin/maps/${enc}`,
+        `/api/admin/maps/${enc}/data`,
       ];
+    }
+
+    // ---------------------------------------------------------------
+    // Fetch map data: API endpoints -> localStorage/sessionStorage
+    // ---------------------------------------------------------------
+    async function fetchMapData(mapId) {
+      if (!mapId) throw new Error('No map ID in URL');
 
       let lastErr = null;
-      for (const url of endpoints) {
+      for (const url of mapEndpoints(mapId)) {
         try {
-          const res = await fetch(url, { headers: { Accept: 'application/json' } });
-          if (!res.ok) { lastErr = new Error(`HTTP ${res.status} for ${url}`); continue; }
+          const res = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          });
+          if (res.status === 404) { lastErr = new Error(`HTTP 404 (${url})`); continue; }
+          if (!res.ok)            { lastErr = new Error(`HTTP ${res.status} (${url})`); continue; }
           const data = await res.json();
           return normalizeMapData(data, mapId);
         } catch (err) {
           lastErr = err;
         }
       }
-      throw lastErr || new Error('Could not fetch map data.');
+
+      // Storage fallback — the editor may have cached this map client-side.
+      const storageKeys = [
+        `map:${mapId}`, `map-${mapId}`, `mapData:${mapId}`,
+        `editor:map:${mapId}`, `territory:map:${mapId}`,
+      ];
+      for (const key of storageKeys) {
+        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (!raw) continue;
+        try { return normalizeMapData(JSON.parse(raw), mapId); }
+        catch (_) { /* ignore malformed cache */ }
+      }
+
+      throw lastErr || new Error('Map not found');
     }
 
-    // ------------------------------------------------------------------
-    // Normalize whatever shape the API returns into a common structure:
-    // { id, name, width, height, cells: [ { row, col, type, difficulty, spawn, obstacle } ] }
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Normalize whatever shape the API returns into:
+    // { id, name, width, height, cells: [{row,col,type,difficulty,spawn,obstacle}] }
+    // ---------------------------------------------------------------
     function normalizeMapData(raw, fallbackId) {
-      // If raw already has a rows/cols/cells structure
-      const width = raw.width || raw.cols || raw.columns || raw.w || 20;
-      const height = raw.height || raw.rows || raw.r || 15;
+      const m = raw.map || raw.data || raw;
+
+      const width  = m.width  || m.cols || m.columns || m.w || 20;
+      const height = m.height || m.rows || m.r        || 15;
 
       const cells = [];
-      // Try to extract cells from common formats
-      if (Array.isArray(raw.cells)) {
-        for (const c of raw.cells) {
-          cells.push({
-            row: c.row ?? c.y ?? 0,
-            col: c.col ?? c.x ?? 0,
-            type: c.type ?? c.kind ?? 'empty',
-            difficulty: c.difficulty ?? c.diff ?? null,
-            spawn: c.spawn === true || c.type === 'spawnpoint' || c.kind === 'spawnpoint',
-            obstacle: c.obstacle === true || c.type === 'obstacle' || c.kind === 'obstacle',
-            problemNo: c.problemNo ?? c.problem_no ?? c.id ?? null,
-            problemType: c.problemType ?? c.problem_type ?? null,
-          });
-        }
-      } else if (Array.isArray(raw.grid)) {
-        // grid is 2D array of cell objects or strings
-        for (let r = 0; r < raw.grid.length; r++) {
-          const row = raw.grid[r];
-          if (!Array.isArray(row)) continue;
-          for (let c = 0; c < row.length; c++) {
-            const val = row[c];
-            if (val == null) continue;
-            if (typeof val === 'string') {
-              // 'spawn' | 'obstacle' | 'problem' | 'empty' or difficulty name
-              const isSpawn = val === 'spawn' || val === 'spawnpoint' || val === 'S';
-              const isObstacle = val === 'obstacle' || val === 'O' || val === 'X';
-              const isProblem = !isSpawn && !isObstacle && val !== 'empty' && val !== '.';
-              let diff = null;
-              if (['easy','normal','hard','insane'].includes(val.toLowerCase())) diff = val.toLowerCase();
-              cells.push({
-                row: r, col: c,
-                type: isSpawn ? 'spawnpoint' : isObstacle ? 'obstacle' : isProblem ? 'problem' : 'empty',
+      const push = (r, c, o) => {
+        if (r == null || c == null) return;
+        const type = o.type || o.kind || 'empty';
+        const isSpawn    = o.spawn === true    || type === 'spawnpoint' || type === 'spawn';
+        const isObstacle = o.obstacle === true || type === 'obstacle';
+        const isProblem  = !isSpawn && !isObstacle &&
+                           (type === 'problem' || o.problemNo != null ||
+                            o.problem_no != null || o.problemId != null);
+        cells.push({
+          row: +r, col: +c,
+          type: isSpawn ? 'spawnpoint' : isObstacle ? 'obstacle' : isProblem ? 'problem' : 'empty',
+          difficulty: (o.difficulty || o.diff || null)?.toLowerCase?.() || null,
+          spawn: isSpawn,
+          obstacle: isObstacle,
+        });
+      };
+
+      // Format 1: cells[]
+      if (Array.isArray(m.cells)) {
+        for (const c of m.cells) push(c.row ?? c.y, c.col ?? c.x, c);
+      }
+      // Format 2: grid[][] (objects or strings)
+      else if (Array.isArray(m.grid)) {
+        m.grid.forEach((row, r) => {
+          if (!Array.isArray(row)) return;
+          row.forEach((v, c) => {
+            if (v == null) return;
+            if (typeof v === 'string') {
+              const t = v.toLowerCase();
+              const diff = ['easy','normal','hard','insane'].includes(t) ? t : null;
+              push(r, c, {
+                type: t === 'spawn' || t === 's'                ? 'spawnpoint'
+                    : t === 'obstacle' || t === 'o' || t === 'x' ? 'obstacle'
+                    : t === 'empty' || t === '.'                 ? 'empty'
+                    : 'problem',
                 difficulty: diff,
-                spawn: isSpawn,
-                obstacle: isObstacle,
-                problemNo: null,
-                problemType: null,
               });
-            } else if (typeof val === 'object') {
-              // cell object
-              const type = val.type ?? val.kind ?? (val.spawn ? 'spawnpoint' : val.obstacle ? 'obstacle' : val.problem ? 'problem' : 'empty');
-              cells.push({
-                row: r, col: c,
-                type,
-                difficulty: val.difficulty ?? val.diff ?? null,
-                spawn: val.spawn === true || type === 'spawnpoint',
-                obstacle: val.obstacle === true || type === 'obstacle',
-                problemNo: val.problemNo ?? val.problem_no ?? val.id ?? null,
-                problemType: val.problemType ?? val.problem_type ?? null,
-              });
+            } else {
+              push(r, c, v);
             }
-          }
-        }
-      } else if (Array.isArray(raw.tiles)) {
-        for (const t of raw.tiles) {
-          cells.push({
-            row: t.row ?? t.y ?? 0,
-            col: t.col ?? t.x ?? 0,
-            type: t.type ?? t.kind ?? 'empty',
-            difficulty: t.difficulty ?? t.diff ?? null,
-            spawn: t.spawn === true || t.type === 'spawnpoint' || t.kind === 'spawnpoint',
-            obstacle: t.obstacle === true || t.type === 'obstacle' || t.kind === 'obstacle',
-            problemNo: t.problemNo ?? t.problem_no ?? t.id ?? null,
-            problemType: t.problemType ?? t.problem_type ?? null,
           });
-        }
+        });
       }
+      // Format 3: flat arrays
+      (m.problems  || []).forEach(p => push(p.row ?? p.y, p.col ?? p.x, { ...p, type: 'problem' }));
+      (m.spawns    || []).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
+      (m.obstacles || []).forEach(o => push(o.row ?? o.y, o.col ?? o.x, { ...o, type: 'obstacle', obstacle: true }));
+      (m.spawnPoints || []).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
 
-      // If no cells found, try to derive from a flat array of problems/spawns
-      if (cells.length === 0 && raw.problems && Array.isArray(raw.problems)) {
-        for (const p of raw.problems) {
-          cells.push({
-            row: p.row ?? p.y ?? 0,
-            col: p.col ?? p.x ?? 0,
-            type: 'problem',
-            difficulty: p.difficulty ?? p.diff ?? null,
-            spawn: false, obstacle: false,
-            problemNo: p.no ?? p.id ?? null,
-            problemType: p.type ?? p.problemType ?? null,
-          });
-        }
-      }
-      if (raw.spawns && Array.isArray(raw.spawns)) {
-        for (const s of raw.spawns) {
-          cells.push({
-            row: s.row ?? s.y ?? 0,
-            col: s.col ?? s.x ?? 0,
-            type: 'spawnpoint',
-            difficulty: null,
-            spawn: true, obstacle: false,
-            problemNo: null, problemType: null,
-          });
-        }
-      }
-      if (raw.obstacles && Array.isArray(raw.obstacles)) {
-        for (const o of raw.obstacles) {
-          cells.push({
-            row: o.row ?? o.y ?? 0,
-            col: o.col ?? o.x ?? 0,
-            type: 'obstacle',
-            difficulty: null,
-            spawn: false, obstacle: true,
-            problemNo: null, problemType: null,
-          });
-        }
-      }
-
-      // Deduplicate by row,col (last one wins, but prefer spawn/obstacle over empty)
-      const map = new Map();
+      // Deduplicate by row,col — priority spawn > obstacle > problem > empty
+      const prio = x => x.spawn ? 3 : x.obstacle ? 2 : x.type === 'problem' ? 1 : 0;
+      const byPos = new Map();
       for (const c of cells) {
-        const key = `${c.row},${c.col}`;
-        const existing = map.get(key);
-        if (!existing) { map.set(key, c); continue; }
-        // Priority: spawn > obstacle > problem > empty
-        const priority = (x) => x.spawn ? 3 : x.obstacle ? 2 : x.type === 'problem' ? 1 : 0;
-        if (priority(c) > priority(existing)) map.set(key, c);
-        else if (priority(c) === priority(existing) && c.difficulty && !existing.difficulty) map.set(key, c);
+        const k = `${c.row},${c.col}`;
+        const cur = byPos.get(k);
+        if (!cur || prio(c) > prio(cur) ||
+            (prio(c) === prio(cur) && c.difficulty && !cur.difficulty)) {
+          byPos.set(k, c);
+        }
       }
-
-      const finalCells = Array.from(map.values());
 
       return {
-        id: raw.id || fallbackId,
-        name: raw.name || raw.title || 'Untitled map',
-        width,
-        height,
-        cells: finalCells,
+        id: m.id || m._id || fallbackId,
+        name: m.name || m.title || 'Untitled map',
+        width, height,
+        cells: [...byPos.values()],
         raw,
       };
     }
 
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
     // Render
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
     function renderMap(map) {
       titleEl.textContent = map.name;
-      sizeEl.textContent = `${map.width} × ${map.height} cells`;
+      sizeEl.textContent  = `${map.width} × ${map.height} cells`;
 
-      // Stats
-      const spawns = map.cells.filter(c => c.spawn);
+      const spawns    = map.cells.filter(c => c.spawn);
       const obstacles = map.cells.filter(c => c.obstacle);
-      const problems = map.cells.filter(c => c.type === 'problem' && !c.spawn && !c.obstacle);
+      const problems  = map.cells.filter(c => c.type === 'problem' && !c.spawn && !c.obstacle);
 
-      spawnCountEl.textContent = spawns.length;
+      spawnCountEl.textContent    = spawns.length;
       obstacleCountEl.textContent = obstacles.length;
-      problemCountEl.textContent = problems.length;
+      problemCountEl.textContent  = problems.length;
 
-      // Difficulty summary: compute "dominant" or list all unique
-      const diffCounts = {};
+      // Difficulty summary — dominant difficulty if >60%, else "Mixed"
+      const counts = {};
       for (const p of problems) {
         const d = p.difficulty || 'unknown';
-        diffCounts[d] = (diffCounts[d] || 0) + 1;
+        counts[d] = (counts[d] || 0) + 1;
       }
-      const diffKeys = Object.keys(diffCounts);
-      if (diffKeys.length === 0) {
+      const keys = Object.keys(counts);
+      if (keys.length === 0) {
         difficultyEl.textContent = '—';
-      } else if (diffKeys.length === 1) {
-        difficultyEl.textContent = diffKeys[0].charAt(0).toUpperCase() + diffKeys[0].slice(1);
+      } else if (keys.length === 1) {
+        difficultyEl.textContent = capitalize(keys[0]);
       } else {
-        // Show as "Mixed (easy:3, hard:2 ...)" or just dominant
-        const sorted = diffKeys.sort((a,b) => (diffCounts[b] - diffCounts[a]));
-        const dominant = sorted[0];
-        const total = problems.length;
-        if (diffCounts[dominant] / total > 0.6) {
-          difficultyEl.textContent = dominant.charAt(0).toUpperCase() + dominant.slice(1) + ' (mostly)';
-        } else {
-          difficultyEl.textContent = 'Mixed';
-        }
+        const sorted = keys.sort((a, b) => counts[b] - counts[a]);
+        const dom = sorted[0];
+        difficultyEl.textContent = counts[dom] / problems.length > 0.6
+          ? `${capitalize(dom)} (mostly)`
+          : 'Mixed';
       }
 
       // Build grid
       gridEl.innerHTML = '';
-      gridEl.style.setProperty('--cols', map.width);
-      gridEl.style.setProperty('--rows', map.height);
-      // Ensure grid has display grid
       gridEl.style.display = 'grid';
       gridEl.style.gridTemplateColumns = `repeat(${map.width}, 1fr)`;
+      gridEl.style.setProperty('--cols', map.width);
+      gridEl.style.setProperty('--rows', map.height);
 
-      // Create a lookup by row,col
       const lookup = new Map();
-      for (const c of map.cells) {
-        lookup.set(`${c.row},${c.col}`, c);
-      }
+      for (const c of map.cells) lookup.set(`${c.row},${c.col}`, c);
 
       for (let r = 0; r < map.height; r++) {
         for (let c = 0; c < map.width; c++) {
-          const cellData = lookup.get(`${r},${c}`) || { row: r, col: c, type: 'empty', spawn: false, obstacle: false, difficulty: null };
+          const data = lookup.get(`${r},${c}`) || {
+            row: r, col: c, type: 'empty',
+            spawn: false, obstacle: false, difficulty: null,
+          };
           const div = document.createElement('div');
           div.className = 'cell';
           div.dataset.row = r;
           div.dataset.col = c;
 
-          // Apply classes
-          if (cellData.spawn) {
+          if (data.spawn) {
             div.classList.add('spawn-cell');
-          } else if (cellData.obstacle) {
+            div.title = 'Spawn point';
+          } else if (data.obstacle) {
             div.classList.add('obstacle-cell');
-          } else if (cellData.type === 'problem') {
-            // Difficulty class
-            const d = (cellData.difficulty || '').toLowerCase();
+            div.title = 'Obstacle';
+          } else if (data.type === 'problem') {
+            const d = data.difficulty;
             if (['easy','normal','hard','insane'].includes(d)) {
               div.classList.add(`difficulty-${d}`);
+              div.title = `Problem — ${capitalize(d)}`;
             } else {
               div.classList.add('difficulty-unknown');
+              div.title = 'Problem — difficulty unknown';
             }
-            // No problem type/ID shown
           } else {
-            // empty
             div.classList.add('cell-empty');
-          }
-
-          // Tooltip (title attribute) — show only difficulty / spawn / obstacle
-          if (cellData.spawn) {
-            div.title = 'Spawn point';
-          } else if (cellData.obstacle) {
-            div.title = 'Obstacle';
-          } else if (cellData.type === 'problem') {
-            const d = cellData.difficulty ? cellData.difficulty.charAt(0).toUpperCase() + cellData.difficulty.slice(1) : 'Unknown';
-            div.title = `Problem (difficulty: ${d})`;
-          } else {
             div.title = 'Empty';
           }
 
@@ -590,98 +508,90 @@
       }
     }
 
-    // ------------------------------------------------------------------
-    // Init
-    // ------------------------------------------------------------------
-    async function init() {
-      const mapId = getMapId();
-      if (!mapId) {
-        // Show sample map so the viewer isn't empty
-        loadErrorEl.hidden = true;
-        const sampleMap = createSampleMap();
-        renderMap(sampleMap);
-        showToast('No map ID in URL — showing sample map. Add ?id=... to view a real map.');
-        return;
-      }
-
-      try {
-        loadErrorEl.hidden = true;
-        const map = await fetchMapData(mapId);
-        renderMap(map);
-      } catch (err) {
-        console.warn('Failed to load map:', err);
-        loadErrorEl.hidden = false;
-        loadErrorEl.textContent = `Could not load map (${err.message}). Showing sample map.`;
-        const sampleMap = createSampleMap();
-        renderMap(sampleMap);
-        showToast('Using sample map — API unavailable.');
-      }
+    function capitalize(s) {
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
     }
 
-    // ------------------------------------------------------------------
-    // Sample map for fallback / demonstration
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Sample map (only used when no map ID is present)
+    // ---------------------------------------------------------------
     function createSampleMap() {
-      const width = 18;
-      const height = 12;
+      const width = 18, height = 12;
       const cells = [];
 
-      // Spawn points
-      cells.push({ row: 0, col: 0, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
-      cells.push({ row: 0, col: 17, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
-      cells.push({ row: 11, col: 0, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
-      cells.push({ row: 11, col: 17, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null });
+      // Spawn points (corners)
+      [[0,0],[0,17],[11,0],[11,17]].forEach(([r,c]) =>
+        cells.push({ row: r, col: c, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null }));
 
-      // Obstacles (a few scattered)
-      const obstaclePositions = [
+      // Obstacles
+      [
         [2,3],[2,4],[2,5],[3,3],[3,5],[4,3],[4,4],[4,5],
         [7,8],[7,9],[7,10],[8,8],[8,10],[9,8],[9,9],[9,10],
         [5,12],[6,12],[7,12],[5,13],[6,13],[7,13],
-      ];
-      for (const [r,c] of obstaclePositions) {
+      ].forEach(([r,c]) => {
         if (r < height && c < width) {
           cells.push({ row: r, col: c, type: 'obstacle', spawn: false, obstacle: true, difficulty: null });
         }
-      }
+      });
 
-      // Problems with various difficulties
+      // Problems with a spread of difficulties
       const difficulties = ['easy','easy','easy','normal','normal','hard','hard','insane'];
-      let idx = 0;
+      let i = 0;
       for (let r = 0; r < height; r++) {
         for (let c = 0; c < width; c++) {
-          // Skip if spawn or obstacle already there
           if (cells.some(x => x.row === r && x.col === c)) continue;
-          // Only place problems on some cells (checkerboard-ish with randomness)
           if ((r * 3 + c * 7) % 5 === 0 && Math.random() > 0.3) {
-            const diff = difficulties[idx % difficulties.length];
-            idx++;
             cells.push({
-              row: r, col: c,
-              type: 'problem',
+              row: r, col: c, type: 'problem',
               spawn: false, obstacle: false,
-              difficulty: diff,
-              // problemNo and problemType intentionally omitted — viewer doesn't show them
+              difficulty: difficulties[i++ % difficulties.length],
             });
           }
         }
       }
 
-      return {
-        id: 'sample',
-        name: 'Sample Territory Map',
-        width,
-        height,
-        cells,
-      };
+      return { id: 'sample', name: 'Sample Territory Map', width, height, cells };
     }
 
-    // Run
+    // ---------------------------------------------------------------
+    // Init
+    // ---------------------------------------------------------------
+    async function init() {
+      const mapId = getMapId();
+
+      if (!mapId) {
+        loadErrorEl.hidden = false;
+        loadErrorEl.textContent = 'No map ID in the URL. Open as terrain-view.html?id=<mapId> to view a real map.';
+        renderMap(createSampleMap());
+        showToast('No map ID — showing sample terrain.');
+        return;
+      }
+
+      try {
+        const map = await fetchMapData(mapId);
+        loadErrorEl.hidden = true;
+        renderMap(map);
+      } catch (err) {
+        console.error('[terrain-view]', err);
+        loadErrorEl.hidden = false;
+        loadErrorEl.textContent =
+          `Could not load map "${mapId}": ${err.message}. ` +
+          `Check the network tab while the editor loads the map and copy that exact ` +
+          `endpoint into mapEndpoints() in terrain-view.html.`;
+        // Clear the grid instead of painting a fake map over the failure.
+        gridEl.innerHTML = '<p class="grid-loading">Map could not be loaded.</p>';
+        showToast('Map not found — see error above.');
+      }
+    }
+
     init();
 
-    // Mobile menu toggle (same as editor, for consistency)
+    // ---------------------------------------------------------------
+    // Mobile menu toggle (same as editor)
+    // ---------------------------------------------------------------
     const menuButton = document.getElementById('menu-button');
-    const sidebar = document.querySelector('.sidebar');
-    const backdrop = document.querySelector('.sidebar-backdrop');
+    const sidebar    = document.querySelector('.sidebar');
+    const backdrop   = document.querySelector('.sidebar-backdrop');
     if (menuButton && sidebar) {
       menuButton.addEventListener('click', () => {
         const expanded = menuButton.getAttribute('aria-expanded') === 'true';
