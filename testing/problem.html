@@ -9,15 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-    <style>
-      /* Make the statement area scroll-safe and touch-drawable on mobile. */
-      #student-problem-prompt,
-      #student-problem-prompt .statement-frame {
-        touch-action: none;
-      }
-      .answer-page { padding-bottom: max(48px, env(safe-area-inset-bottom)); }
-      .answer-page input { font-size: 16px; }
-    </style>
   </head>
   <body>
     <main class="answer-page">
@@ -84,13 +75,12 @@
             ? text
             : '<pre class="statement-text">' + escapeStatementText(text) + "</pre>";
           return '<!doctype html><html><head><meta charset="utf-8">'
-            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             + '<link rel="stylesheet" href="' + STATEMENT_KATEX_CSS + '" crossorigin="anonymous">'
             + '<style>'
             + "html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }"
             + 'body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }'
             + "#territory-bridge { display: none; }"
-            + ".statement-content { overflow-wrap: anywhere; font-size: 16px; touch-action: none; }"
+            + ".statement-content { overflow-wrap: anywhere; font-size: 16px; }"
             + ".katex { font-size: 1em; }"
             + ".statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }"
             + ".statement-content img, .statement-content video,"
@@ -134,8 +124,6 @@
             + "    report();"
             + "    try { if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement); } catch (error) {}"
             + "    try { new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true }); } catch (error) {}"
-            + "    setTimeout(report, 300);"
-            + "    setTimeout(report, 1200);"
             + "  }"
             + "  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", boot);"
             + "  else boot();"
@@ -149,6 +137,7 @@
             + '  <input id="student-answer" type="text" />'
             + '  <p id="student-answer-error" hidden></p>'
             + "</div>"
+            // Bridge: forwards input value/style/readOnly/error to the parent.
             + "<script>"
             + "(function () {"
             + "  var input = document.getElementById(\"student-answer\");"
@@ -225,29 +214,14 @@
           frame.className = "statement-frame";
           frame.setAttribute("sandbox", "allow-scripts");
           frame.setAttribute("title", "Problem statement");
-          frame.style.height = "200px";
-          frame.style.width = "100%";
-          frame.style.border = "0";
-          frame.style.display = "block";
-          frame.style.touchAction = "none";
+          frame.style.height = "120px";
           frame.srcdoc = buildStatementDocument(text, options.tag || "");
           element.append(frame);
           if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
-          // Fallback: mobile browsers sometimes miss the first height post.
-          frame.addEventListener("load", function () {
-            try {
-              var doc = frame.contentDocument;
-              if (!doc) return;
-              var h = Math.max(
-                doc.documentElement ? doc.documentElement.scrollHeight : 0,
-                doc.body ? doc.body.scrollHeight : 0
-              );
-              if (h > 0) frame.style.height = Math.max(200, Math.min(8000, Math.ceil(h))) + "px";
-            } catch (e) { /* sandboxed cross-origin read may fail; message handler covers it */ }
-          });
           return frame;
         }
 
+        // Ask the statement iframe to approve submission (puzzles may block it).
         function approveStatementSubmit() {
           var frame = activeStatementFrame;
           if (!frame || !frame.contentWindow) return Promise.resolve({ blocked: false, message: "" });
@@ -287,7 +261,7 @@
           if (data.type === "territory-statement-height") {
             var height = Number(data.height);
             if (!Number.isFinite(height)) return;
-            frame.style.height = Math.max(200, Math.min(8000, Math.ceil(height))) + "px";
+            frame.style.height = Math.max(48, Math.min(8000, Math.ceil(height))) + "px";
             return;
           }
           if (frame !== activeStatementFrame) return;
@@ -343,13 +317,13 @@
         form.addEventListener("submit", async function (event) {
           event.preventDefault();
           error.hidden = true;
-          error.style.color = "";
           var button = form.querySelector("button");
           if (button.disabled) return;
           var label = button.textContent;
           button.disabled = true;
           button.textContent = "Checking...";
 
+          // Let the puzzle refuse submission if its own validation fails.
           var approval = await approveStatementSubmit();
           if (approval.blocked) {
             button.disabled = false;
@@ -371,9 +345,8 @@
               error.hidden = false;
               error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
             } else if (data.correct) {
-              error.hidden = false;
-              error.style.color = "#3ddc6a";
-              error.textContent = "AC";
+              form.hidden = true;
+              showStatus("Answer accepted. You can close this tab.");
             } else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
