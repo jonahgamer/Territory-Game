@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Terrain Generator · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060910;
+      font-family: 'Share Tech Mono', monospace;
+      color: #d7f6ff;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* 悬浮控制面板 */
+    .controls-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      z-index: 10;
+      background: rgba(8, 18, 32, 0.85);
+      border: 1px solid rgba(62, 224, 255, 0.3);
+      backdrop-filter: blur(8px);
+      padding: 16px;
+      box-shadow: 0 0 30px rgba(62, 224, 255, 0.1);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    .controls-panel h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #3ee0ff;
+      border-bottom: 1px solid rgba(62, 224, 255, 0.2);
+      padding-bottom: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #7f9eb0;
+    }
+
+    .control-row input[type="number"] {
+      width: 80px;
+      padding: 4px 8px;
+      border: 1px solid rgba(62, 224, 255, 0.3);
+      background: rgba(4, 12, 22, 0.85);
+      color: #d7f6ff;
+      font-family: 'Share Tech Mono', monospace;
+      text-align: right;
+    }
+
+    .control-row input[type="color"] {
+      width: 36px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid rgba(62, 224, 255, 0.3);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 8px;
+      background: rgba(62, 224, 255, 0.12);
+      border: 1px solid #3ee0ff;
+      color: #3ee0ff;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    .btn:hover { background: rgba(62, 224, 255, 0.25); }
+
+    .hint-box {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(8, 18, 32, 0.7);
+      padding: 12px 16px;
+      border: 1px solid rgba(62, 224, 255, 0.2);
+      font-size: 13px;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
+    .key {
+      display: inline-block;
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      margin: 0 2px;
+      font-weight: bold;
+    }
+
+    /* 隐藏滚动条 */
+    .controls-panel::-webkit-scrollbar { width: 6px; }
+    .controls-panel::-webkit-scrollbar-thumb { background: rgba(62, 224, 255, 0.3); }
+  </style>
+  <!-- 使用 Import Map 引入 Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div class="hint-box">
+    <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 平面移动</div>
+    <div><span class="key">Space</span> 上升 / <span class="key">Shift</span> 下降</div>
+    <div><span class="key">鼠标左键拖拽</span> 旋转视角</div>
+  </div>
+
+  <div class="controls-panel">
+    <h3>3D 参数设置</h3>
+    <div class="control-row">
+      <span>随机种子</span>
+      <input type="number" id="input-seed" value="12345" />
+    </div>
+    <div class="control-row">
+      <span>地形起伏高度</span>
+      <input type="number" id="input-height" value="30" min="5" max="100" />
+    </div>
+    <div class="control-row">
+      <span>移动速度</span>
+      <input type="number" id="input-speed" value="1.5" step="0.5" min="0.1" max="10" />
+    </div>
+    <button id="btn-random-seed" class="btn">随机生成新世界</button>
+    
+    <h3 style="margin-top:20px;">颜色映射</h3>
+    <div class="control-row">
+      <span>平原浅色 (临水)</span>
+      <input type="color" id="color-plain-light" value="#a3e635" />
+    </div>
+    <div class="control-row">
+      <span>平原深色 (临山)</span>
+      <input type="color" id="color-plain-dark" value="#166534" />
+    </div>
+    <div class="control-row">
+      <span>河流浅色 (岸边)</span>
+      <input type="color" id="color-river-light" value="#7dd3fc" />
+    </div>
+    <div class="control-row">
+      <span>河流深色 (中心)</span>
+      <input type="color" id="color-river-dark" value="#1e3a8a" />
+    </div>
+    <div class="control-row">
+      <span>高山鲜红 (山脚)</span>
+      <input type="color" id="color-mountain-bright" value="#f87171" />
+    </div>
+    <div class="control-row">
+      <span>高山暗红 (山顶)</span>
+      <input type="color" id="color-mountain-dark" value="#7f1d1d" />
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ==================================================================
+    // 配置与状态
+    // ==================================================================
+    const CONFIG = {
+      gridSize: 150,        // 网格分辨率 (150x150 顶点)
+      planeSize: 300,       // 平面物理尺寸
+      heightScale: 30,      // 高度缩放
+      speed: 1.5,           // 移动速度
+      seed: 12345,
+      colors: {
+        plainLight: '#a3e635',
+        plainDark: '#166534',
+        riverLight: '#7dd3fc',
+        riverDark: '#1e3a8a',
+        mountainBright: '#f87171',
+        mountainDark: '#7f1d1d'
+      }
+    };
+
+    // ==================================================================
+    // 噪声生成器
+    // ==================================================================
+    function mulberry32(a) {
+      return function() {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      }
+    }
+
+    class Noise {
+      constructor(seed) {
+        this.perm = new Uint8Array(512);
+        let rand = mulberry32(seed);
+        let p = Array.from({ length: 256 }, (_, i) => i);
+        for (let i = 255; i > 0; i--) {
+          let j = Math.floor(rand() * (i + 1));
+          [p[i], p[j]] = [p[j], p[i]];
+        }
+        for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+      }
+      fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+      lerp(t, a, b) { return a + t * (b - a); }
+      grad(hash, x, y) {
+        let h = hash & 7;
+        let u = h < 4 ? x : y;
+        let v = h < 4 ? y : x;
+        return ((h & 1) ? -u : u) + ((h & 2) ? -2.0 * v : 2.0 * v);
+      }
+      perlin(x, y) {
+        let X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+        x -= Math.floor(x); y -= Math.floor(y);
+        let u = this.fade(x), v = this.fade(y);
+        let A = this.perm[X] + Y, AA = this.perm[A], AB = this.perm[A + 1];
+        let B = this.perm[X + 1] + Y, BA = this.perm[B], BB = this.perm[B + 1];
+        return this.lerp(v, this.lerp(u, this.grad(this.perm[AA], x, y), this.grad(this.perm[BA], x - 1, y)),
+          this.lerp(u, this.grad(this.perm[AB], x, y - 1), this.grad(this.perm[BB], x - 1, y - 1)));
+      }
+      fbm(x, y, octaves, lacunarity, gain) {
+        let amp = 1.0, freq = 1.0, sum = 0.0;
+        for (let i = 0; i < octaves; i++) {
+          sum += amp * this.perlin(x * freq, y * freq);
+          freq *= lacunarity;
+          amp *= gain;
+        }
+        return (sum + 1) / 2; // 0~1
+      }
+    }
+
+    let terrainNoise, riverNoise, detailNoise;
+
+    function initNoise(seed) {
+      terrainNoise = new Noise(seed);
+      riverNoise = new Noise(seed + 1);
+      detailNoise = new Noise(seed + 2);
+    }
+
+    function getTerrainData(x, y) {
+      const scale = 0.02;
+      let base = terrainNoise.fbm(x * scale, y * scale, 3, 2.0, 0.5);
+      let detail = detailNoise.fbm(x * 0.08, y * 0.08, 2, 2.0, 0.5);
+      let h = base * 0.8 + detail * 0.2;
+      h = Math.pow(h, 1.3);
+      
+      let r1 = riverNoise.fbm(x * 0.015, y * 0.015, 2, 2.0, 0.5);
+      let r2 = riverNoise.fbm(x * 0.015 + 100, y * 0.015 + 100, 2, 2.0, 0.5);
+      let riverVal = Math.abs(r1 - r2);
+      
+      return { h, riverVal };
+    }
+
+    // ==================================================================
+    // 颜色插值工具
+    // ==================================================================
+    const colorCache = { plainLight: new THREE.Color(), /* ... */ };
+    function updateColors() {
+      colorCache.plainLight.set(CONFIG.colors.plainLight);
+      colorCache.plainDark.set(CONFIG.colors.plainDark);
+      colorCache.riverLight.set(CONFIG.colors.riverLight);
+      colorCache.riverDark.set(CONFIG.colors.riverDark);
+      colorCache.mountainBright.set(CONFIG.colors.mountainBright);
+      colorCache.mountainDark.set(CONFIG.colors.mountainDark);
+    }
+    updateColors();
+
+    function getVertexColor(h, riverVal, targetColor) {
+      const tempColor = new THREE.Color();
+      
+      if (h > 0.6) {
+        // 高山：山脚鲜红，山顶暗红
+        const t = Math.min(1, (h - 0.6) / 0.4);
+        targetColor.copy(colorCache.mountainBright).lerp(colorCache.mountainDark, t);
+      } else if (riverVal < 0.04) {
+        // 河流：岸边浅蓝，中心深蓝
+        const t = Math.min(1, 1 - riverVal / 0.04);
+        targetColor.copy(colorCache.riverLight).lerp(colorCache.riverDark, t);
+      } else {
+        // 平原：靠水浅绿，靠山深绿
+        const t_mountain = Math.max(0, Math.min(1, (h - 0.4) / 0.2));
+        targetColor.copy(colorCache.plainLight).lerp(colorCache.plainDark, t_mountain);
+        
+        const t_river = Math.max(0, Math.min(1, (0.1 - riverVal) / 0.06));
+        if (t_river > 0) {
+          targetColor.lerp(colorCache.plainLight, t_river);
+        }
+      }
+      return targetColor;
+    }
+
+    // ==================================================================
+    // Three.js 初始化
+    // ==================================================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060910);
+    scene.fog = new THREE.FogExp2(0x060910, 0.005);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 30, 80);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // 光照
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(50, 100, 50);
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.left = -100;
+    dirLight.shadow.camera.right = 100;
+    dirLight.shadow.camera.top = 100;
+    dirLight.shadow.camera.bottom = -100;
+    scene.add(dirLight);
+
+    // ==================================================================
+    // 地形网格构建
+    // ==================================================================
+    let geometry, mesh;
+    const gridSize = CONFIG.gridSize;
+    const planeSize = CONFIG.planeSize;
+    const step = planeSize / gridSize;
+
+    function createGeometry() {
+      geometry = new THREE.PlaneGeometry(planeSize, planeSize, gridSize, gridSize);
+      geometry.rotateX(-Math.PI / 2); // 使其平铺在 XZ 平面
+
+      // 添加颜色属性
+      const count = geometry.attributes.position.count;
+      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+
+      const material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: true, // 低多边形风格
+        roughness: 0.8,
+        metalness: 0.1
+      });
+
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      scene.add(mesh);
+    }
+    createGeometry();
+
+    // ==================================================================
+    // 核心：动态更新地形
+    // ==================================================================
+    const _color = new THREE.Color();
+    const posAttr = geometry.attributes.position;
+    const colorAttr = geometry.attributes.color;
+
+    function updateTerrain() {
+      const offsetX = Math.floor(camera.position.x / step);
+      const offsetZ = Math.floor(camera.position.z / step);
+
+      for (let i = 0; i < posAttr.count; i++) {
+        // 顶点的局部坐标
+        const lx = posAttr.getX(i);
+        const lz = posAttr.getZ(i);
+
+        // 转换为世界坐标，使其与相机绑定
+        const wx = lx + camera.position.x;
+        const wz = lz + camera.position.z;
+
+        const { h, riverVal } = getTerrainData(wx, wz);
+        
+        // 计算高度 (Y轴)
+        let y = h * CONFIG.heightScale;
+        if (riverVal < 0.04) {
+          y = 0.5; // 水面拉平
+        }
+        
+        // 如果是边界墙，强制拔高（可选，让地形边缘像一堵墙）
+        // const isBorder = Math.abs(lx) > planeSize/2 - 2 || Math.abs(lz) > planeSize/2 - 2;
+        // if (isBorder) y += 5;
+
+        posAttr.setY(i, y);
+
+        // 计算颜色
+        getVertexColor(h, riverVal, _color);
+        colorAttr.setXYZ(i, _color.r, _color.g, _color.b);
+      }
+
+      posAttr.needsUpdate = true;
+      colorAttr.needsUpdate = true;
+      geometry.computeVertexNormals();
+    }
+
+    // ==================================================================
+    // 键盘与鼠标控制
+    // ==================================================================
+    const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+    
+    document.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'w' || k === 'arrowup') keys.w = true;
+      if (k === 's' || k === 'arrowdown') keys.s = true;
+      if (k === 'a' || k === 'arrowleft') keys.a = true;
+      if (k === 'd' || k === 'arrowright') keys.d = true;
+      if (e.code === 'Space') keys.space = true;
+      if (e.key === 'Shift') keys.shift = true;
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'w' || k === 'arrowup') keys.w = false;
+      if (k === 's' || k === 'arrowdown') keys.s = false;
+      if (k === 'a' || k === 'arrowleft') keys.a = false;
+      if (k === 'd' || k === 'arrowright') keys.d = false;
+      if (e.code === 'Space') keys.space = false;
+      if (e.key === 'Shift') keys.shift = false;
+    });
+
+    // 鼠标拖拽旋转视角
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let yaw = 0; // 左右旋转
+    let pitch = 0; // 上下旋转
+
+    container.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      previousMousePosition = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const deltaX = e.clientX - previousMousePosition.x;
+      const deltaY = e.clientY - previousMousePosition.y;
+      
+      yaw -= deltaX * 0.005;
+      pitch -= deltaY * 0.005;
+      
+      // 限制上下视角，防止翻转
+      pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+      
+      previousMousePosition = { x: e.clientX, y: e.clientY };
+    });
+
+    // ==================================================================
+    // UI 绑定
+    // ==================================================================
+    document.getElementById('input-seed').addEventListener('change', (e) => {
+      CONFIG.seed = parseInt(e.target.value) || 12345;
+      initNoise(CONFIG.seed);
+      updateTerrain();
+    });
+
+    document.getElementById('btn-random-seed').addEventListener('click', () => {
+      const newSeed = Math.floor(Math.random() * 999999) + 1;
+      document.getElementById('input-seed').value = newSeed;
+      CONFIG.seed = newSeed;
+      initNoise(CONFIG.seed);
+      updateTerrain();
+    });
+
+    document.getElementById('input-height').addEventListener('change', (e) => {
+      CONFIG.heightScale = parseInt(e.target.value) || 30;
+      updateTerrain();
+    });
+
+    document.getElementById('input-speed').addEventListener('change', (e) => {
+      CONFIG.speed = parseFloat(e.target.value) || 1.5;
+    });
+
+    const colorMaps = [
+      { id: 'color-plain-light', key: 'plainLight' },
+      { id: 'color-plain-dark', key: 'plainDark' },
+      { id: 'color-river-light', key: 'riverLight' },
+      { id: 'color-river-dark', key: 'riverDark' },
+      { id: 'color-mountain-bright', key: 'mountainBright' },
+      { id: 'color-mountain-dark', key: 'mountainDark' }
+    ];
+
+    colorMaps.forEach(({ id, key }) => {
+      document.getElementById(id).addEventListener('input', (e) => {
+        CONFIG.colors[key] = e.target.value;
+        updateColors();
+        updateTerrain();
+      });
+    });
+
+    // ==================================================================
+    // 动画循环
+    // ==================================================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+
+      // 1. 处理键盘移动
+      let moved = false;
+      const speed = CONFIG.speed * delta * 20;
+      
+      // 计算水平移动方向（基于当前视角）
+      const forwardX = Math.sin(yaw);
+      const forwardZ = Math.cos(yaw);
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
+
+      if (keys.w) { camera.position.x -= forwardX * speed; camera.position.z -= forwardZ * speed; moved = true; }
+      if (keys.s) { camera.position.x += forwardX * speed; camera.position.z += forwardZ * speed; moved = true; }
+      if (keys.a) { camera.position.x -= rightX * speed; camera.position.z -= rightZ * speed; moved = true; }
+      if (keys.d) { camera.position.x += rightX * speed; camera.position.z += rightZ * speed; moved = true; }
+      
+      // 垂直移动
+      if (keys.space) { camera.position.y += speed * 1.5; }
+      if (keys.shift) { camera.position.y -= speed * 1.5; }
+
+      // 防止相机穿地
+      const groundH = getTerrainData(camera.position.x, camera.position.z).h * CONFIG.heightScale;
+      if (camera.position.y < groundH + 2) {
+        camera.position.y = groundH + 2;
+      }
+
+      // 2. 更新相机旋转
+      camera.rotation.set(pitch, yaw, 0, 'YXZ');
+
+      // 3. 如果移动了，实时更新地形顶点（无限地形效果）
+      if (moved) {
+        updateTerrain();
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // 窗口调整
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 启动
+    initNoise(CONFIG.seed);
+    updateTerrain();
+    animate();
+
+  </script>
+</body>
+</html>
