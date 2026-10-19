@@ -33,6 +33,7 @@
     #map-canvas {
       cursor: grab;
       image-rendering: pixelated;
+      box-shadow: 0 0 10px rgba(0,0,0,0.8);
     }
     #map-canvas:active {
       cursor: grabbing;
@@ -155,6 +156,13 @@
       font-size: 12px;
       color: var(--muted);
     }
+    
+    .info-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -186,7 +194,7 @@
 
       <p class="eyebrow">Terrain Generator</p>
       <h1>Noise Map</h1>
-      <p class="lead">实时生成并框选地图。点击画面并拖拽，或使用键盘 WASD 移动取景框。</p>
+      <p class="lead">拖拽画布或按 WASD 移动取景框。墙壁会实时包裹视野边缘。</p>
 
       <div class="generator-layout">
         <div class="canvas-container" id="canvas-container">
@@ -203,20 +211,16 @@
                 <span class="stat-val spawn" id="stat-spawn">0</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Easy</span>
+                <span class="stat-label">Easy (平原)</span>
                 <span class="stat-val easy" id="stat-easy">0</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Normal</span>
+                <span class="stat-label">Normal (河流)</span>
                 <span class="stat-val normal" id="stat-normal">0</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Hard</span>
+                <span class="stat-label">Hard/Insane (高山)</span>
                 <span class="stat-val hard" id="stat-hard">0</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Insane</span>
-                <span class="stat-val insane" id="stat-insane">0</span>
               </div>
             </div>
           </div>
@@ -240,6 +244,7 @@
               <input type="number" id="input-rows" value="20" min="5" max="40" />
             </div>
             <button id="btn-export" class="btn export">导出为 JSON</button>
+            <p class="info-note">导出时，不同难度对应的占位题号为：Easy(26001)、Normal(26002)、Hard(26003)、Insane(26004)。没有实体覆盖的高山和河流默认转换为墙体(Obstacle)。</p>
           </div>
 
           <!-- 颜色自定义 -->
@@ -316,7 +321,7 @@
     const CELL_SIZE = 24;
 
     // ==================================================================
-    // 柏林噪声算法与地形生成
+    // 柏林噪声算法
     // ==================================================================
     function mulberry32(a) {
       return function() {
@@ -381,17 +386,97 @@
         
         let r1 = this.noiseRiver.fbm(x * 0.02, y * 0.02, 2, 2.0, 0.5);
         let r2 = this.noiseRiver.fbm(x * 0.02 + 100, y * 0.02 + 100, 2, 2.0, 0.5);
-        let riverVal = Math.abs(r1 - r2); // 0 到 1，越小越靠近河道中心
+        let riverVal = Math.abs(r1 - r2); // 越小越靠近河道中心
         
         return { h, riverVal };
       }
     }
 
-    // 哈希随机数（保证相同坐标生成相同的实体）
+    // 哈希随机数
     function hash(x, y, seed) {
       let h = x * 374761393 + y * 668265263 + seed * 1442695040888963407;
       h = (h ^ (h >> 13)) * 1274126177;
       return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+    }
+
+    // ==================================================================
+    // 核心：网格生成逻辑
+    // ==================================================================
+    function generateGrid() {
+      const terrainMap = new TerrainMap(state.seed);
+      const cells = [];
+      const stats = { spawn: 0, easy: 0, normal: 0, hard: 0, insane: 0 };
+      const placedSpawns = []; // 用于曼哈顿距离判断
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const wx = state.offsetX + c;
+          const wy = state.offsetY + r;
+
+          // 1. 边界墙
+          if (r === 0 || r === state.rows - 1 || c === 0 || c === state.cols - 1) {
+            cells.push({ row: r, col: c, wx, wy, kind: 'wall', entity: null });
+            continue;
+          }
+
+          const t = terrainMap.getTerrain(wx, wy);
+          const rand = hash(wx, wy, state.seed);
+          let entity = null;
+
+          // 2. 判断是否生成实体 (概率分布)
+          if (t.h > 0.6) {
+            // 高山
+            if (rand < 0.01) entity = 'spawn';       // 小概率
+            else if (rand < 0.08) entity = 'insane';
+            else if (rand < 0.18) entity = 'hard';
+          } else if (t.riverVal < 0.04) {
+            // 河流
+            if (rand < 0.15) entity = 'normal';
+          } else {
+            // 平原
+            if (rand < 0.03) entity = 'spawn';       // 大概率
+            else if (rand < 0.15) entity = 'easy';
+          }
+
+          // 3. 出生点曼哈顿距离检查
+          if (entity === 'spawn') {
+            let tooClose = false;
+            for (const s of placedSpawns) {
+              if (Math.abs(wx - s.x) + Math.abs(wy - s.y) <= 3) {
+                tooClose = true;
+                break;
+              }
+            }
+            if (tooClose) {
+              entity = null; // 取消出生点
+            } else {
+              placedSpawns.push({ x: wx, y: wy });
+            }
+          }
+
+          // 4. 确保所有地方都有地形 kind
+          let kind = 'empty';
+          if (entity === 'spawn') {
+            kind = 'spawnpoint';
+            stats.spawn++;
+          } else if (entity) {
+            kind = 'problem';
+            if (entity === 'easy') stats.easy++;
+            else if (entity === 'normal') stats.normal++;
+            else if (entity === 'hard') stats.hard++;
+            else if (entity === 'insane') stats.insane++;
+          } else {
+            // 没有实体的天然地形转化
+            if (t.h > 0.6) kind = 'obstacle';       // 高山 -> 障碍物
+            else if (t.riverVal < 0.04) kind = 'obstacle'; // 河流 -> 障碍物
+            // 平原默认为 'empty'
+          }
+
+          cells.push({ row: r, col: c, wx, wy, t, kind, entity });
+        }
+      }
+
+      return { cells, stats };
     }
 
     // ==================================================================
@@ -421,115 +506,79 @@
       canvas.width = state.cols * CELL_SIZE;
       canvas.height = state.rows * CELL_SIZE;
       
-      const terrainMap = new TerrainMap(state.seed);
-      const stats = { spawn: 0, easy: 0, normal: 0, hard: 0, insane: 0 };
+      const { cells, stats } = generateGrid();
 
-      for (let r = 0; r < state.rows; r++) {
-        for (let c = 0; c < state.cols; c++) {
-          const px = c * CELL_SIZE;
-          const py = r * CELL_SIZE;
+      for (const cell of cells) {
+        const px = cell.col * CELL_SIZE;
+        const py = cell.row * CELL_SIZE;
 
-          // 1. 边界墙
-          if (r === 0 || r === state.rows - 1 || c === 0 || c === state.cols - 1) {
-            ctx.fillStyle = state.colors.wall;
-            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
-            // 砖块纹理
-            ctx.beginPath();
-            ctx.moveTo(px, py + CELL_SIZE / 2);
-            ctx.lineTo(px + CELL_SIZE, py + CELL_SIZE / 2);
-            ctx.moveTo(px + CELL_SIZE / 2, py);
-            ctx.lineTo(px + CELL_SIZE / 2, py + CELL_SIZE / 2);
-            ctx.moveTo(px, py + CELL_SIZE / 2);
-            ctx.lineTo(px, py + CELL_SIZE);
-            ctx.moveTo(px + CELL_SIZE, py + CELL_SIZE / 2);
-            ctx.lineTo(px + CELL_SIZE, py + CELL_SIZE);
-            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-            ctx.stroke();
-            continue;
-          }
-
-          const wx = state.offsetX + c;
-          const wy = state.offsetY + r;
-          const t = terrainMap.getTerrain(wx, wy);
-          
-          let baseColor = '#000';
-          
-          // 2. 地形着色
-          if (t.h > 0.6) {
-            // 高山：山脚鲜红，山顶暗红
-            const t_peak = Math.min(1, (t.h - 0.6) / 0.4);
-            baseColor = lerpColor(state.colors.mountainBright, state.colors.mountainDark, t_peak);
-          } else if (t.riverVal < 0.04) {
-            // 河流：岸边浅蓝，中心深蓝
-            const t_deep = Math.min(1, 1 - t.riverVal / 0.04);
-            baseColor = lerpColor(state.colors.riverLight, state.colors.riverDark, t_deep);
-          } else {
-            // 平原
-            // 靠山深绿，靠水浅绿
-            const t_mountain = Math.max(0, Math.min(1, (t.h - 0.4) / 0.2));
-            let plainColor = lerpColor(state.colors.plainLight, state.colors.plainDark, t_mountain);
-            
-            const t_river = Math.max(0, Math.min(1, (0.1 - t.riverVal) / 0.06));
-            if (t_river > 0) {
-              plainColor = lerpColor(plainColor, state.colors.plainLight, t_river);
-            }
-            baseColor = plainColor;
-          }
-
-          ctx.fillStyle = baseColor;
+        // 1. 绘制墙体
+        if (cell.kind === 'wall') {
+          ctx.fillStyle = state.colors.wall;
           ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+          ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+          ctx.beginPath();
+          ctx.moveTo(px, py + CELL_SIZE / 2);
+          ctx.lineTo(px + CELL_SIZE, py + CELL_SIZE / 2);
+          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+          ctx.stroke();
+          continue;
+        }
+
+        // 2. 绘制地形背景
+        let baseColor = '#000';
+        const { h, riverVal } = cell.t;
+        
+        if (h > 0.6) {
+          // 高山：山脚鲜红，山顶暗红
+          const t_peak = Math.min(1, (h - 0.6) / 0.4);
+          baseColor = lerpColor(state.colors.mountainBright, state.colors.mountainDark, t_peak);
+        } else if (riverVal < 0.04) {
+          // 河流：岸边浅蓝，中心深蓝
+          const t_deep = Math.min(1, 1 - riverVal / 0.04);
+          baseColor = lerpColor(state.colors.riverLight, state.colors.riverDark, t_deep);
+        } else {
+          // 平原：靠水浅绿，靠山深绿
+          const t_mountain = Math.max(0, Math.min(1, (h - 0.4) / 0.2));
+          let plainColor = lerpColor(state.colors.plainLight, state.colors.plainDark, t_mountain);
           
-          // 3. 生成实体 (题目 / 出生点)
-          const rand = hash(wx, wy, state.seed);
-          let entity = null;
+          const t_river = Math.max(0, Math.min(1, (0.1 - riverVal) / 0.06));
+          if (t_river > 0) plainColor = lerpColor(plainColor, state.colors.plainLight, t_river);
           
-          if (t.h > 0.6) {
-            if (rand < 0.005) entity = 'spawn';
-            else if (rand < 0.10) entity = 'insane';
-            else if (rand < 0.25) entity = 'hard';
-          } else if (t.riverVal < 0.04) {
-            if (rand < 0.20) entity = 'normal';
+          baseColor = plainColor;
+        }
+
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+
+        // 3. 绘制实体
+        if (cell.entity) {
+          ctx.font = 'bold 16px "Share Tech Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          if (cell.entity === 'spawn') {
+            ctx.beginPath();
+            ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI * 2);
+            ctx.fillStyle = state.colors.spawn;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
           } else {
-            if (rand < 0.02) entity = 'spawn';
-            else if (rand < 0.12) entity = 'easy';
-          }
-
-          if (entity) {
-            if (entity === 'spawn') stats.spawn++;
-            else if (entity === 'easy') stats.easy++;
-            else if (entity === 'normal') stats.normal++;
-            else if (entity === 'hard') stats.hard++;
-            else if (entity === 'insane') stats.insane++;
-
-            ctx.font = 'bold 16px "Share Tech Mono", monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            let char = '', color = '';
+            if (cell.entity === 'easy') { char = 'E'; color = '#22c55e'; }
+            if (cell.entity === 'normal') { char = 'N'; color = '#eab308'; }
+            if (cell.entity === 'hard') { char = 'H'; color = '#f97316'; }
+            if (cell.entity === 'insane') { char = 'I'; color = '#ef4444'; }
             
-            if (entity === 'spawn') {
-              ctx.beginPath();
-              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI * 2);
-              ctx.fillStyle = state.colors.spawn;
-              ctx.fill();
-              ctx.strokeStyle = '#000';
-              ctx.lineWidth = 2;
-              ctx.stroke();
-            } else {
-              let char = '', color = '';
-              if (entity === 'easy') { char = 'E'; color = '#22c55e'; }
-              if (entity === 'normal') { char = 'N'; color = '#eab308'; }
-              if (entity === 'hard') { char = 'H'; color = '#f97316'; }
-              if (entity === 'insane') { char = 'I'; color = '#ef4444'; }
-              
-              // 文字黑边+亮色填充，防止在地形上看不清
-              ctx.lineWidth = 4;
-              ctx.strokeStyle = '#000';
-              ctx.strokeText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
-              ctx.fillStyle = color;
-              ctx.fillText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
-            }
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#000';
+            ctx.strokeText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
+            ctx.fillStyle = color;
+            ctx.fillText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
           }
         }
       }
@@ -538,8 +587,7 @@
       document.getElementById('stat-spawn').textContent = stats.spawn;
       document.getElementById('stat-easy').textContent = stats.easy;
       document.getElementById('stat-normal').textContent = stats.normal;
-      document.getElementById('stat-hard').textContent = stats.hard;
-      document.getElementById('stat-insane').textContent = stats.insane;
+      document.getElementById('stat-hard').textContent = stats.hard + stats.insane;
     }
 
     // ==================================================================
@@ -560,7 +608,6 @@
       }
     }
 
-    // 鼠标拖拽
     canvas.addEventListener('mousedown', (e) => {
       isDragging = true;
       dragStartX = e.clientX;
@@ -586,7 +633,6 @@
 
     window.addEventListener('mouseup', () => { isDragging = false; });
 
-    // 键盘移动
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
       let moved = false;
@@ -605,7 +651,7 @@
     // 导出 JSON
     // ==================================================================
     document.getElementById('btn-export').addEventListener('click', () => {
-      const terrainMap = new TerrainMap(state.seed);
+      const { cells } = generateGrid();
       const exportData = {
         name: `Generated Map (Seed: ${state.seed})`,
         cols: state.cols,
@@ -614,50 +660,27 @@
         cells: []
       };
 
-      for (let r = 0; r < state.rows; r++) {
-        for (let c = 0; c < state.cols; c++) {
-          // 边界墙
-          if (r === 0 || r === state.rows - 1 || c === 0 || c === state.cols - 1) {
-            exportData.cells.push({ kind: "obstacle" });
-            continue;
-          }
-
-          const wx = state.offsetX + c;
-          const wy = state.offsetY + r;
-          const t = terrainMap.getTerrain(wx, wy);
-          const rand = hash(wx, wy, state.seed);
+      // 遍历并严格按照顺序推入数组
+      for (const cell of cells) {
+        if (cell.kind === 'wall') {
+          exportData.cells.push({ kind: "obstacle" });
+        } else if (cell.kind === 'spawnpoint') {
+          exportData.cells.push({ kind: "spawnpoint" });
+        } else if (cell.kind === 'obstacle') {
+          exportData.cells.push({ kind: "obstacle" });
+        } else if (cell.kind === 'problem') {
+          // 使用不同的占位题号代表不同难度
+          let pNo = 26001;
+          if (cell.entity === 'normal') pNo = 26002;
+          if (cell.entity === 'hard') pNo = 26003;
+          if (cell.entity === 'insane') pNo = 26004;
           
-          let entity = null;
-          if (t.h > 0.6) {
-            if (rand < 0.005) entity = 'spawn';
-            else if (rand < 0.10) entity = 'insane';
-            else if (rand < 0.25) entity = 'hard';
-          } else if (t.riverVal < 0.04) {
-            if (rand < 0.20) entity = 'normal';
-          } else {
-            if (rand < 0.02) entity = 'spawn';
-            else if (rand < 0.12) entity = 'easy';
-          }
-
-          if (entity === 'spawn') {
-            exportData.cells.push({ kind: "spawnpoint" });
-          } else if (entity === 'easy') {
-            exportData.cells.push({ kind: "problem", problemNo: 26001, type: "math" }); // 占位题号
-          } else if (entity === 'normal') {
-            exportData.cells.push({ kind: "problem", problemNo: 26002, type: "math" });
-          } else if (entity === 'hard') {
-            exportData.cells.push({ kind: "problem", problemNo: 26003, type: "math" });
-          } else if (entity === 'insane') {
-            exportData.cells.push({ kind: "problem", problemNo: 26004, type: "math" });
-          } else {
-            // 没有实体时，高山用障碍物填充，其他用空地
-            if (t.h > 0.6) exportData.cells.push({ kind: "obstacle" });
-            else exportData.cells.push({ kind: "empty" });
-          }
+          exportData.cells.push({ kind: "problem", problemNo: pNo, type: "math" });
+        } else {
+          exportData.cells.push({ kind: "empty" });
         }
       }
 
-      // 下载 JSON
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -668,7 +691,7 @@
       
       const toast = document.getElementById('page-toast');
       const toastMsg = document.getElementById('page-toast-message');
-      toastMsg.textContent = 'JSON 已导出！不同难度的题号通过 26001~26004 区分。';
+      toastMsg.textContent = 'JSON 已导出！所有格子均分配了有效的 kind。';
       toast.hidden = false;
       setTimeout(() => toast.hidden = true, 4500);
     });
@@ -700,7 +723,6 @@
       requestDraw();
     });
 
-    // 颜色选择器绑定
     const colorInputs = [
       { id: 'color-plain-light', key: 'plainLight' },
       { id: 'color-plain-dark', key: 'plainDark' },
@@ -720,7 +742,6 @@
       });
     });
 
-    // 初始化绘制
     requestDraw();
   </script>
 </body>
