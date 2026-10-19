@@ -3,12 +3,45 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Map editor · Territory Game</title>
+  <title>Terrain view · Territory Game</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+  <style>
+    .viewer-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.45);color:#f5d76e;font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:4px 12px;border-radius:20px;letter-spacing:1px;text-transform:uppercase}
+    .viewer-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .viewer-toolbar .back-button{margin-right:auto}
+    .map-info-panel{display:flex;flex-wrap:wrap;gap:28px;margin:16px 0 20px;padding:16px 22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px}
+    .map-info-panel .info-item{display:flex;flex-direction:column;gap:4px;min-width:96px}
+    .map-info-panel .info-label{font-family:'Share Tech Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.45)}
+    .map-info-panel .info-value{font-family:'Orbitron',sans-serif;font-size:1.15rem;font-weight:700;color:#e0e0e0}
+    .legend-row{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0 18px;align-items:center}
+    .legend-item{display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:.8rem;color:rgba(255,255,255,.75)}
+    .legend-swatch{width:18px;height:18px;border-radius:4px;border:1px solid rgba(255,255,255,.15);flex-shrink:0}
+    .legend-swatch.spawn{background:#4ade80;border-color:#22c55e;border-radius:50%}
+    .legend-swatch.obstacle{background:#78716c;border-color:#57534e}
+    .legend-swatch.problem{background:#3b82f6;border-color:#2563eb}
+    .legend-swatch.diff-easy{background:#22c55e;border-color:#16a34a}
+    .legend-swatch.diff-normal{background:#eab308;border-color:#ca8a04}
+    .legend-swatch.diff-hard{background:#f97316;border-color:#ea580c}
+    .legend-swatch.diff-insane{background:#ef4444;border-color:#dc2626}
+    #editor-grid .cell{position:relative}
+    #editor-grid .cell.difficulty-easy{background:#22c55e!important;border-color:#16a34a!important}
+    #editor-grid .cell.difficulty-normal{background:#eab308!important;border-color:#ca8a04!important}
+    #editor-grid .cell.difficulty-hard{background:#f97316!important;border-color:#ea580c!important}
+    #editor-grid .cell.difficulty-insane{background:#ef4444!important;border-color:#dc2626!important}
+    #editor-grid .cell.difficulty-unknown{background:#6b7280!important;border-color:#4b5563!important}
+    #editor-grid .cell.spawn-cell{background:#4ade80!important;border-color:#22c55e!important;border-radius:50%!important;box-shadow:0 0 8px rgba(74,222,128,.55)}
+    #editor-grid .cell.obstacle-cell{background:#78716c!important;border-color:#57534e!important}
+    #editor-grid .cell.spawn-cell::after{content:'';display:block;width:8px;height:8px;background:#fff;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+    #editor-grid .cell.obstacle-cell::after{content:'';display:block;width:60%;height:60%;border:2px solid rgba(255,255,255,.4);border-radius:2px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg)}
+    .no-edit-note{font-family:'Share Tech Mono',monospace;font-size:.75rem;color:rgba(255,255,255,.35);margin-top:6px}
+    .no-edit-note i{margin-right:4px}
+    .grid-loading{font-family:'Share Tech Mono',monospace;font-size:.85rem;color:rgba(255,255,255,.55);padding:24px 0}
+    #debug-log{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:rgba(255,255,255,.5);white-space:pre-wrap;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 14px;margin:12px 0;max-height:220px;overflow:auto}
+  </style>
 </head>
 <body>
   <div class="app">
@@ -31,116 +64,461 @@
     <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
     <main>
       <p id="load-error" class="form-error" hidden></p>
-      <div class="editor-toolbar">
+      <div class="editor-toolbar viewer-toolbar">
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
-          <a class="terrain-view-button" id="terrain-view-button" href="terrain-view.html" title="Open terrain view"><i class="fa-solid fa-mountain-sun" style="margin-right:6px;"></i>Terrain view</a>
-          <a class="terrain-view-button" id="difficulty-view-button" href="map-difficulty-visualise.html" title="Open difficulty map"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>Difficulty map</a>
-          <span id="problem-save-state" class="problem-save-state"></span>
-          <button class="save-changes" id="save-map-button" type="button" disabled>Save map</button>
-          <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
+          <span class="viewer-badge"><i class="fa-solid fa-eye"></i> View only</span>
         </div>
       </div>
-      <p class="eyebrow">Map editor</p>
+      <p class="eyebrow">Terrain view</p>
       <h1 id="editor-title"></h1>
       <p class="lead" id="editor-size"></p>
 
-      <div class="map-counts" id="map-counts"></div>
-
-      <label class="map-name-field">Name <input id="map-name-input" type="text" maxlength="60" /></label>
-
-      <div class="kind-choices" id="map-mode-choices" role="group" aria-label="Map mode">
-        <button type="button" data-map-mode="official">Official</button>
-        <button type="button" data-map-mode="testing">Testing</button>
+      <div class="map-info-panel">
+        <div class="info-item"><span class="info-label">Difficulty</span><span class="info-value" id="viewer-difficulty">—</span></div>
+        <div class="info-item"><span class="info-label">Spawn points</span><span class="info-value" id="viewer-spawn-count">0</span></div>
+        <div class="info-item"><span class="info-label">Obstacles</span><span class="info-value" id="viewer-obstacle-count">0</span></div>
+        <div class="info-item"><span class="info-label">Problems placed</span><span class="info-value" id="viewer-problem-count">0</span></div>
       </div>
 
-      <div class="editor-tools">
-        <div class="kind-choices" id="kind-choices" role="group" aria-label="Paint tool">
-          <button type="button" id="kind-problem" data-tool="problem" aria-pressed="true">Problem</button>
-          <button type="button" id="kind-spawnpoint" data-tool="spawnpoint" aria-pressed="false">Spawn point</button>
-          <button type="button" id="kind-obstacle" data-tool="obstacle" aria-pressed="false">Obstacle</button>
-          <button type="button" id="kind-empty" data-tool="empty" aria-pressed="false">Empty</button>
-        </div>
-
-        <div class="problem-options" id="problem-options">
-          <div class="kind-choices" id="place-mode-choices" role="group" aria-label="Placement mode">
-            <button type="button" data-place-mode="manual" aria-pressed="true">Manual</button>
-            <button type="button" data-place-mode="pick" aria-pressed="false">Pick from saved</button>
-          </div>
-
-          <div id="place-manual" class="place-types">
-            <div class="kind-choices" id="place-type-choices" role="group" aria-label="Problem type">
-              <button type="button" data-place-type="math" aria-pressed="true">Math</button>
-              <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
-              <button type="button" data-place-type="science" aria-pressed="false">Science</button>
-              <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
-              <button type="button" data-place-type="testing" aria-pressed="false" hidden>Testing</button>
-            </div>
-            <label id="problem-no-field">Problem no.
-              <input id="problem-no" type="number" min="1" max="99999" />
-            </label>
-            <label class="next-number">
-              <input id="next-number" type="checkbox" checked /> Increment after each placement
-            </label>
-            <p id="problem-no-error" class="form-error" hidden></p>
-          </div>
-
-          <div id="place-pick" hidden>
-            <div class="kind-choices" id="place-pick-types" role="group" aria-label="Allowed problem types">
-              <button type="button" data-pick-type="math" aria-pressed="true">Math</button>
-              <button type="button" data-pick-type="oi" aria-pressed="false">OI</button>
-              <button type="button" data-pick-type="science" aria-pressed="false">Science</button>
-              <button type="button" data-pick-type="puzzle" aria-pressed="false">Puzzle</button>
-              <button type="button" data-pick-type="testing" aria-pressed="false" hidden>Testing</button>
-            </div>
-            <div class="kind-choices" id="place-pick-difficulties" role="group" aria-label="Allowed difficulties">
-              <button type="button" data-pick-difficulty="easy" aria-pressed="true">Easy</button>
-              <button type="button" data-pick-difficulty="normal" aria-pressed="true">Normal</button>
-              <button type="button" data-pick-difficulty="hard" aria-pressed="true">Hard</button>
-              <button type="button" data-pick-difficulty="insane" aria-pressed="true">Insane</button>
-            </div>
-            <div class="kind-choices" id="place-pick-source" role="group" aria-label="Pick source">
-              <button type="button" data-pick-source="random" aria-pressed="true">Random</button>
-              <button type="button" data-pick-source="fixed" aria-pressed="false">Fixed index</button>
-              <button type="button" data-pick-source="range" aria-pressed="false">Index range</button>
-            </div>
-            <label id="place-fixed-field" hidden>Index <input id="place-fixed-index" type="number" min="1" max="99999" /></label>
-            <div id="place-range-field" class="place-range" hidden>
-              <label>From <input id="place-range-from" type="number" min="1" max="99999" /></label>
-              <label>To <input id="place-range-to" type="number" min="1" max="99999" /></label>
-            </div>
-          </div>
-        </div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-swatch spawn"></span> Spawn point</div>
+        <div class="legend-item"><span class="legend-swatch obstacle"></span> Obstacle</div>
+        <div class="legend-item"><span class="legend-swatch diff-easy"></span> Easy</div>
+        <div class="legend-item"><span class="legend-swatch diff-normal"></span> Normal</div>
+        <div class="legend-item"><span class="legend-swatch diff-hard"></span> Hard</div>
+        <div class="legend-item"><span class="legend-swatch diff-insane"></span> Insane</div>
+        <div class="legend-item"><span class="legend-swatch problem"></span> Problem (difficulty unknown)</div>
       </div>
 
-      <div class="grid-scroll"><div id="editor-grid" class="editor-grid"></div></div>
+      <p class="no-edit-note"><i class="fa-solid fa-lock"></i> Read-only view — problem types and IDs are hidden.</p>
+
+      <div class="grid-scroll">
+        <div id="editor-grid" class="editor-grid"><p class="grid-loading">Loading terrain…</p></div>
+      </div>
+
+      <pre id="debug-log" hidden></pre>
     </main>
   </div>
+
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
+
   <script type="module">
-    // Pass the current map ID (from the editor's URL) to the terrain view
-    // and the difficulty visualiser.
-    // The map editor is opened with ?map=<mapId> (or ?id=<mapId>).
-    (function () {
-      const params = new URLSearchParams(window.location.search);
-      const mapId = params.get('id') || params.get('map');
+    const gridEl          = document.getElementById('editor-grid');
+    const titleEl         = document.getElementById('editor-title');
+    const sizeEl          = document.getElementById('editor-size');
+    const difficultyEl    = document.getElementById('viewer-difficulty');
+    const spawnCountEl    = document.getElementById('viewer-spawn-count');
+    const obstacleCountEl = document.getElementById('viewer-obstacle-count');
+    const problemCountEl  = document.getElementById('viewer-problem-count');
+    const loadErrorEl     = document.getElementById('load-error');
+    const pageToast       = document.getElementById('page-toast');
+    const pageToastMsg    = document.getElementById('page-toast-message');
+    const pageToastClose  = document.getElementById('page-toast-close');
+    const debugLogEl      = document.getElementById('debug-log');
 
-      const terrainBtn = document.getElementById('terrain-view-button');
-      const difficultyBtn = document.getElementById('difficulty-view-button');
-
-      if (mapId) {
-        const enc = encodeURIComponent(mapId);
-        if (terrainBtn)    terrainBtn.href    = `terrain-view.html?id=${enc}`;
-        if (difficultyBtn) difficultyBtn.href = `map-difficulty-visualise.html?id=${enc}`;
-      } else {
-        if (terrainBtn)    terrainBtn.href    = 'terrain-view.html';
-        if (difficultyBtn) difficultyBtn.href = 'map-difficulty-visualise.html';
+    const DEBUG = true;
+    function log(...args) {
+      console.log('[terrain-view]', ...args);
+      if (DEBUG && debugLogEl) {
+        debugLogEl.hidden = false;
+        debugLogEl.textContent += args.map(a =>
+          typeof a === 'string' ? a : JSON.stringify(a, null, 0)
+        ).join(' ') + '\n';
       }
-    })();
+    }
+
+    function showToast(msg) {
+      if (!pageToast) return;
+      pageToastMsg.textContent = msg;
+      pageToast.hidden = false;
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { pageToast.hidden = true; }, 6000);
+    }
+    pageToastClose?.addEventListener('click', () => { pageToast.hidden = true; });
+
+    function getMapId() {
+      const p = new URLSearchParams(location.search);
+      return p.get('map') || p.get('id') || p.get('mapId') ||
+             p.get('uuid') || p.get('slug') || null;
+    }
+
+    // -----------------------------------------------------------------
+    // Endpoints — bootstrap first. Only ONE param name per attempt so we
+    // can log exactly which variant worked.
+    // -----------------------------------------------------------------
+    function mapEndpoints(id) {
+      const enc = encodeURIComponent(id);
+      return [
+        `/api/territory?action=bootstrap&map=${enc}`,
+        `/api/territory?action=bootstrap&id=${enc}`,
+        `/api/territory?action=bootstrap&mapId=${enc}`,
+        `/api/territory?action=bootstrap`,
+      ];
+    }
+
+    async function fetchBootstrap(mapId) {
+      const attempts = [];
+      for (const url of mapEndpoints(mapId)) {
+        try {
+          log('GET', url);
+          const res = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          });
+          attempts.push({ url, status: res.status });
+          log('  →', res.status, res.statusText);
+          if (!res.ok) continue;
+          const json = await res.json();
+          log('  → top-level keys:', Object.keys(json).join(', '));
+          return json;
+        } catch (err) {
+          attempts.push({ url, error: String(err) });
+          log('  → network error:', String(err));
+        }
+      }
+
+      // Storage fallback
+      for (const key of [`map:${mapId}`, `map-${mapId}`, `mapData:${mapId}`,
+                         `territory:map:${mapId}`, `bootstrap`]) {
+        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          log('storage fallback:', key);
+          return JSON.parse(raw);
+        } catch {}
+      }
+
+      const msg = attempts.map(a =>
+        a.status ? `${a.url} → HTTP ${a.status}` : `${a.url} → ${a.error}`
+      ).join('; ');
+      throw new Error(`All endpoints failed: ${msg}`);
+    }
+
+    // -----------------------------------------------------------------
+    // Extract the specific map from the bootstrap payload.
+    // Handles many container shapes + a deep-search last resort.
+    // -----------------------------------------------------------------
+    function extractMap(bootstrap, mapId) {
+      const idMatches = (m) =>
+        m && (m.id === mapId || m.uuid === mapId ||
+              m.mapId === mapId || m.map_id === mapId ||
+              m.slug === mapId);
+
+      const containers = [
+        bootstrap.map,
+        bootstrap.data?.map,
+        bootstrap.maps,
+        bootstrap.data?.maps,
+        bootstrap.mapList,
+        bootstrap.data?.mapList,
+        bootstrap.allMaps,
+        bootstrap.data?.allMaps,
+        bootstrap.territory?.maps,
+        bootstrap.data?.territory?.maps,
+      ];
+
+      for (const c of containers) {
+        if (!c) continue;
+        // Array of maps
+        if (Array.isArray(c)) {
+          const found = c.find(idMatches);
+          if (found) { log('found map in array container'); return { map: found, extras: bootstrap }; }
+        }
+        // Object keyed by id
+        else if (typeof c === 'object') {
+          if (c[mapId]) { log('found map keyed by id'); return { map: c[mapId], extras: bootstrap }; }
+          if (idMatches(c)) { log('found map as single object'); return { map: c, extras: bootstrap }; }
+          // Object whose values are maps
+          const vals = Object.values(c);
+          const found = vals.find(idMatches);
+          if (found) { log('found map among object values'); return { map: found, extras: bootstrap }; }
+        }
+      }
+
+      // If bootstrap itself is a map
+      if (idMatches(bootstrap) || bootstrap.cells || bootstrap.grid ||
+          bootstrap.problems || bootstrap.spawns || bootstrap.obstacles) {
+        log('treating bootstrap as the map itself');
+        return { map: bootstrap, extras: bootstrap };
+      }
+
+      // Last resort: deep search for an object whose id === mapId
+      const found = deepFind(bootstrap, mapId);
+      if (found) { log('found map via deep search'); return { map: found, extras: bootstrap }; }
+
+      // If there is exactly one map in a known list, use it
+      const lists = [
+        bootstrap.maps, bootstrap.data?.maps,
+        bootstrap.mapList, bootstrap.data?.mapList,
+      ].filter(Array.isArray);
+      if (lists.length === 1 && lists[0].length === 1) {
+        log('using sole map in list');
+        return { map: lists[0][0], extras: bootstrap };
+      }
+
+      const keys = Object.keys(bootstrap).join(', ');
+      throw new Error(
+        `Map "${mapId}" not found in bootstrap response. Top-level keys: ${keys}. ` +
+        `Open /api/territory?action=bootstrap in a tab and check where the map list is.`
+      );
+    }
+
+    function deepFind(obj, id, depth = 0, seen = new Set()) {
+      if (depth > 6 || obj == null || typeof obj !== 'object' || seen.has(obj)) return null;
+      seen.add(obj);
+      if (obj.id === id || obj.uuid === id || obj.mapId === id) return obj;
+      for (const v of Object.values(obj)) {
+        const found = deepFind(v, id, depth + 1, seen);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    // -----------------------------------------------------------------
+    // Normalize
+    // -----------------------------------------------------------------
+    function normalizeMapData(map, extras, fallbackId) {
+      const m = map.map || map.data || map;
+      const width  = m.width  || m.cols || m.columns || m.w || 20;
+      const height = m.height || m.rows || m.r        || 15;
+
+      const cells = [];
+      const push = (r, c, o) => {
+        if (r == null || c == null) return;
+        const type = o.type || o.kind || 'empty';
+        const isSpawn    = o.spawn === true    || type === 'spawnpoint' || type === 'spawn';
+        const isObstacle = o.obstacle === true || type === 'obstacle';
+        const isProblem  = !isSpawn && !isObstacle &&
+                           (type === 'problem' || o.problemNo != null ||
+                            o.problem_no != null || o.problemId != null ||
+                            o.difficulty != null);
+        cells.push({
+          row: +r, col: +c,
+          type: isSpawn ? 'spawnpoint' : isObstacle ? 'obstacle' : isProblem ? 'problem' : 'empty',
+          difficulty: (o.difficulty || o.diff || null)?.toLowerCase?.() || null,
+          spawn: isSpawn,
+          obstacle: isObstacle,
+        });
+      };
+
+      if (Array.isArray(m.cells)) {
+        for (const c of m.cells) push(c.row ?? c.y, c.col ?? c.x, c);
+      } else if (Array.isArray(m.grid)) {
+        m.grid.forEach((row, r) => {
+          if (!Array.isArray(row)) return;
+          row.forEach((v, c) => {
+            if (v == null) return;
+            if (typeof v === 'string') {
+              const t = v.toLowerCase();
+              const diff = ['easy','normal','hard','insane'].includes(t) ? t : null;
+              push(r, c, {
+                type: t === 'spawn' || t === 's'                ? 'spawnpoint'
+                    : t === 'obstacle' || t === 'o' || t === 'x' ? 'obstacle'
+                    : t === 'empty' || t === '.'                 ? 'empty'
+                    : 'problem',
+                difficulty: diff,
+              });
+            } else {
+              push(r, c, v);
+            }
+          });
+        });
+      }
+
+      (m.problems  || []).forEach(p => push(p.row ?? p.y, p.col ?? p.x, { ...p, type: 'problem' }));
+      (m.spawns    || []).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
+      (m.obstacles || []).forEach(o => push(o.row ?? o.y, o.col ?? o.x, { ...o, type: 'obstacle', obstacle: true }));
+      (m.spawnPoints || []).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
+
+      // Bootstrap-level arrays, filtered by map id
+      const ex = extras || {};
+      const id = m.id || fallbackId;
+      const belongsToUs = (x) =>
+        x.mapId === id || x.map === id || x.map_id === id ||
+        x.mapUuid === id || x.map_uuid === id;
+
+      (ex.problems  || []).filter(belongsToUs).forEach(p => push(p.row ?? p.y, p.col ?? p.x, { ...p, type: 'problem' }));
+      (ex.spawns    || []).filter(belongsToUs).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
+      (ex.obstacles || []).filter(belongsToUs).forEach(o => push(o.row ?? o.y, o.col ?? o.x, { ...o, type: 'obstacle', obstacle: true }));
+
+      // If the map object itself has no cells but bootstrap does, try unfiltered
+      if (cells.length === 0) {
+        (ex.spawns    || []).forEach(s => push(s.row ?? s.y, s.col ?? s.x, { ...s, type: 'spawnpoint', spawn: true }));
+        (ex.obstacles || []).forEach(o => push(o.row ?? o.y, o.col ?? o.x, { ...o, type: 'obstacle', obstacle: true }));
+        (ex.problems  || []).forEach(p => push(p.row ?? p.y, p.col ?? p.x, { ...p, type: 'problem' }));
+      }
+
+      const prio = x => x.spawn ? 3 : x.obstacle ? 2 : x.type === 'problem' ? 1 : 0;
+      const byPos = new Map();
+      for (const c of cells) {
+        const k = `${c.row},${c.col}`;
+        const cur = byPos.get(k);
+        if (!cur || prio(c) > prio(cur) ||
+            (prio(c) === prio(cur) && c.difficulty && !cur.difficulty)) {
+          byPos.set(k, c);
+        }
+      }
+
+      log('normalized:', { id, width, height, cells: byPos.size });
+
+      return {
+        id,
+        name: m.name || m.title || 'Untitled map',
+        width, height,
+        cells: [...byPos.values()],
+      };
+    }
+
+    // -----------------------------------------------------------------
+    // Render
+    // -----------------------------------------------------------------
+    function renderMap(map) {
+      titleEl.textContent = map.name;
+      sizeEl.textContent  = `${map.width} × ${map.height} cells`;
+
+      const spawns    = map.cells.filter(c => c.spawn);
+      const obstacles = map.cells.filter(c => c.obstacle);
+      const problems  = map.cells.filter(c => c.type === 'problem' && !c.spawn && !c.obstacle);
+
+      spawnCountEl.textContent    = spawns.length;
+      obstacleCountEl.textContent = obstacles.length;
+      problemCountEl.textContent  = problems.length;
+
+      const counts = {};
+      for (const p of problems) {
+        const d = p.difficulty || 'unknown';
+        counts[d] = (counts[d] || 0) + 1;
+      }
+      const keys = Object.keys(counts);
+      if (keys.length === 0) difficultyEl.textContent = '—';
+      else if (keys.length === 1) difficultyEl.textContent = capitalize(keys[0]);
+      else {
+        const sorted = keys.sort((a, b) => counts[b] - counts[a]);
+        const dom = sorted[0];
+        difficultyEl.textContent = counts[dom] / problems.length > 0.6
+          ? `${capitalize(dom)} (mostly)` : 'Mixed';
+      }
+
+      gridEl.innerHTML = '';
+      gridEl.style.display = 'grid';
+      gridEl.style.gridTemplateColumns = `repeat(${map.width}, 1fr)`;
+      gridEl.style.setProperty('--cols', map.width);
+      gridEl.style.setProperty('--rows', map.height);
+
+      const lookup = new Map();
+      for (const c of map.cells) lookup.set(`${c.row},${c.col}`, c);
+
+      for (let r = 0; r < map.height; r++) {
+        for (let c = 0; c < map.width; c++) {
+          const data = lookup.get(`${r},${c}`) || {
+            row: r, col: c, type: 'empty',
+            spawn: false, obstacle: false, difficulty: null,
+          };
+          const div = document.createElement('div');
+          div.className = 'cell';
+          div.dataset.row = r;
+          div.dataset.col = c;
+
+          if (data.spawn) {
+            div.classList.add('spawn-cell'); div.title = 'Spawn point';
+          } else if (data.obstacle) {
+            div.classList.add('obstacle-cell'); div.title = 'Obstacle';
+          } else if (data.type === 'problem') {
+            const d = data.difficulty;
+            if (['easy','normal','hard','insane'].includes(d)) {
+              div.classList.add(`difficulty-${d}`);
+              div.title = `Problem — ${capitalize(d)}`;
+            } else {
+              div.classList.add('difficulty-unknown');
+              div.title = 'Problem — difficulty unknown';
+            }
+          } else {
+            div.classList.add('cell-empty'); div.title = 'Empty';
+          }
+          gridEl.appendChild(div);
+        }
+      }
+    }
+
+    function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+    function createSampleMap() {
+      const width = 18, height = 12, cells = [];
+      [[0,0],[0,17],[11,0],[11,17]].forEach(([r,c]) =>
+        cells.push({ row: r, col: c, type: 'spawnpoint', spawn: true, obstacle: false, difficulty: null }));
+      [[2,3],[2,4],[2,5],[3,3],[3,5],[4,3],[4,4],[4,5],
+       [7,8],[7,9],[7,10],[8,8],[8,10],[9,8],[9,9],[9,10],
+       [5,12],[6,12],[7,12],[5,13],[6,13],[7,13]].forEach(([r,c]) => {
+        if (r < height && c < width)
+          cells.push({ row: r, col: c, type: 'obstacle', spawn: false, obstacle: true, difficulty: null });
+      });
+      const difficulties = ['easy','easy','easy','normal','normal','hard','hard','insane'];
+      let i = 0;
+      for (let r = 0; r < height; r++) for (let c = 0; c < width; c++) {
+        if (cells.some(x => x.row === r && x.col === c)) continue;
+        if ((r * 3 + c * 7) % 5 === 0 && Math.random() > 0.3) {
+          cells.push({ row: r, col: c, type: 'problem', spawn: false, obstacle: false,
+                       difficulty: difficulties[i++ % difficulties.length] });
+        }
+      }
+      return { id: 'sample', name: 'Sample Territory Map', width, height, cells };
+    }
+
+    async function init() {
+      const mapId = getMapId();
+      if (!mapId) {
+        loadErrorEl.hidden = false;
+        loadErrorEl.textContent = 'No map ID in URL. Open as terrain-view.html?map=<mapId>.';
+        renderMap(createSampleMap());
+        return;
+      }
+
+      try {
+        const bootstrap = await fetchBootstrap(mapId);
+        const { map, extras } = extractMap(bootstrap, mapId);
+        const normalized = normalizeMapData(map, extras, mapId);
+        if (normalized.cells.length === 0) {
+          loadErrorEl.hidden = false;
+          loadErrorEl.textContent =
+            `Map "${mapId}" was found in bootstrap, but no cells/spawns/obstacles could be parsed. ` +
+            `Check the debug log below for the response shape.`;
+          renderMap(normalized);
+          return;
+        }
+        loadErrorEl.hidden = true;
+        renderMap(normalized);
+      } catch (err) {
+        console.error('[terrain-view]', err);
+        loadErrorEl.hidden = false;
+        loadErrorEl.textContent = `Could not load map "${mapId}": ${err.message}`;
+        gridEl.innerHTML = '<p class="grid-loading">Map could not be loaded.</p>';
+        showToast('Map not found — see debug log below.');
+        if (debugLogEl) debugLogEl.hidden = false;
+      }
+    }
+
+    init();
+
+    const menuButton = document.getElementById('menu-button');
+    const sidebar    = document.querySelector('.sidebar');
+    const backdrop   = document.querySelector('.sidebar-backdrop');
+    if (menuButton && sidebar) {
+      menuButton.addEventListener('click', () => {
+        const expanded = menuButton.getAttribute('aria-expanded') === 'true';
+        menuButton.setAttribute('aria-expanded', String(!expanded));
+        sidebar.classList.toggle('open');
+        if (backdrop) backdrop.hidden = expanded;
+      });
+    }
+    backdrop?.addEventListener('click', () => {
+      sidebar?.classList.remove('open');
+      menuButton?.setAttribute('aria-expanded', 'false');
+      if (backdrop) backdrop.hidden = true;
+    });
   </script>
-  <script type="module" src="/app/admin-map-editor.js"></script>
 </body>
 </html>
