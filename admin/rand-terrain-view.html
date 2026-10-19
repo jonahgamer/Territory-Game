@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terrain Generator · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .generator-layout {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      margin-top: 20px;
+    }
+
+    .canvas-container {
+      flex: 1;
+      min-width: 0;
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: #060910;
+      padding: 16px;
+      box-shadow: 0 0 24px rgba(62, 224, 255, 0.04);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+
+    #map-canvas {
+      cursor: grab;
+      image-rendering: pixelated;
+    }
+    #map-canvas:active {
+      cursor: grabbing;
+    }
+
+    .controls-panel {
+      width: 320px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel-box {
+      background: rgba(8, 18, 32, 0.72);
+      border: 1px solid var(--line);
+      padding: 16px;
+      box-shadow: 0 0 24px rgba(62, 224, 255, 0.04);
+    }
+
+    .panel-box h3 {
+      margin: 0 0 12px;
+      font-family: var(--font-ui);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      border-bottom: 1px solid rgba(62, 224, 255, 0.2);
+      padding-bottom: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .control-row input[type="number"], .control-row input[type="text"] {
+      width: 80px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      background: rgba(4, 12, 22, 0.85);
+      color: var(--ink);
+      font-family: var(--font-ui);
+      text-align: right;
+    }
+
+    .control-row input[type="color"] {
+      width: 40px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--line);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      background: rgba(62, 224, 255, 0.12);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background: rgba(62, 224, 255, 0.25);
+    }
+    .btn.export {
+      border-color: #4ade80;
+      color: #4ade80;
+      background: rgba(74, 222, 128, 0.1);
+    }
+    .btn.export:hover {
+      background: rgba(74, 222, 128, 0.25);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .stat-val {
+      font-family: var(--font-display);
+      font-size: 18px;
+      color: var(--ink);
+      margin-top: 4px;
+    }
+    .stat-val.spawn { color: #facc15; }
+    .stat-val.easy { color: #22c55e; }
+    .stat-val.normal { color: #eab308; }
+    .stat-val.hard { color: #f97316; }
+    .stat-val.insane { color: #ef4444; }
+
+    .nav-hint {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <div class="editor-toolbar">
+        <a class="back-button" href="/admin/maps.html">Back to maps</a>
+        <div class="editor-toolbar-actions">
+          <span class="viewer-badge" style="background:rgba(255,255,255,0.1); border-color:#fff; color:#fff;"><i class="fa-solid fa-wand-magic-sparkles"></i> Noise Generator</span>
+        </div>
+      </div>
+
+      <p class="eyebrow">Terrain Generator</p>
+      <h1>Noise Map</h1>
+      <p class="lead">实时生成并框选地图。点击画面并拖拽，或使用键盘 WASD 移动取景框。</p>
+
+      <div class="generator-layout">
+        <div class="canvas-container" id="canvas-container">
+          <canvas id="map-canvas"></canvas>
+        </div>
+
+        <div class="controls-panel">
+          <!-- 统计信息 -->
+          <div class="panel-box">
+            <h3>视野内统计</h3>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">出生点</span>
+                <span class="stat-val spawn" id="stat-spawn">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Easy</span>
+                <span class="stat-val easy" id="stat-easy">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Normal</span>
+                <span class="stat-val normal" id="stat-normal">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Hard</span>
+                <span class="stat-val hard" id="stat-hard">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Insane</span>
+                <span class="stat-val insane" id="stat-insane">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生成设置 -->
+          <div class="panel-box">
+            <h3>地图设置</h3>
+            <div class="control-row">
+              <span>随机种子</span>
+              <div style="display:flex; gap:8px;">
+                <input type="number" id="input-seed" value="12345" />
+                <button id="btn-random-seed" style="padding:4px 8px; background:transparent; border:1px solid var(--line); color:var(--cyan); cursor:pointer;">🎲</button>
+              </div>
+            </div>
+            <div class="control-row">
+              <span>视口宽度 (格)</span>
+              <input type="number" id="input-cols" value="20" min="5" max="40" />
+            </div>
+            <div class="control-row">
+              <span>视口高度 (格)</span>
+              <input type="number" id="input-rows" value="20" min="5" max="40" />
+            </div>
+            <button id="btn-export" class="btn export">导出为 JSON</button>
+          </div>
+
+          <!-- 颜色自定义 -->
+          <div class="panel-box">
+            <h3>地形颜色调整</h3>
+            <div class="control-row">
+              <span>平原浅色 (临水)</span>
+              <input type="color" id="color-plain-light" value="#a3e635" />
+            </div>
+            <div class="control-row">
+              <span>平原深色 (临山)</span>
+              <input type="color" id="color-plain-dark" value="#166534" />
+            </div>
+            <div class="control-row">
+              <span>河流浅色 (岸边)</span>
+              <input type="color" id="color-river-light" value="#7dd3fc" />
+            </div>
+            <div class="control-row">
+              <span>河流深色 (中心)</span>
+              <input type="color" id="color-river-dark" value="#1e3a8a" />
+            </div>
+            <div class="control-row">
+              <span>高山鲜红 (山脚)</span>
+              <input type="color" id="color-mountain-bright" value="#f87171" />
+            </div>
+            <div class="control-row">
+              <span>高山暗红 (山顶)</span>
+              <input type="color" id="color-mountain-dark" value="#7f1d1d" />
+            </div>
+            <div class="control-row">
+              <span>边界墙体</span>
+              <input type="color" id="color-wall" value="#334155" />
+            </div>
+            <div class="control-row">
+              <span>出生点标记</span>
+              <input type="color" id="color-spawn" value="#facc15" />
+            </div>
+          </div>
+          <div class="nav-hint">↑ ↓ ← → / W A S D 移动视口</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+
+  <script type="module">
+    // ==================================================================
+    // 配置与状态
+    // ==================================================================
+    const state = {
+      seed: 12345,
+      offsetX: 0,
+      offsetY: 0,
+      cols: 20,
+      rows: 20,
+      colors: {
+        plainLight: '#a3e635',
+        plainDark: '#166534',
+        riverLight: '#7dd3fc',
+        riverDark: '#1e3a8a',
+        mountainBright: '#f87171',
+        mountainDark: '#7f1d1d',
+        wall: '#334155',
+        spawn: '#facc15'
+      }
+    };
+
+    const canvas = document.getElementById('map-canvas');
+    const ctx = canvas.getContext('2d');
+    const CELL_SIZE = 24;
+
+    // ==================================================================
+    // 柏林噪声算法与地形生成
+    // ==================================================================
+    function mulberry32(a) {
+      return function() {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      }
+    }
+
+    class Noise {
+      constructor(seed) {
+        this.perm = new Uint8Array(512);
+        let rand = mulberry32(seed);
+        let p = Array.from({ length: 256 }, (_, i) => i);
+        for (let i = 255; i > 0; i--) {
+          let j = Math.floor(rand() * (i + 1));
+          [p[i], p[j]] = [p[j], p[i]];
+        }
+        for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+      }
+      fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+      lerp(t, a, b) { return a + t * (b - a); }
+      grad(hash, x, y) {
+        let h = hash & 7;
+        let u = h < 4 ? x : y;
+        let v = h < 4 ? y : x;
+        return ((h & 1) ? -u : u) + ((h & 2) ? -2.0 * v : 2.0 * v);
+      }
+      perlin(x, y) {
+        let X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+        x -= Math.floor(x); y -= Math.floor(y);
+        let u = this.fade(x), v = this.fade(y);
+        let A = this.perm[X] + Y, AA = this.perm[A], AB = this.perm[A + 1];
+        let B = this.perm[X + 1] + Y, BA = this.perm[B], BB = this.perm[B + 1];
+        return this.lerp(v, this.lerp(u, this.grad(this.perm[AA], x, y), this.grad(this.perm[BA], x - 1, y)),
+          this.lerp(u, this.grad(this.perm[AB], x, y - 1), this.grad(this.perm[BB], x - 1, y - 1)));
+      }
+      fbm(x, y, octaves, lacunarity, gain) {
+        let amp = 1.0, freq = 1.0, sum = 0.0;
+        for (let i = 0; i < octaves; i++) {
+          sum += amp * this.perlin(x * freq, y * freq);
+          freq *= lacunarity;
+          amp *= gain;
+        }
+        return (sum + 1) / 2; // 映射到 0~1
+      }
+    }
+
+    class TerrainMap {
+      constructor(seed) {
+        this.noiseElevation = new Noise(seed);
+        this.noiseRiver = new Noise(seed + 1);
+        this.noiseDetail = new Noise(seed + 2);
+      }
+      getTerrain(x, y) {
+        const scale = 0.03;
+        let base = this.noiseElevation.fbm(x * scale, y * scale, 3, 2.0, 0.5);
+        let detail = this.noiseDetail.fbm(x * 0.1, y * 0.1, 2, 2.0, 0.5);
+        let h = base * 0.8 + detail * 0.2;
+        h = Math.pow(h, 1.3); // 让平原多，高山少且集中
+        
+        let r1 = this.noiseRiver.fbm(x * 0.02, y * 0.02, 2, 2.0, 0.5);
+        let r2 = this.noiseRiver.fbm(x * 0.02 + 100, y * 0.02 + 100, 2, 2.0, 0.5);
+        let riverVal = Math.abs(r1 - r2); // 0 到 1，越小越靠近河道中心
+        
+        return { h, riverVal };
+      }
+    }
+
+    // 哈希随机数（保证相同坐标生成相同的实体）
+    function hash(x, y, seed) {
+      let h = x * 374761393 + y * 668265263 + seed * 1442695040888963407;
+      h = (h ^ (h >> 13)) * 1274126177;
+      return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+    }
+
+    // ==================================================================
+    // 颜色处理
+    // ==================================================================
+    function hexToRgb(hex) {
+      const bigint = parseInt(hex.slice(1), 16);
+      return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+    }
+    function rgbToHex(r, g, b) {
+      return '#' + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
+    }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerpColor(c1, c2, t) {
+      const r1 = hexToRgb(c1), r2 = hexToRgb(c2);
+      return rgbToHex(
+        Math.round(lerp(r1[0], r2[0], t)),
+        Math.round(lerp(r1[1], r2[1], t)),
+        Math.round(lerp(r1[2], r2[2], t))
+      );
+    }
+
+    // ==================================================================
+    // 渲染引擎
+    // ==================================================================
+    function drawMap() {
+      canvas.width = state.cols * CELL_SIZE;
+      canvas.height = state.rows * CELL_SIZE;
+      
+      const terrainMap = new TerrainMap(state.seed);
+      const stats = { spawn: 0, easy: 0, normal: 0, hard: 0, insane: 0 };
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const px = c * CELL_SIZE;
+          const py = r * CELL_SIZE;
+
+          // 1. 边界墙
+          if (r === 0 || r === state.rows - 1 || c === 0 || c === state.cols - 1) {
+            ctx.fillStyle = state.colors.wall;
+            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
+            // 砖块纹理
+            ctx.beginPath();
+            ctx.moveTo(px, py + CELL_SIZE / 2);
+            ctx.lineTo(px + CELL_SIZE, py + CELL_SIZE / 2);
+            ctx.moveTo(px + CELL_SIZE / 2, py);
+            ctx.lineTo(px + CELL_SIZE / 2, py + CELL_SIZE / 2);
+            ctx.moveTo(px, py + CELL_SIZE / 2);
+            ctx.lineTo(px, py + CELL_SIZE);
+            ctx.moveTo(px + CELL_SIZE, py + CELL_SIZE / 2);
+            ctx.lineTo(px + CELL_SIZE, py + CELL_SIZE);
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.stroke();
+            continue;
+          }
+
+          const wx = state.offsetX + c;
+          const wy = state.offsetY + r;
+          const t = terrainMap.getTerrain(wx, wy);
+          
+          let baseColor = '#000';
+          
+          // 2. 地形着色
+          if (t.h > 0.6) {
+            // 高山：山脚鲜红，山顶暗红
+            const t_peak = Math.min(1, (t.h - 0.6) / 0.4);
+            baseColor = lerpColor(state.colors.mountainBright, state.colors.mountainDark, t_peak);
+          } else if (t.riverVal < 0.04) {
+            // 河流：岸边浅蓝，中心深蓝
+            const t_deep = Math.min(1, 1 - t.riverVal / 0.04);
+            baseColor = lerpColor(state.colors.riverLight, state.colors.riverDark, t_deep);
+          } else {
+            // 平原
+            // 靠山深绿，靠水浅绿
+            const t_mountain = Math.max(0, Math.min(1, (t.h - 0.4) / 0.2));
+            let plainColor = lerpColor(state.colors.plainLight, state.colors.plainDark, t_mountain);
+            
+            const t_river = Math.max(0, Math.min(1, (0.1 - t.riverVal) / 0.06));
+            if (t_river > 0) {
+              plainColor = lerpColor(plainColor, state.colors.plainLight, t_river);
+            }
+            baseColor = plainColor;
+          }
+
+          ctx.fillStyle = baseColor;
+          ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+          
+          // 3. 生成实体 (题目 / 出生点)
+          const rand = hash(wx, wy, state.seed);
+          let entity = null;
+          
+          if (t.h > 0.6) {
+            if (rand < 0.005) entity = 'spawn';
+            else if (rand < 0.10) entity = 'insane';
+            else if (rand < 0.25) entity = 'hard';
+          } else if (t.riverVal < 0.04) {
+            if (rand < 0.20) entity = 'normal';
+          } else {
+            if (rand < 0.02) entity = 'spawn';
+            else if (rand < 0.12) entity = 'easy';
+          }
+
+          if (entity) {
+            if (entity === 'spawn') stats.spawn++;
+            else if (entity === 'easy') stats.easy++;
+            else if (entity === 'normal') stats.normal++;
+            else if (entity === 'hard') stats.hard++;
+            else if (entity === 'insane') stats.insane++;
+
+            ctx.font = 'bold 16px "Share Tech Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            if (entity === 'spawn') {
+              ctx.beginPath();
+              ctx.arc(px + CELL_SIZE/2, py + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI * 2);
+              ctx.fillStyle = state.colors.spawn;
+              ctx.fill();
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            } else {
+              let char = '', color = '';
+              if (entity === 'easy') { char = 'E'; color = '#22c55e'; }
+              if (entity === 'normal') { char = 'N'; color = '#eab308'; }
+              if (entity === 'hard') { char = 'H'; color = '#f97316'; }
+              if (entity === 'insane') { char = 'I'; color = '#ef4444'; }
+              
+              // 文字黑边+亮色填充，防止在地形上看不清
+              ctx.lineWidth = 4;
+              ctx.strokeStyle = '#000';
+              ctx.strokeText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
+              ctx.fillStyle = color;
+              ctx.fillText(char, px + CELL_SIZE/2, py + CELL_SIZE/2 + 1);
+            }
+          }
+        }
+      }
+      
+      // 更新 UI 统计
+      document.getElementById('stat-spawn').textContent = stats.spawn;
+      document.getElementById('stat-easy').textContent = stats.easy;
+      document.getElementById('stat-normal').textContent = stats.normal;
+      document.getElementById('stat-hard').textContent = stats.hard;
+      document.getElementById('stat-insane').textContent = stats.insane;
+    }
+
+    // ==================================================================
+    // 交互逻辑
+    // ==================================================================
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let startOffsetX = 0, startOffsetY = 0;
+    let rafPending = false;
+
+    function requestDraw() {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(() => {
+          drawMap();
+          rafPending = false;
+        });
+      }
+    }
+
+    // 鼠标拖拽
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      startOffsetX = state.offsetX;
+      startOffsetY = state.offsetY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = Math.round((dragStartX - e.clientX) / CELL_SIZE);
+      const dy = Math.round((dragStartY - e.clientY) / CELL_SIZE);
+      if (dx !== 0 || dy !== 0) {
+        state.offsetX = startOffsetX + dx;
+        state.offsetY = startOffsetY + dy;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        startOffsetX = state.offsetX;
+        startOffsetY = state.offsetY;
+        requestDraw();
+      }
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // 键盘移动
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      let moved = false;
+      if (key === 'w' || e.key === 'ArrowUp') { state.offsetY -= 1; moved = true; }
+      if (key === 's' || e.key === 'ArrowDown') { state.offsetY += 1; moved = true; }
+      if (key === 'a' || e.key === 'ArrowLeft') { state.offsetX -= 1; moved = true; }
+      if (key === 'd' || e.key === 'ArrowRight') { state.offsetX += 1; moved = true; }
+      
+      if (moved) {
+        e.preventDefault();
+        requestDraw();
+      }
+    });
+
+    // ==================================================================
+    // 导出 JSON
+    // ==================================================================
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const terrainMap = new TerrainMap(state.seed);
+      const exportData = {
+        name: `Generated Map (Seed: ${state.seed})`,
+        cols: state.cols,
+        rows: state.rows,
+        mode: "official",
+        cells: []
+      };
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          // 边界墙
+          if (r === 0 || r === state.rows - 1 || c === 0 || c === state.cols - 1) {
+            exportData.cells.push({ kind: "obstacle" });
+            continue;
+          }
+
+          const wx = state.offsetX + c;
+          const wy = state.offsetY + r;
+          const t = terrainMap.getTerrain(wx, wy);
+          const rand = hash(wx, wy, state.seed);
+          
+          let entity = null;
+          if (t.h > 0.6) {
+            if (rand < 0.005) entity = 'spawn';
+            else if (rand < 0.10) entity = 'insane';
+            else if (rand < 0.25) entity = 'hard';
+          } else if (t.riverVal < 0.04) {
+            if (rand < 0.20) entity = 'normal';
+          } else {
+            if (rand < 0.02) entity = 'spawn';
+            else if (rand < 0.12) entity = 'easy';
+          }
+
+          if (entity === 'spawn') {
+            exportData.cells.push({ kind: "spawnpoint" });
+          } else if (entity === 'easy') {
+            exportData.cells.push({ kind: "problem", problemNo: 26001, type: "math" }); // 占位题号
+          } else if (entity === 'normal') {
+            exportData.cells.push({ kind: "problem", problemNo: 26002, type: "math" });
+          } else if (entity === 'hard') {
+            exportData.cells.push({ kind: "problem", problemNo: 26003, type: "math" });
+          } else if (entity === 'insane') {
+            exportData.cells.push({ kind: "problem", problemNo: 26004, type: "math" });
+          } else {
+            // 没有实体时，高山用障碍物填充，其他用空地
+            if (t.h > 0.6) exportData.cells.push({ kind: "obstacle" });
+            else exportData.cells.push({ kind: "empty" });
+          }
+        }
+      }
+
+      // 下载 JSON
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `map-seed-${state.seed}-${state.cols}x${state.rows}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      const toast = document.getElementById('page-toast');
+      const toastMsg = document.getElementById('page-toast-message');
+      toastMsg.textContent = 'JSON 已导出！不同难度的题号通过 26001~26004 区分。';
+      toast.hidden = false;
+      setTimeout(() => toast.hidden = true, 4500);
+    });
+
+    // ==================================================================
+    // UI 绑定
+    // ==================================================================
+    document.getElementById('input-seed').addEventListener('change', (e) => {
+      state.seed = parseInt(e.target.value) || 12345;
+      requestDraw();
+    });
+
+    document.getElementById('btn-random-seed').addEventListener('click', () => {
+      const randomSeed = Math.floor(Math.random() * 999999) + 1;
+      document.getElementById('input-seed').value = randomSeed;
+      state.seed = randomSeed;
+      requestDraw();
+    });
+
+    document.getElementById('input-cols').addEventListener('change', (e) => {
+      state.cols = Math.max(5, Math.min(40, parseInt(e.target.value) || 20));
+      e.target.value = state.cols;
+      requestDraw();
+    });
+
+    document.getElementById('input-rows').addEventListener('change', (e) => {
+      state.rows = Math.max(5, Math.min(40, parseInt(e.target.value) || 20));
+      e.target.value = state.rows;
+      requestDraw();
+    });
+
+    // 颜色选择器绑定
+    const colorInputs = [
+      { id: 'color-plain-light', key: 'plainLight' },
+      { id: 'color-plain-dark', key: 'plainDark' },
+      { id: 'color-river-light', key: 'riverLight' },
+      { id: 'color-river-dark', key: 'riverDark' },
+      { id: 'color-mountain-bright', key: 'mountainBright' },
+      { id: 'color-mountain-dark', key: 'mountainDark' },
+      { id: 'color-wall', key: 'wall' },
+      { id: 'color-spawn', key: 'spawn' }
+    ];
+
+    colorInputs.forEach(({ id, key }) => {
+      const input = document.getElementById(id);
+      input.addEventListener('input', (e) => {
+        state.colors[key] = e.target.value;
+        requestDraw();
+      });
+    });
+
+    // 初始化绘制
+    requestDraw();
+  </script>
+</body>
+</html>
