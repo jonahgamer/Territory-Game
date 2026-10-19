@@ -20,6 +20,36 @@ function deleteOpenMap() {
   else showMaps();
 }
 
+function mapMode(map) {
+  return map?.mode === "testing" ? "testing" : "official";
+}
+
+function onCreateMapModeClick(event) {
+  const button = event.target.closest("[data-map-mode]");
+  if (!button) return;
+  newMapMode = button.dataset.mapMode === "testing" ? "testing" : "official";
+  renderMapModeButtons(createMapMode, newMapMode);
+}
+
+function onMapModeClick(event) {
+  const button = event.target.closest("[data-map-mode]");
+  const map = currentMap();
+  if (!button || !map) return;
+  const mode = button.dataset.mapMode === "testing" ? "testing" : "official";
+  if (mapMode(map) === mode) return;
+  map.mode = mode;
+  renderMapModeButtons(mapModeChoices, mode);
+  markMapDirty();
+  renderMaps();
+}
+
+function renderMapModeButtons(container, mode) {
+  if (!container) return;
+  for (const button of container.querySelectorAll("[data-map-mode]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.mapMode === mode));
+  }
+}
+
 function createMap(event) {
   event.preventDefault();
   const name = readMapName(mapNameInput.value);
@@ -44,6 +74,7 @@ function createMap(event) {
     cols,
     rows,
     cells: emptyCells(cols * rows),
+    mode: newMapMode,
   });
   persistMaps();
   mapNameInput.value = "";

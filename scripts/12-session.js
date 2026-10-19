@@ -119,6 +119,8 @@ function applyContestPlayState(contest, data) {
     contest.contestantIds = contest.teams.flatMap((team) => team.members);
   }
   if (typeof next.spawnResolved === "boolean") contest.spawnResolved = next.spawnResolved;
+  if (next.mode === "testing" || next.mode === "competition") contest.mode = next.mode;
+  if (Array.isArray(next.resolvedTeams)) contest.resolvedTeams = next.resolvedTeams.filter((id) => typeof id === "string");
   if (Array.isArray(next.spawnChoices)) contest.spawnChoices = normalizeTeamCells(next.spawnChoices);
   if (Array.isArray(next.spawnVotes)) contest.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
   if (Array.isArray(next.spawns)) contest.spawns = normalizeTeamCells(next.spawns);
@@ -427,6 +429,7 @@ async function syncContest(contest) {
       votes: contest.spawnVotes,
       spawns: contest.spawns,
       resolved: contest.spawnResolved,
+      resolvedTeams: contest.resolvedTeams,
       claims: contest.claims,
     });
     if (key === contestSyncKey) return;
@@ -436,7 +439,7 @@ async function syncContest(contest) {
       const map = maps.find((item) => item.id === contest.mapId);
       renderContestTeams(contest, map);
       renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
-      renderAdminBoard(contest, map);
+      renderAdminBoard(isTestingContest(contest) ? contestAsTeam(contest, adminViewTeamId) : contest, map);
     }
   } catch {
     // The next tick tries again.

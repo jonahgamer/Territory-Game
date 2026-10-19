@@ -25,12 +25,101 @@ function showContest(contestId) {
   if (editingTeamId) resetTeamForm();
   openMapId = null;
   openContestId = contestId;
+  adminViewTeamId = null;
   editingProblemNo = null;
   editingProblemType = null;
   hideViews();
   contestView.hidden = false;
   setCurrentSection(competitionsButton);
   renderContest();
+}
+
+function isTestingContest(contest) {
+  return contest?.mode === "testing";
+}
+
+function teamSpawnReady(contest, teamId) {
+  if (!contest) return false;
+  if (isTestingContest(contest)) return (contest.resolvedTeams || []).includes(teamId);
+  return contest.spawnResolved === true;
+}
+
+function contestAsTeam(contest, teamId) {
+  if (!isTestingContest(contest) || !teamId) return contest;
+  return {
+    ...contest,
+    teams: (contest.teams || []).filter((team) => team.id === teamId),
+    spawnResolved: teamSpawnReady(contest, teamId),
+    spawnChoices: (contest.spawnChoices || []).filter((choice) => choice.teamId === teamId),
+    spawnVotes: (contest.spawnVotes || []).filter((vote) => vote.teamId === teamId),
+    spawns: (contest.spawns || []).filter((spawn) => spawn.teamId === teamId),
+    claims: (contest.claims || []).filter((claim) => claim.teamId === teamId),
+  };
+}
+
+function onCreateContestModeClick(event) {
+  const button = event.target.closest("[data-contest-mode]");
+  if (!button) return;
+  newContestMode = button.dataset.contestMode === "testing" ? "testing" : "competition";
+  renderContestModeButtons(createContestMode, newContestMode);
+  if (contestMapSelect) {
+    fillMapSelect(contestMapSelect, contestMapSelect.value, newContestMode);
+    updateContestSpawnNote(contestMapSelect, contestMapNote);
+  }
+}
+
+function onContestModeClick(event) {
+  const button = event.target.closest("[data-contest-mode]");
+  const contest = currentContest();
+  if (!button || !contest || isContestant()) return;
+  const mode = button.dataset.contestMode === "testing" ? "testing" : "competition";
+  if (contest.mode === mode) return;
+  contest.mode = mode;
+  contest.spawns = [];
+  contest.spawnChoices = [];
+  contest.spawnVotes = [];
+  contest.claims = [];
+  contest.spawnResolved = false;
+  contest.resolvedTeams = [];
+  adminViewTeamId = null;
+  renderContest();
+  persistContests();
+}
+
+function onTestingTeamViewClick(event) {
+  const button = event.target.closest("[data-view-team]");
+  if (!button) return;
+  adminViewTeamId = button.dataset.viewTeam;
+  const contest = currentContest();
+  const map = contest && maps.find((item) => item.id === contest.mapId);
+  renderTestingTeamView(contest);
+  renderAdminBoard(contestAsTeam(contest, adminViewTeamId), map);
+}
+
+function renderContestModeButtons(container, mode) {
+  if (!container) return;
+  for (const button of container.querySelectorAll("[data-contest-mode]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.contestMode === mode));
+  }
+}
+
+function renderTestingTeamView(contest) {
+  if (!testingTeamView) return;
+  const testing = isTestingContest(contest);
+  testingTeamView.hidden = !testing;
+  testingTeamView.replaceChildren();
+  if (!testing) return;
+  if (!adminViewTeamId || !(contest.teams || []).some((team) => team.id === adminViewTeamId)) {
+    adminViewTeamId = contest.teams?.[0]?.id || null;
+  }
+  for (const team of contest.teams || []) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.viewTeam = team.id;
+    button.textContent = team.name;
+    button.setAttribute("aria-pressed", String(team.id === adminViewTeamId));
+    testingTeamView.append(button);
+  }
 }
 
 function createContest(event) {
@@ -48,9 +137,13 @@ function createContest(event) {
     return;
   }
   const mapId = contestMapSelect.value;
-  if (!maps.some((map) => map.id === mapId)) {
+  const map = maps.find((item) => item.id === mapId);
+  const wanted = newContestMode === "testing" ? "testing" : "official";
+  if (!map || mapMode(map) !== wanted) {
     contestFormError.hidden = false;
-    contestFormError.textContent = "Choose a map for this contest.";
+    contestFormError.textContent = wanted === "testing"
+      ? "Choose a testing map for a testing contest."
+      : "Choose an official map for a competition.";
     return;
   }
   const schedule = readSchedule(
@@ -80,6 +173,7 @@ function createContest(event) {
     durationMinutes: schedule.durationMinutes,
     spawnMinutes: schedule.spawnMinutes,
     readyMinutes: schedule.readyMinutes,
+    mode: newContestMode,
   });
   persistContests();
   contestNameInput.value = "";
@@ -125,6 +219,7 @@ function commitContestMap() {
     contest.spawnVotes = [];
     contest.claims = [];
     contest.spawnResolved = false;
+    contest.resolvedTeams = [];
   }
   contest.mapId = contestMapField.value;
   updateContestSpawnNote(contestMapField, contestMapEditNote);
@@ -307,7 +402,7 @@ function renderCompetitions() {
     ? "Open the contest your team was added to."
     : "Contests, schedules, teams, and scores.";
   if (!contestant) {
-    fillMapSelect(contestMapSelect, contestMapSelect.value);
+    fillMapSelect(contestMapSelect, contestMapSelect.value, newContestMode);
     updateContestSpawnNote(contestMapSelect, contestMapNote);
   }
   contestFormError.hidden = true;
@@ -323,6 +418,7 @@ function renderCompetitions() {
     const map = maps.find((item) => item.id === contest.mapId);
     const teamCount = (contest.teams || []).length;
     const people = teamCount === 0 ? "No teams" : `${teamCount} team${teamCount === 1 ? "" : "s"}`;
+    const kind = isTestingContest(contest) ? "Testing" : "Competition";
 
     openButton.type = "button";
     openButton.className = "open-problem";
@@ -331,7 +427,7 @@ function renderCompetitions() {
     name.className = "contest-name-label";
     name.textContent = contest.name;
     detail.className = "problem-snippet";
-    detail.append(`${map ? mapOptionLabel(map) : "Map removed"} · ${contestTimingLine(contest)} · ${people} · `);
+    detail.append(`${map ? mapOptionLabel(map) : "Map removed"} · ${kind} · ${contestTimingLine(contest)} · ${people} · `);
     detail.append(phaseClockNode(contest));
     openButton.append(name, detail);
     item.append(openButton);
@@ -350,10 +446,25 @@ function renderContest() {
   const map = maps.find((item) => item.id === contest.mapId);
   contestTitle.textContent = contest.name;
   contestNameField.value = contest.name;
-  fillMapSelect(contestMapField, contest.mapId);
+  fillMapSelect(contestMapField, contest.mapId, isTestingContest(contest) ? "testing" : "competition", true);
   fillContestSchedule(contest);
   updateContestSpawnNote(contestMapField, contestMapEditNote);
   contestScheduleError.hidden = true;
+  renderContestModeButtons(contestModeChoices, isTestingContest(contest) ? "testing" : "competition");
+  if (contestModeNote) {
+    contestModeNote.textContent = isTestingContest(contest)
+      ? "Testing contest. Each team plays its own copy of the map. Changing this clears scores and spawn points."
+      : "Competition. Every team shares one map. Changing this clears scores and spawn points.";
+  }
+  if (contestTeamLead) {
+    contestTeamLead.textContent = isTestingContest(contest)
+      ? "Add as many teams as you need. Each team has 1 to 5 students and plays alone on this map."
+      : "A team has 1 to 5 students and shares one spawn point, territory, and score.";
+  }
+  if (contestLeaderboardHeading) {
+    contestLeaderboardHeading.textContent = isTestingContest(contest) ? "Team scores" : "Leaderboard";
+  }
+  renderTestingTeamView(contest);
   deleteOpenContestButton.setAttribute("aria-label", `Delete contest ${contest.name}`);
   if (editingTeamId && !(contest.teams || []).some((team) => team.id === editingTeamId)) {
     resetTeamForm();
@@ -363,7 +474,7 @@ function renderContest() {
   renderContestTeams(contest, map);
   updateContestTeamNote(contest, map);
   renderLeaderboard(contestLeaderboard, contestLeaderboardEmpty, contest);
-  renderAdminBoard(contest, map);
+  renderAdminBoard(isTestingContest(contest) ? contestAsTeam(contest, adminViewTeamId) : contest, map);
   paintPhaseClocks();
   ensureContestClock();
 }
@@ -379,6 +490,10 @@ function updateContestTeamNote(contest, map) {
   contestTeamNote.hidden = false;
   if (spawnCount === 0) {
     contestTeamNote.textContent = "This map has no spawn points. Place spawn points on the map before adding teams.";
+    return;
+  }
+  if (isTestingContest(contest)) {
+    contestTeamNote.textContent = `${teams} team${teams === 1 ? "" : "s"}. Each team uses the map's ${spawnCount} spawn point${spawnCount === 1 ? "" : "s"} on its own copy.`;
     return;
   }
   if (teams > spawnCount) {
@@ -617,7 +732,7 @@ function writeStudentStatus(contest, phase, map, frozen) {
   const team = teamForUser(contest);
   const score = buildLeaderboard(contest).find((row) => row.teamId === team?.id);
   const scoreBit = score ? ` ${team.name} has ${score.score} point${score.score === 1 ? "" : "s"}.` : "";
-  studentPlayMeta.textContent = `${mapBit}. ${phaseSentence(contest, phase, frozen)}${scoreBit}`;
+  studentPlayMeta.textContent = `${mapBit}. ${isTestingContest(contest) ? "Practice map. Other teams cannot see your cells. " : ""}${phaseSentence(contest, phase, frozen)}${scoreBit}`;
   if (!map) {
     studentSpawnNote.hidden = true;
     return;
@@ -1082,21 +1197,22 @@ function updateContestSpawnNote(select, note) {
 function spawnSummary(contest, map, teamId) {
   const team = (contest.teams || []).find((item) => item.id === teamId);
   const votes = (contest.spawnVotes || []).filter((vote) => vote.teamId === teamId);
-  const choice = !contest.spawnResolved
+  const ready = teamSpawnReady(contest, teamId);
+  const choice = !ready
     ? (contest.spawnChoices || []).find((item) => item.teamId === teamId)
     : null;
-  const spawn = contest.spawnResolved
+  const spawn = ready
     ? (contest.spawns || []).find((item) => item.teamId === teamId)
     : null;
   const cell = spawn?.cell ?? choice?.cell;
   if (!Number.isInteger(cell)) {
-    if (contest.spawnResolved) return "No spawn point";
+    if (ready) return "No spawn point";
     return team ? `${votes.length} of ${team.members.length} chosen` : "Has not chosen";
   }
   if (!map || cell < 0 || cell >= map.cells.length || map.cells[cell].kind !== "spawnpoint") {
     return "Spawn point no longer on the map";
   }
-  return `${contest.spawnResolved ? "Starts" : "Agrees"} ${cellPlace(map, cell)}`;
+  return `${ready ? "Starts" : "Agrees"} ${cellPlace(map, cell)}`;
 }
 
 function loadedContest(raw) {
@@ -1111,6 +1227,8 @@ function loadedContest(raw) {
     durationMinutes: Number.isInteger(raw.durationMinutes) ? raw.durationMinutes : null,
     spawnMinutes: Number.isInteger(raw.spawnMinutes) ? raw.spawnMinutes : null,
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
+    mode: raw.mode === "testing" ? "testing" : "competition",
+    resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes),
     spawns: normalizeTeamCells(raw.spawns),
@@ -1119,23 +1237,26 @@ function loadedContest(raw) {
   };
 }
 
-function fillMapSelect(select, selectedId) {
+function fillMapSelect(select, selectedId, contestMode = "competition", keepCurrent = false) {
   const previous = selectedId || select.value;
+  const wanted = contestMode === "testing" ? "testing" : "official";
+  const choices = maps.filter((map) => mapMode(map) === wanted || (keepCurrent && map.id === previous));
   select.replaceChildren();
-  if (maps.length === 0) {
+  if (choices.length === 0) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "No maps yet";
+    option.textContent = wanted === "testing" ? "No testing maps yet" : "No official maps yet";
     select.append(option);
     return;
   }
-  for (const map of maps) {
+  for (const map of choices) {
     const option = document.createElement("option");
     option.value = map.id;
-    option.textContent = mapOptionLabel(map);
+    const kind = mapMode(map) === "testing" ? "Testing" : "Official";
+    option.textContent = `${mapOptionLabel(map)} · ${kind}`;
     select.append(option);
   }
-  if (previous && maps.some((map) => map.id === previous)) {
+  if (previous && choices.some((map) => map.id === previous)) {
     select.value = previous;
     return;
   }

@@ -51,6 +51,10 @@
           <label>Name <input id="map-name" class="contest-name" name="name" type="text" maxlength="60" required /></label>
           <label>Width <input id="map-cols" name="cols" type="number" min="1" max="40" value="8" required /></label>
           <label>Height <input id="map-rows" name="rows" type="number" min="1" max="40" value="8" required /></label>
+          <div class="kind-choices" id="create-map-mode">
+            <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
+            <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
+          </div>
           <button type="submit">Create map</button>
           <p id="map-form-error" class="form-error" hidden></p>
         </form>
@@ -70,6 +74,10 @@
         <p id="editor-size" class="field-note"></p>
         <div id="map-counts" class="map-counts" aria-live="polite"></div>
         <label class="map-name-field">Name <input id="map-name-input" type="text" maxlength="60" /></label>
+        <div class="kind-choices" id="map-mode-choices">
+          <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
+          <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
+        </div>
         <p class="lead">Click or drag to place and clear cells. On a phone, pinch the map to zoom and drag with one finger to slide it. With Problem selected, choose Math, OI, Science, or Puzzle, then place the cell. Click a problem cell to open that problem. The border shows difficulty. Spawn points are where a team can start.</p>
         <div class="kind-choices editor-tools">
           <button id="kind-problem" type="button" aria-pressed="true">Problem</button>

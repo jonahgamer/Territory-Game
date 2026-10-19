@@ -14,6 +14,7 @@ const CONFLICT_COLLECTION_LABELS = {
 const CONFLICT_FIELDS = {
   maps: [
     { key: "name", label: "Name" },
+    { key: "mode", label: "Type" },
     { key: "geometry", label: "Size and cells" },
   ],
   problems: [
@@ -129,6 +130,7 @@ function conflictFieldValue(name, item, field) {
 
 function conflictFormatValue(name, field, value) {
   if (value === undefined || value === null) return "(empty)";
+  if (name === "maps" && field === "mode") return value === "testing" ? "Testing" : "Official";
   if (name === "maps" && field === "geometry") return conflictMapSummary(value);
   if (field === "startAt" && Number.isFinite(Number(value))) {
     return `${new Date(Number(value)).toLocaleString()} (${value})`;

@@ -199,6 +199,10 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               Height
               <input id="map-rows" name="rows" type="number" min="1" max="40" value="8" required />
             </label>
+            <div class="kind-choices" id="create-map-mode">
+              <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
+              <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
+            </div>
             <button type="submit">Create map</button>
             <p id="map-form-error" class="form-error" hidden></p>
           </form>
@@ -351,6 +355,11 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               Map
               <select id="contest-map" name="map" required></select>
             </label>
+            <div class="kind-choices" id="create-contest-mode">
+              <button type="button" data-contest-mode="competition" aria-pressed="true">Competition</button>
+              <button type="button" data-contest-mode="testing" aria-pressed="false">Testing</button>
+            </div>
+            <p id="create-contest-mode-note" class="field-note">A competition shares one map. A testing contest gives every team its own copy, so teams do not compete.</p>
             <p id="contest-map-note" class="field-note" hidden></p>
             <fieldset class="contest-schedule">
               <legend>Schedule</legend>
@@ -397,6 +406,11 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
               <select id="contest-map-input"></select>
             </label>
             <p id="contest-map-edit-note" class="field-note" hidden></p>
+            <div class="kind-choices" id="contest-mode-choices">
+              <button type="button" data-contest-mode="competition" aria-pressed="true">Competition</button>
+              <button type="button" data-contest-mode="testing" aria-pressed="false">Testing</button>
+            </div>
+            <p id="contest-mode-note" class="field-note"></p>
             <fieldset class="contest-schedule">
               <legend>Schedule</legend>
               <label>
@@ -419,7 +433,7 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             <p id="contest-schedule-error" class="form-error" hidden></p>
           </form>
           <h2>Teams</h2>
-          <p class="field-note">A team has 1 to 5 students and shares one spawn point, territory, and score.</p>
+          <p id="contest-team-lead" class="field-note">A team has 1 to 5 students and shares one spawn point, territory, and score.</p>
           <form id="team-form" class="create-map">
             <label>
               Team name
@@ -439,7 +453,8 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
           <p id="contest-team-note" class="field-note" hidden></p>
           <p id="contestant-empty">No teams yet.</p>
           <ul id="contestant-list" class="problem-list team-list" hidden></ul>
-          <h2>Leaderboard</h2>
+          <h2 id="contest-leaderboard-heading">Leaderboard</h2>
+          <div id="testing-team-view" class="kind-choices" hidden></div>
           <ol id="contest-leaderboard" class="leaderboard" hidden></ol>
           <p id="contest-leaderboard-empty" class="field-note">Scores appear after the contest begins.</p>
           <div class="grid-scroll">
@@ -532,6 +547,10 @@ if (given.length === want.length && given.every((part, i) => part === want[i])) 
             Name
             <input id="map-name-input" type="text" maxlength="60" />
           </label>
+          <div class="kind-choices" id="map-mode-choices">
+            <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
+            <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
+          </div>
 
           <div class="kind-choices editor-tools">
             <button id="kind-problem" type="button" aria-pressed="true">Problem</button>

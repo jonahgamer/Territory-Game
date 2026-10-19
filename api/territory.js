@@ -121,7 +121,7 @@ function normalizeMap(v) {
   if (!Array.isArray(v.cells) || v.cells.length !== v.cols * v.rows) return null;
   const cells = v.cells.map(cleanCell);
   if (cells.some((cell) => !cell)) return null;
-  return { id: v.id, name, cols: v.cols, rows: v.rows, cells };
+  return { id: v.id, name, cols: v.cols, rows: v.rows, cells, mode: v.mode === 'testing' ? 'testing' : 'official' };
 }
 
 function normalizeProblem(v) {
@@ -360,26 +360,62 @@ function buildLeaderboard(contest, map, problems) {
   }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
+function isTestingContest(contest) {
+  return contest?.mode === 'testing';
+}
+
+function cleanResolvedTeams(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = [];
+  for (const raw of value) {
+    const id = cleanId(raw);
+    if (!id || ids.includes(id)) continue;
+    ids.push(id);
+  }
+  return ids;
+}
+
 function contestPayload(contest, map, problems, user) {
   const admin = isAdmin(user);
+  const testing = isTestingContest(contest);
   const team = teamForUser(contest, user?.username);
-  const resolved = contest?.spawnResolved === true;
+  const resolvedIds = cleanResolvedTeams(contest?.resolvedTeams);
+  const mineResolved = Boolean(team && resolvedIds.includes(team.id));
+  const resolved = testing ? (admin ? contest?.spawnResolved === true : mineResolved) : contest?.spawnResolved === true;
   const choices = cleanTeamCells(contest?.spawnChoices);
   const votes = cleanSpawnVotes(contest?.spawnVotes);
-  const visibleVotes = admin || resolved ? votes : votes.filter((vote) => team && vote.teamId === team.id);
+  const spawns = cleanTeamCells(contest?.spawns);
+  const claims = cleanClaims(contest?.claims);
+  const teams = cleanTeams(contest?.teams);
+  const own = (item) => !testing || admin || (team && item.teamId === team.id);
+  const visibleTeams = testing && !admin ? teams.filter((item) => team && item.id === team.id) : teams;
+  const visibleClaims = claims.filter(own);
+  const ended = Date.now() >= (contestWindow(contest)?.endAt ?? Infinity);
+  const frozen = Boolean(map) && (ended || (!testing || !admin) && allProblemsClaimed(map, testing && team ? claims.filter((item) => item.teamId === team.id) : claims));
+  const visibleVotes = testing && !admin
+    ? votes.filter((vote) => team && vote.teamId === team.id)
+    : (admin || resolved ? votes : votes.filter((vote) => team && vote.teamId === team.id));
   return {
     success: true,
     serverNow: Date.now(),
     contest: {
       id: contest.id,
-      teams: cleanTeams(contest?.teams),
+      name: contest.name,
+      mapId: contest.mapId,
+      mode: testing ? 'testing' : 'competition',
+      teams: visibleTeams,
       spawnResolved: resolved,
-      spawnChoices: admin || resolved ? choices : choices.filter((choice) => team && choice.teamId === team.id),
+      resolvedTeams: testing && !admin ? (mineResolved && team ? [team.id] : []) : resolvedIds,
+      spawnChoices: (testing && !admin) || !(admin || resolved)
+        ? choices.filter((choice) => team && choice.teamId === team.id)
+        : choices.filter(own),
       spawnVotes: visibleVotes,
-      spawns: admin || resolved ? cleanTeamCells(contest?.spawns) : [],
-      claims: cleanClaims(contest?.claims),
-      leaderboard: buildLeaderboard(contest, map, problems || []),
-      frozen: Boolean(map) && (Date.now() >= (contestWindow(contest)?.endAt ?? Infinity) || allProblemsClaimed(map, contest?.claims)),
+      spawns: (testing && !admin) || !(admin || resolved)
+        ? spawns.filter((spawn) => team && spawn.teamId === team.id)
+        : spawns.filter(own),
+      claims: visibleClaims,
+      leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, map, problems || []),
+      frozen,
     },
   };
 }
@@ -429,6 +465,7 @@ function normalizeContest(v) {
     durationMinutes: v.durationMinutes,
     spawnMinutes: v.spawnMinutes,
     readyMinutes: v.readyMinutes,
+    mode: v.mode === 'testing' ? 'testing' : 'competition',
   };
 }
 
@@ -555,7 +592,14 @@ async function handleBootstrap(req, res, db, user) {
     ? problems
     : problems.filter((problem) => neededProblems.has(`${problem.type}:${problem.index}`));
 
-  const cleanMaps = sourceMaps.map(m => ({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells }));
+  const cleanMaps = sourceMaps.map(m => ({
+    id: m.id,
+    name: m.name,
+    cols: m.cols,
+    rows: m.rows,
+    cells: m.cells,
+    mode: m.mode === 'testing' ? 'testing' : 'official',
+  }));
   const cleanProblems = sourceProblems.map(p => {
     const problem = {
       index: p.index,
@@ -584,6 +628,8 @@ async function handleBootstrap(req, res, db, user) {
       readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
       teams,
       spawnResolved: play.spawnResolved,
+      resolvedTeams: play.resolvedTeams,
+      mode: play.mode,
       spawnChoices: play.spawnChoices,
       spawnVotes: play.spawnVotes,
       spawns: play.spawns,
@@ -699,8 +745,10 @@ async function handleSaveContests(req, res, db, user, body) {
           durationMinutes: contest.durationMinutes,
           spawnMinutes: contest.spawnMinutes,
           readyMinutes: contest.readyMinutes,
+          mode: contest.mode === 'testing' ? 'testing' : 'competition',
           updatedAt: new Date(),
         };
+        const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
         if (!stored) {
           update.teams = [];
           update.contestantIds = [];
@@ -709,12 +757,14 @@ async function handleSaveContests(req, res, db, user, body) {
           update.spawns = [];
           update.claims = [];
           update.spawnResolved = false;
-        } else if (!sameMap) {
+          update.resolvedTeams = [];
+        } else if (!sameMap || !sameMode) {
           update.spawnChoices = [];
           update.spawnVotes = [];
           update.spawns = [];
           update.claims = [];
           update.spawnResolved = false;
+          update.resolvedTeams = [];
         }
         await col.updateOne(
           { id: contest.id },
@@ -787,7 +837,9 @@ async function loadContestMap(db, contest) {
 }
 
 async function maybeResolveSpawns(db, contest, map, now) {
-  if (!contest || contest.spawnResolved === true || !map) return contest;
+  if (!contest || !map) return contest;
+  if (isTestingContest(contest)) return maybeResolveTestingSpawns(db, contest, map, now);
+  if (contest.spawnResolved === true) return contest;
   const timing = contestWindow(contest);
   if (!timing || now < timing.startAt) return contest;
   const teams = cleanTeams(contest.teams);
@@ -802,6 +854,38 @@ async function maybeResolveSpawns(db, contest, map, now) {
   await db.collection('contests').updateOne(
     { id: contest.id, spawnResolved: { $ne: true } },
     { $set: { spawns, spawnResolved: true, updatedAt: new Date() } }
+  );
+  return db.collection('contests').findOne({ id: contest.id });
+}
+
+async function maybeResolveTestingSpawns(db, contest, map, now) {
+  const timing = contestWindow(contest);
+  if (!timing || now < timing.startAt) return contest;
+  const teams = cleanTeams(contest.teams);
+  const choices = agreedSpawnChoices(teams, cleanSpawnVotes(contest.spawnVotes));
+  const resolved = new Set(cleanResolvedTeams(contest.resolvedTeams));
+  const spawns = cleanTeamCells(contest.spawns);
+  const spawnCells = spawnCellIndexes(map);
+  let changed = false;
+  for (const team of teams) {
+    if (resolved.has(team.id)) continue;
+    const choice = choices.find((item) => item.teamId === team.id);
+    if (!choice && now < timing.spawnEnd) continue;
+    const assigned = resolveSpawns(spawnCells, [team], choice ? [choice] : []);
+    const next = assigned.find((item) => item.teamId === team.id);
+    if (next) {
+      const existing = spawns.findIndex((item) => item.teamId === team.id);
+      if (existing >= 0) spawns.splice(existing, 1);
+      spawns.push(next);
+    }
+    resolved.add(team.id);
+    changed = true;
+  }
+  if (!changed) return contest;
+  const allResolved = teams.length > 0 && teams.every((team) => resolved.has(team.id));
+  await db.collection('contests').updateOne(
+    { id: contest.id },
+    { $set: { spawns, resolvedTeams: [...resolved], spawnResolved: allResolved, updatedAt: new Date() } }
   );
   return db.collection('contests').findOne({ id: contest.id });
 }
@@ -877,7 +961,7 @@ async function handleSaveTeam(req, res, db, user, body) {
   if (!map || spawnCount === 0) {
     return res.status(400).json({ success: false, message: 'This contest map has no spawn points. Add spawn points before creating teams.' });
   }
-  if (index < 0 && teams.length >= spawnCount) {
+  if (!isTestingContest(contest) && index < 0 && teams.length >= spawnCount) {
     return res.status(400).json({
       success: false,
       message: `This map has ${spawnCount} spawn point${spawnCount === 1 ? '' : 's'}, which is the most teams the contest can start.`,
@@ -1006,17 +1090,26 @@ async function handleSolve(req, res, db, user, body) {
   if (!timing || now < timing.liveAt || now >= timing.endAt) {
     return res.status(400).json({ success: false, message: 'The contest is not running.', serverNow: now });
   }
-  if (contest.spawnResolved !== true) {
+  const testing = isTestingContest(contest);
+  const teamReady = testing
+    ? cleanResolvedTeams(contest.resolvedTeams).includes(team.id)
+    : contest.spawnResolved === true;
+  if (!teamReady) {
     return res.status(400).json({ success: false, message: 'Spawn points are not assigned yet.', serverNow: now });
   }
   if (!map || cell >= map.cells.length || map.cells[cell]?.kind !== 'problem') {
     return res.status(400).json({ success: false, message: 'That cell is not a problem.', serverNow: now });
   }
-  if (allProblemsClaimed(map, contest.claims)) {
+  const teamClaims = cleanClaims(contest.claims).filter((claim) => !testing || claim.teamId === team.id);
+  if (allProblemsClaimed(map, teamClaims)) {
     return res.status(400).json({ success: false, message: 'Every problem is already solved.', serverNow: now });
   }
-  if (cleanClaims(contest.claims).some((claim) => claim.cell === cell)) {
-    return res.status(400).json({ success: false, message: 'Another team already holds this cell.', serverNow: now });
+  if (teamClaims.some((claim) => claim.cell === cell)) {
+    return res.status(400).json({
+      success: false,
+      message: testing ? 'Your team already solved this cell.' : 'Another team already holds this cell.',
+      serverNow: now,
+    });
   }
   if (!adjacentToTeam(map, contest, team.id, cell)) {
     return res.status(400).json({ success: false, message: 'That cell is not next to your territory.', serverNow: now });
@@ -1049,12 +1142,19 @@ if (logic) {
   }
 
   const claim = { cell, teamId: team.id, solvedBy: username, solvedAt: now };
+  const claimFilter = testing
+    ? { id: contestId, claims: { $not: { $elemMatch: { cell, teamId: team.id } } } }
+    : { id: contestId, 'claims.cell': { $ne: cell } };
   const result = await col.updateOne(
-    { id: contestId, 'claims.cell': { $ne: cell } },
+    claimFilter,
     { $push: { claims: claim }, $set: { updatedAt: new Date() } }
   );
   if (result.matchedCount === 0) {
-    return res.status(400).json({ success: false, message: 'Another team already holds this cell.', serverNow: Date.now() });
+    return res.status(400).json({
+      success: false,
+      message: testing ? 'Your team already solved this cell.' : 'Another team already holds this cell.',
+      serverNow: Date.now(),
+    });
   }
   const updated = await col.findOne({ id: contestId });
   return res.status(200).json(contestPayload(updated, map, problems, user));

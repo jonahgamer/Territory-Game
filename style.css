@@ -501,7 +501,15 @@ button[type="submit"],
   margin-top: 10px;
 }
 
-.map-count {
+.map-group-label {
+  margin-top: 18px;
+  padding: 0 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
   display: inline-flex;
   align-items: center;
   gap: 8px;

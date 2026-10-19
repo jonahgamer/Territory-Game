@@ -44,6 +44,9 @@ accountButton?.addEventListener("click", logOut);
 versionForm?.addEventListener("submit", addVersion);
 pageToastClose?.addEventListener("click", hidePageToast);
 createContestForm?.addEventListener("submit", createContest);
+createContestMode?.addEventListener("click", onCreateContestModeClick);
+contestModeChoices?.addEventListener("click", onContestModeClick);
+testingTeamView?.addEventListener("click", onTestingTeamViewClick);
 contestList?.addEventListener("click", onContestListClick);
 contestBackButton?.addEventListener("click", () => navigateTo("contests"));
 deleteOpenContestButton?.addEventListener("click", deleteOpenContest);
@@ -132,6 +135,8 @@ saveProblemButton?.addEventListener("click", saveOpenProblem);
 saveProblemTopButton?.addEventListener("click", saveOpenProblem);
 deleteOpenMapButton?.addEventListener("click", deleteOpenMap);
 createForm?.addEventListener("submit", createMap);
+createMapMode?.addEventListener("click", onCreateMapModeClick);
+mapModeChoices?.addEventListener("click", onMapModeClick);
 editorNameInput?.addEventListener("input", commitMapName);
 editorNameInput?.addEventListener("change", () => {
   const map = currentMap();

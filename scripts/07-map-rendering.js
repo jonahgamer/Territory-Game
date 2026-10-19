@@ -44,28 +44,41 @@ function renderMaps() {
   mapList.replaceChildren();
   emptyMessage.hidden = maps.length > 0;
   mapList.hidden = maps.length === 0;
-
-  for (const map of maps) {
-    const item = document.createElement("li");
-    const openButton = document.createElement("button");
-    const label = document.createElement("span");
-    const name = document.createElement("span");
-    const size = document.createElement("span");
-
-    openButton.type = "button";
-    openButton.className = "open-map";
-    openButton.dataset.openId = map.id;
-    openButton.setAttribute("aria-label", `Open map ${map.name}`);
-    label.className = "map-label";
-    name.className = "map-name";
-    name.textContent = map.name;
-    size.className = "map-size";
-    size.textContent = `${map.cols} × ${map.rows}`;
-    label.append(name, size);
-    openButton.append(createPreview(map), label);
-    item.append(openButton);
-    mapList.append(item);
+  const groups = [
+    ["official", "Official maps"],
+    ["testing", "Testing maps"],
+  ];
+  for (const [mode, title] of groups) {
+    const group = maps.filter((map) => mapMode(map) === mode);
+    if (group.length === 0) continue;
+    const heading = document.createElement("li");
+    heading.className = "map-group-label";
+    heading.textContent = title;
+    mapList.append(heading);
+    for (const map of group) mapList.append(mapListItem(map));
   }
+}
+
+function mapListItem(map) {
+  const item = document.createElement("li");
+  const openButton = document.createElement("button");
+  const label = document.createElement("span");
+  const name = document.createElement("span");
+  const size = document.createElement("span");
+
+  openButton.type = "button";
+  openButton.className = "open-map";
+  openButton.dataset.openId = map.id;
+  openButton.setAttribute("aria-label", `Open map ${map.name}`);
+  label.className = "map-label";
+  name.className = "map-name";
+  name.textContent = map.name;
+  size.className = "map-size";
+  size.textContent = `${map.cols} × ${map.rows} · ${mapMode(map) === "testing" ? "Testing" : "Official"}`;
+  label.append(name, size);
+  openButton.append(createPreview(map), label);
+  item.append(openButton);
+  return item;
 }
 
 function renderEditor() {
@@ -80,6 +93,7 @@ function renderEditor() {
   editorSize.textContent = `${map.cols} × ${map.rows}`;
   renderMapCounts(map);
   editorNameInput.value = map.name;
+  renderMapModeButtons(mapModeChoices, mapMode(map));
   deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);
   editorGrid.dataset.rows = String(map.rows);
