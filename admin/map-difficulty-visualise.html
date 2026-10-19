@@ -167,24 +167,49 @@
       ];
     }
 
+    // -----------------------------------------------------------------
+    // Fetch with auth handling.
+    // On 401/403: redirect to login (with a redirect back), and stop
+    // trying further endpoints — the problem is auth, not the URL.
+    // -----------------------------------------------------------------
     async function fetchBootstrap(mapId) {
       const attempts = [];
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+
       for (const url of mapEndpoints(mapId)) {
         try {
           log('GET', url);
           const res = await fetch(url, {
-            headers: { Accept: 'application/json' },
+            headers: {
+              Accept: 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
             credentials: 'same-origin',
           });
           attempts.push({ url, status: res.status });
           log('  →', res.status, res.statusText);
+
+          // Auth failure — stop retrying, send user to log in.
+          if (res.status === 401 || res.status === 403) {
+            const back = encodeURIComponent(location.pathname + location.search);
+            log('  → auth required, redirecting to /login');
+            // If the app's login page uses a different path, change this:
+            location.href = `/login?redirect=${back}`;
+            throw new Error(
+              `Authentication required (HTTP ${res.status}). Redirecting to login…`
+            );
+          }
+
           if (!res.ok) continue;
           const json = await res.json();
           log('  → top-level keys:', Object.keys(json).join(', '));
           return json;
         } catch (err) {
           attempts.push({ url, error: String(err) });
-          log('  → network error:', String(err));
+          log('  → error:', String(err));
+          // Re-throw auth errors immediately so we don't fall through to
+          // the storage fallback / endpoint list.
+          if (String(err).includes('Authentication required')) throw err;
         }
       }
 
@@ -458,7 +483,6 @@
             div.title = 'Empty';
           }
 
-          // Make sure spawn/obstacle pseudo-elements are hidden (via CSS)
           gridEl.appendChild(div);
         }
       }
@@ -514,9 +538,20 @@
       } catch (err) {
         console.error('[difficulty-view]', err);
         loadErrorEl.hidden = false;
-        loadErrorEl.textContent = `Could not load map "${mapId}": ${err.message}`;
-        gridEl.innerHTML = '<p class="grid-loading">Map could not be loaded.</p>';
-        showToast('Map not found — see debug log below.');
+
+        const isAuthError = String(err.message).includes('Authentication required');
+        if (isAuthError) {
+          loadErrorEl.textContent =
+            'You need to log in to view this map. Redirecting to login…';
+          gridEl.innerHTML =
+            '<p class="grid-loading">Authentication required — please log in.</p>';
+          showToast('Login required — redirecting…');
+        } else {
+          loadErrorEl.textContent = `Could not load map "${mapId}": ${err.message}`;
+          gridEl.innerHTML = '<p class="grid-loading">Map could not be loaded.</p>';
+          showToast('Map not found — see debug log below.');
+        }
+
         if (debugLogEl) debugLogEl.hidden = false;
       }
     }
