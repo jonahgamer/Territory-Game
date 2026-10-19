@@ -40,19 +40,18 @@ const LEGEND = [
   ["Empty",    "#1e2430"],
 ];
 
-// ── Fake‑3D tuning (85° camera pitch = 5° off straight‑down) ─
-// At 85° we're almost looking straight down, so:
-//  - the top face barely shifts (small lift)
-//  - the side faces are squashed vertically (cos(85°) ≈ 0.087)
-//  - the drop shadow is short and mostly straight down
-const CAMERA_PITCH_DEG = 85;
-const COS_PITCH        = Math.cos(CAMERA_PITCH_DEG * Math.PI / 180); // ≈ 0.087
+// ── Fake‑3D tuning (70° camera pitch = 20° off straight‑down) ─
+// At 70° the height is clearly visible:
+//  - cos(70°) ≈ 0.342 → side band is ~34% of true height
+//  - 1 − cos(70°) ≈ 0.658 → top face offsets up‑left by ~66% of height
+const CAMERA_PITCH_DEG = 70;
+const COS_PITCH        = Math.cos(CAMERA_PITCH_DEG * Math.PI / 180); // ≈ 0.342
 
-const MAX_LIFT_PX   = 18;                    // raw 3‑D height at the tallest
-const VISIBLE_LIFT  = MAX_LIFT_PX * (1 - COS_PITCH); // ≈ 16.4px — top face offset
-const SIDE_HEIGHT   = MAX_LIFT_PX * COS_PITCH;       // ≈ 1.6px — squashed side band
-const SHADOW_BLUR   = 6;
-const SHADOW_OFFSET = 3;
+const MAX_LIFT_PX   = 28;                              // raw 3‑D height at tallest
+const VISIBLE_LIFT  = MAX_LIFT_PX * (1 - COS_PITCH);   // ≈ 18.4px
+const SIDE_HEIGHT   = MAX_LIFT_PX * COS_PITCH;         // ≈ 9.6px
+const SHADOW_BLUR   = 8;
+const SHADOW_OFFSET = 5;
 
 const CONTOUR_LEVELS = [0.5, 1.5, 2.5, 3.5];
 
@@ -195,7 +194,7 @@ async function run() {
   layoutMapGrid(gridEl, map.cols, map.rows);
   gridEl.replaceChildren();
   gridEl.style.gap = "0";
-  gridEl.style.padding = `${VISIBLE_LIFT + 8}px ${VISIBLE_LIFT + 8}px 32px`;
+  gridEl.style.padding = `${VISIBLE_LIFT + 16}px ${VISIBLE_LIFT + 16}px ${VISIBLE_LIFT + 40}px`;
   gridEl.style.background =
     "radial-gradient(ellipse at 50% 25%, #1a2233 0%, #0b0f14 78%)";
   gridEl.style.borderRadius = "10px";
@@ -210,48 +209,58 @@ async function run() {
     const k = kind[i];
     const colour = heightToColour(h);
 
-    // Normalised height in 0…1
+    // Normalised height 0…1
     const t = Math.max(0, Math.min(1, h / 4));
 
-    // At 85° pitch the top face barely shifts up, and the side band
-    // is squashed to a thin strip. Both scale linearly with height.
-    const lift = t * VISIBLE_LIFT;          // top-face upward offset
-    const side = t * SIDE_HEIGHT;           // squashed side band
+    // At 70° pitch:
+    //  - top face offsets up‑left by `lift` (≈66% of real height)
+    //  - side band is `side` px tall (≈34% of real height)
+    //  - the left face is a narrow strip `side` px wide
+    const lift = t * VISIBLE_LIFT;
+    const side = t * SIDE_HEIGHT;
 
-    // Wrapper keeps the ground footprint fixed.
     const wrap = document.createElement("div");
     wrap.className = "grid-cell difficulty-cell";
     wrap.style.position = "relative";
     wrap.style.aspectRatio = "1 / 1";
 
-    // Base — the dark footprint on the floor. Barely visible at 85°,
-    // but it grounds tall cells and gives them a hairline edge.
+    // Base — dark footprint on the floor.
     const base = document.createElement("div");
     base.style.position = "absolute";
     base.style.inset = "0";
-    base.style.background = shade(colour, -0.6);
+    base.style.background = shade(colour, -0.65);
     base.style.borderRadius = "2px";
     wrap.appendChild(base);
 
-    // Side band — a single thin strip along the bottom edge, matching
-    // what you'd actually see of a vertical wall at 85° pitch (just the
-    // near edge). Its height is `side` px, starting at the top face's
-    // bottom edge and reaching down to the base.
     if (side > 0.3) {
-      const sideBand = document.createElement("div");
-      sideBand.style.position = "absolute";
-      sideBand.style.left = `${-lift}px`;
-      sideBand.style.right = `${-lift}px`;
-      sideBand.style.top = `calc(100% - ${side}px - ${lift}px)`;
-      sideBand.style.height = `${side}px`;
-      sideBand.style.background =
-        `linear-gradient(to bottom, ${shade(colour, -0.3)}, ${shade(colour, -0.6)})`;
-      sideBand.style.borderRadius = "0 0 2px 2px";
-      wrap.appendChild(sideBand);
+      // Left face — visible because we're looking slightly from the right.
+      // It runs the full height of the block, from base up to the top face.
+      const leftFace = document.createElement("div");
+      leftFace.style.position = "absolute";
+      leftFace.style.left = `${-lift}px`;
+      leftFace.style.top = `${-lift}px`;
+      leftFace.style.width = `${side}px`;
+      leftFace.style.height = `calc(100% + ${lift}px)`;
+      leftFace.style.background =
+        `linear-gradient(to right, ${shade(colour, -0.32)}, ${shade(colour, -0.55)})`;
+      leftFace.style.borderRadius = "2px 0 0 2px";
+      wrap.appendChild(leftFace);
+
+      // Front face — visible because we're looking slightly from above.
+      // It's the bottom strip between the top face and the base.
+      const frontFace = document.createElement("div");
+      frontFace.style.position = "absolute";
+      frontFace.style.left = `${-lift}px`;
+      frontFace.style.bottom = "0";
+      frontFace.style.width = `calc(100% + ${lift}px)`;
+      frontFace.style.height = `${side}px`;
+      frontFace.style.background =
+        `linear-gradient(to bottom, ${shade(colour, -0.22)}, ${shade(colour, -0.5)})`;
+      frontFace.style.borderRadius = "0 0 2px 2px";
+      wrap.appendChild(frontFace);
     }
 
-    // Top face — the visible lid. Shifts up (and slightly left) by `lift`,
-    // which is what makes the cell read as a raised plate.
+    // Top face — the visible lid, shifted up‑left by `lift`.
     const top = document.createElement("div");
     top.style.position = "absolute";
     top.style.left = `${-lift}px`;
@@ -268,20 +277,19 @@ async function run() {
     top.style.color = "#fff";
     top.style.textShadow = "0 1px 2px rgba(0,0,0,0.85)";
 
-    // Shadow is short and mostly straight down at 85° — this is the
-    // single biggest cue that the plates are lifted.
+    // Shadow: at 70° the shadow is longer and more noticeable.
     top.style.boxShadow =
-      `0 ${SHADOW_OFFSET + side * 0.6}px ${SHADOW_BLUR + side * 0.8}px rgba(0,0,0,0.55), ` +
-      `inset 0 1px 0 rgba(255,255,255,0.1)`;
+      `0 ${SHADOW_OFFSET + side * 0.9}px ${SHADOW_BLUR + side * 1.1}px rgba(0,0,0,0.6), ` +
+      `inset 0 1px 0 rgba(255,255,255,0.12)`;
     top.style.transition = "top 120ms ease-out, left 120ms ease-out, box-shadow 120ms ease-out";
     top.style.zIndex = "2";
 
     // Contour lines on the top face.
     for (const s of contourSides(height, map.cols, map.rows, i)) {
-      if (s === "top")    top.style.boxShadow += ", inset 0 2px 0 rgba(0,0,0,0.6)";
-      if (s === "bottom") top.style.boxShadow += ", inset 0 -2px 0 rgba(0,0,0,0.6)";
-      if (s === "left")   top.style.boxShadow += ", inset 2px 0 0 rgba(0,0,0,0.6)";
-      if (s === "right")  top.style.boxShadow += ", inset -2px 0 0 rgba(0,0,0,0.6)";
+      if (s === "top")    top.style.boxShadow += ", inset 0 2px 0 rgba(0,0,0,0.65)";
+      if (s === "bottom") top.style.boxShadow += ", inset 0 -2px 0 rgba(0,0,0,0.65)";
+      if (s === "left")   top.style.boxShadow += ", inset 2px 0 0 rgba(0,0,0,0.65)";
+      if (s === "right")  top.style.boxShadow += ", inset -2px 0 0 rgba(0,0,0,0.65)";
     }
 
     if (cell && cell.kind === "problem") {
@@ -298,23 +306,22 @@ async function run() {
     tiles.push({ wrap, top, lift, side });
   }
 
-  // Hover: raise the top face another couple of px. Small movement,
-  // because at 85° we don't want a big pop — just a subtle confirmation.
+  // Hover: lift the top face another 3px.
   tiles.forEach(({ wrap, top, lift, side }) => {
     wrap.addEventListener("mouseenter", () => {
-      top.style.left = `${-lift - 2}px`;
-      top.style.top = `${-lift - 2}px`;
+      top.style.left = `${-lift - 3}px`;
+      top.style.top = `${-lift - 3}px`;
       top.style.boxShadow =
-        `0 ${SHADOW_OFFSET + 2 + side * 0.6}px ${SHADOW_BLUR + 2 + side * 0.8}px rgba(0,0,0,0.7), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.15)`;
+        `0 ${SHADOW_OFFSET + 3 + side * 0.9}px ${SHADOW_BLUR + 3 + side * 1.1}px rgba(0,0,0,0.75), ` +
+        `inset 0 1px 0 rgba(255,255,255,0.18)`;
       wrap.style.zIndex = "5";
     });
     wrap.addEventListener("mouseleave", () => {
       top.style.left = `${-lift}px`;
       top.style.top = `${-lift}px`;
       top.style.boxShadow =
-        `0 ${SHADOW_OFFSET + side * 0.6}px ${SHADOW_BLUR + side * 0.8}px rgba(0,0,0,0.55), ` +
-        `inset 0 1px 0 rgba(255,255,255,0.1)`;
+        `0 ${SHADOW_OFFSET + side * 0.9}px ${SHADOW_BLUR + side * 1.1}px rgba(0,0,0,0.6), ` +
+        `inset 0 1px 0 rgba(255,255,255,0.12)`;
       wrap.style.zIndex = "";
     });
   });
