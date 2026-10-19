@@ -129,9 +129,13 @@
       (function () {
         var back = document.getElementById("practice-back");
         back.addEventListener("click", function () {
-          // Prefer browser history when there is any, otherwise go to the list.
-          if (window.history.length > 1) window.history.back();
-          else window.location.href = "/testing/index.html";
+          // Try to close the tab. Browsers only allow this for windows opened
+          // by script; if it is blocked, fall back to the category list.
+          window.close();
+          // If the tab is still here after a moment, navigate instead.
+          setTimeout(function () {
+            if (!window.closed) window.location.href = "/testing/index.html";
+          }, 150);
         });
       })();
     </script>
