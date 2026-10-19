@@ -137,7 +137,6 @@
             + '  <input id="student-answer" type="text" />'
             + '  <p id="student-answer-error" hidden></p>'
             + "</div>"
-            // Bridge: forwards input value/style/readOnly/error to the parent.
             + "<script>"
             + "(function () {"
             + "  var input = document.getElementById(\"student-answer\");"
@@ -221,7 +220,6 @@
           return frame;
         }
 
-        // Ask the statement iframe to approve submission (puzzles may block it).
         function approveStatementSubmit() {
           var frame = activeStatementFrame;
           if (!frame || !frame.contentWindow) return Promise.resolve({ blocked: false, message: "" });
@@ -317,13 +315,13 @@
         form.addEventListener("submit", async function (event) {
           event.preventDefault();
           error.hidden = true;
+          error.style.color = "";
           var button = form.querySelector("button");
           if (button.disabled) return;
           var label = button.textContent;
           button.disabled = true;
           button.textContent = "Checking...";
 
-          // Let the puzzle refuse submission if its own validation fails.
           var approval = await approveStatementSubmit();
           if (approval.blocked) {
             button.disabled = false;
@@ -345,8 +343,9 @@
               error.hidden = false;
               error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
             } else if (data.correct) {
-              form.hidden = true;
-              showStatus("Answer accepted. You can close this tab.");
+              error.hidden = false;
+              error.style.color = "#3ddc6a";
+              error.textContent = "AC";
             } else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
