@@ -1091,6 +1091,27 @@ function conflictSetCollection(name, value) {
   else contests = value;
 }
 
+function conflictFocusKeys(collection) {
+  if (collection === "maps" && editorView && !editorView.hidden && openMapId) {
+    return new Set([String(openMapId)]);
+  }
+  if (collection === "problems" && problemEditorView && !problemEditorView.hidden && editingProblemType && Number.isInteger(editingProblemNo)) {
+    return new Set([`${editingProblemType}:${editingProblemNo}`]);
+  }
+  if (collection === "problems" && batchView && !batchView.hidden && batchRows) {
+    const keys = new Set();
+    for (const row of batchRows.querySelectorAll("[data-batch-index]")) {
+      const index = Number(row.value);
+      if (Number.isInteger(index) && batchType) keys.add(`${batchType}:${index}`);
+    }
+    if (keys.size > 0) return keys;
+  }
+  if (collection === "contests" && contestView && !contestView.hidden && openContestId) {
+    return new Set([String(openContestId)]);
+  }
+  return null;
+}
+
 function conflictKey(name, item) {
   if (name === "problems") return `${item.type}:${item.index}`;
   return String(item.id || "");
@@ -1365,7 +1386,9 @@ function renderConflictRecords() {
   body.replaceChildren();
   const intro = document.createElement("p");
   intro.className = "conflict-intro";
-  intro.textContent = "Another admin saved first. Choose what to keep. Nothing is overwritten until you apply.";
+  intro.textContent = state.focused
+    ? "Another admin saved first. This only shows the page you have open. Everything else stays as the server saved it."
+    : "Another admin saved first. Choose what to keep. Nothing is overwritten until you apply.";
   body.append(intro);
 
   if (state.records.length === 0) {
@@ -1691,14 +1714,17 @@ async function openSaveConflict(collection) {
     if (!Number.isInteger(remoteRevision)) throw new Error("The server did not return a revision for this collection.");
     const localItems = conflictClone(conflictCollection(collection));
     const records = conflictBuildRecords(collection, localItems, remoteItems);
+    const focus = conflictFocusKeys(collection);
+    const visible = focus ? records.filter((record) => focus.has(record.key)) : records;
     conflictState = {
       collection,
       loading: false,
+      focused: Boolean(focus),
       localItems,
       remoteItems,
       remoteRevision,
-      records,
-      choices: records.map(conflictNewChoice),
+      records: visible,
+      choices: visible.map(conflictNewChoice),
     };
     renderConflictRecords();
   } catch (error) {
