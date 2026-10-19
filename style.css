@@ -6,6 +6,10 @@
   display: none !important;
 }
 
+html {
+  zoom: 0.92;
+}
+
 :root {
   --void: #060910;
   --ink: #d7f6ff;
@@ -998,7 +1002,7 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -1012,7 +1016,7 @@ button[type="submit"],
   width: 100%;
   max-width: 100%;
   line-height: 1;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   pointer-events: none;
 }
