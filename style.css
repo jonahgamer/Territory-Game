@@ -1001,8 +1001,9 @@ button[type="submit"],
 }
 
 .grid-cell.problem {
-  font-size: 14px;
-  letter-spacing: -0.04em;
+  font-size: 12px;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .grid-cell.student-cell:disabled {

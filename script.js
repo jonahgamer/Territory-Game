@@ -86,7 +86,7 @@ const rowsInput = document.querySelector("#map-rows");
 const formError = document.querySelector("#map-form-error");
 const emptyMessage = document.querySelector("#map-empty");
 const mapList = document.querySelector("#map-list");
-const CELL_SIZE = 48;
+const CELL_SIZE = 64;
 const mapCellSize = new WeakMap();
 const pinchBound = new WeakSet();
 
