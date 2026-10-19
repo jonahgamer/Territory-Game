@@ -405,7 +405,7 @@
   // Avoid duplicate instances if the user submits multiple times
   if (document.getElementById("nekos-best-widget")) return;
 
-  // 1. Insert the markup
+  // 1. Insert the markup (single image, no controls)
   var section = document.createElement("section");
   section.id = "nekos-best-widget";
   section.className = "nekos-best-api";
@@ -415,36 +415,19 @@
     "color:#c9d1d9;font-family:system-ui,sans-serif;";
   section.innerHTML =
     '<h2 style="margin-top:0;color:#58a6ff;">Nekos.best Random Image</h2>' +
-    '<p style="font-size:0.9rem;color:#8b949e;">Fetches a random image or GIF from a selected category.</p>' +
-    '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">' +
-    '  <label for="nekos-category" style="display:flex;align-items:center;gap:0.4rem;">Category:' +
-    '    <select id="nekos-category" style="padding:0.4rem 0.6rem;border-radius:6px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;">' +
-    '      <option value="neko">neko</option>' +
-    '      <option value="waifu">waifu</option>' +
-    '      <option value="husbando">husbando</option>' +
-    '      <option value="kitsune">kitsune</option>' +
-    '      <option value="hug">hug</option>' +
-    '      <option value="pat">pat</option>' +
-    '      <option value="wink">wink</option>' +
-    '    </select>' +
-    '  </label>' +
-    '  <button id="nekos-refresh" style="padding:0.4rem 1rem;border:1px solid #30363d;border-radius:6px;background:#238636;color:#fff;cursor:pointer;font-weight:600;">Refresh</button>' +
-    '</div>' +
     '<div id="nekos-result" style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;min-height:200px;">' +
-    '  <p style="color:#8b949e;">Click Refresh to load an image.</p>' +
+    '  <p style="color:#8b949e;">Loading...</p>' +
     '</div>';
 
   // Place it right after the answer form area
   var main = document.querySelector(".practice-answer");
   main.appendChild(section);
 
-  // 2. Run the widget logic (same as your snippet)
-  var categorySelect = section.querySelector("#nekos-category");
-  var refreshBtn = section.querySelector("#nekos-refresh");
+  // 2. Fetch a single neko image
   var resultDiv = section.querySelector("#nekos-result");
 
   async function fetchRandomImage() {
-    var category = categorySelect.value;
+    var category = "neko";
     var userAgent = "TerritoryGame-Admin-Panel/1.0 (contact: admin@example.com)";
 
     resultDiv.innerHTML = '<p style="color:#8b949e;">Loading...</p>';
@@ -473,6 +456,9 @@
       resultDiv.innerHTML = '<p style="color:#f85149;">Failed to load image: ' + err.message + '</p>';
     }
   }
+
+  fetchRandomImage();
+}
 
   refreshBtn.addEventListener("click", fetchRandomImage);
   // Auto-load the first image right away:
