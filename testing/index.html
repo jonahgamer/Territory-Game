@@ -1,272 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Testing · 260xx Problems</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
-    <style>
-      .testing-wrap { max-width: 52rem; margin: 0 auto; padding: 24px 16px 64px; }
-      .testing-token { display: grid; gap: 8px; margin: 16px 0 24px; }
-      .testing-token label { font-family: var(--font-ui); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-      .testing-token textarea { width: 100%; min-height: 4.5rem; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; font-size: 14px; }
-      .testing-problem { border: 1px solid var(--line); background: rgba(8,18,32,.72); padding: 16px 18px; margin: 14px 0; }
-      .testing-problem h2 { margin: 0 0 6px; font-size: 20px; display: flex; gap: 10px; align-items: baseline; }
-      .testing-problem .tag { font-family: var(--font-ui); color: var(--cyan); }
-      .testing-problem .diff { font-family: var(--font-ui); font-size: 12px; padding: 2px 7px; border: 1px solid currentColor; }
-      .testing-problem .diff.easy { color: #3ddc6a; } .testing-problem .diff.normal { color: #ffe14a; }
-      .testing-problem .diff.hard { color: #ff3b4e; } .testing-problem .diff.insane { color: #c084fc; }
-      .testing-problem .prompt { margin: 10px 0 14px; line-height: 1.5; }
-      .testing-problem form { display: flex; gap: 8px; flex-wrap: wrap; }
-      .testing-problem input[type="text"] { flex: 1 1 16rem; padding: 8px 10px; border: 1px solid var(--line); background: rgba(4,12,22,.85); color: var(--ink); font: inherit; }
-      .testing-problem button { padding: 8px 14px; border: 1px solid var(--cyan); background: rgba(62,224,255,.12); color: var(--cyan); font-family: var(--font-ui); cursor: pointer; }
-      .testing-problem button:disabled { opacity: .5; cursor: wait; }
-      .testing-result { margin: 10px 0 0; font-family: var(--font-ui); font-size: 14px; }
-      .testing-result.ac { color: #3ddc6a; } .testing-result.wa { color: #ffe14a; } .testing-result.err { color: var(--danger); }
-      .testing-empty { color: var(--muted); font-family: var(--font-ui); }
-    </style>
-  </head>
-  <body>
-    <div class="testing-wrap">
-      <p class="eyebrow">Testing</p>
-      <h1>260xx Problems</h1>
-      <p class="lead">Lists problems whose index is in the 26000–26099 range and lets you submit an answer against the saved grader. Nothing is written to the database; this is the same check as <code>test-problem</code>.</p>
+// ── Public (no auth) actions for the guest testing page ──────────────
+// These expose only prompt/type/difficulty and a pass/fail result.
+// `answer` and `logic` are never sent to the client.
 
-      <div class="testing-token">
-        <label for="testing-token">Session token (required by the API)</label>
-        <textarea id="testing-token" spellcheck="false" placeholder="Paste the JWT from localStorage key territory-game-session, or log in normally first."></textarea>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="testing-load" type="button">Load 260xx problems</button>
-          <button id="testing-clear" type="button" class="back-button">Forget token</button>
-        </div>
-        <p id="testing-status" class="field-note"></p>
-      </div>
+const PUBLIC_INDEX_MIN = 26000;
+const PUBLIC_INDEX_MAX = 26099;
+const PUBLIC_EXCLUDED_TYPE = 'math'; // category "M" is excluded
 
-      <div id="testing-list" aria-live="polite"></div>
-    </div>
+function isPublicProblem(problem) {
+  return problem
+    && Number.isInteger(problem.index)
+    && problem.index >= PUBLIC_INDEX_MIN
+    && problem.index <= PUBLIC_INDEX_MAX
+    && problem.type !== PUBLIC_EXCLUDED_TYPE;
+}
 
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-    <script>
-      (function () {
-        "use strict";
+async function handlePublicProblems(req, res, db) {
+  const problems = await db.collection('problems')
+    .find({ index: { $gte: PUBLIC_INDEX_MIN, $lte: PUBLIC_INDEX_MAX }, type: { $ne: PUBLIC_EXCLUDED_TYPE } })
+    .toArray();
+  return res.status(200).json({
+    success: true,
+    problems: problems.map((p) => ({
+      index: p.index,
+      type: p.type,
+      prompt: typeof p.prompt === 'string' ? p.prompt : '',
+      difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+    })),
+  });
+}
 
-        var SESSION_KEY = "territory-game-session";
-        var API_BASE = "/api/territory";
-        var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
-        var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
-        var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
-        var RANGE_START = 26000;
-        var RANGE_END = 26099;
-
-        var tokenInput = document.getElementById("testing-token");
-        var loadButton = document.getElementById("testing-load");
-        var clearButton = document.getElementById("testing-clear");
-        var statusEl = document.getElementById("testing-status");
-        var listEl = document.getElementById("testing-list");
-
-        function readStoredToken() {
-          try {
-            var stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-            return stored && typeof stored.token === "string" ? stored.token : "";
-          } catch (e) {
-            return "";
-          }
-        }
-
-        function currentToken() {
-          return tokenInput.value.trim() || readStoredToken();
-        }
-
-        function setStatus(text, tone) {
-          statusEl.textContent = text || "";
-          statusEl.style.color = tone === "err" ? "var(--danger)" : tone === "ok" ? "#3ddc6a" : "";
-        }
-
-        function problemTag(index, type) {
-          return (TYPE_TAG[type] || "M") + index;
-        }
-
-        function plainText(source) {
-          return String(source || "")
-            .replace(/<script[\s\S]*?<\/script>/gi, " ")
-            .replace(/<style[\s\S]*?<\/style>/gi, " ")
-            .replace(/<[^>]*>/g, " ")
-            .replace(/&nbsp;/gi, " ")
-            .replace(/\s+/g, " ")
-            .trim();
-        }
-
-        async function apiCall(action, body) {
-          var headers = { "Content-Type": "application/json" };
-          var token = currentToken();
-          if (token) headers["Authorization"] = "Bearer " + token;
-          var isPost = !!body;
-          var url = isPost ? API_BASE : API_BASE + "?action=" + encodeURIComponent(action);
-          var res = await fetch(url, {
-            method: isPost ? "POST" : "GET",
-            headers: headers,
-            body: isPost ? JSON.stringify(Object.assign({ action: action }, body)) : undefined
-          });
-          var data = await res.json().catch(function () { return {}; });
-          if (!res.ok) {
-            var err = new Error(data.message || ("HTTP " + res.status));
-            err.status = res.status;
-            throw err;
-          }
-          return data;
-        }
-
-        function renderMath(element) {
-          if (!element || typeof renderMathInElement !== "function") return;
-          try {
-            renderMathInElement(element, {
-              delimiters: [
-                { left: "$$", right: "$$", display: true },
-                { left: "\\[", right: "\\]", display: true },
-                { left: "$", right: "$", display: false },
-                { left: "\\(", right: "\\)", display: false }
-              ],
-              throwOnError: false,
-              strict: "ignore"
-            });
-          } catch (e) { /* keep the raw text */ }
-        }
-
-        function inRange(problem) {
-          return problem && Number.isInteger(problem.index) && problem.index >= RANGE_START && problem.index <= RANGE_END;
-        }
-
-        function renderProblem(problem) {
-          var card = document.createElement("section");
-          card.className = "testing-problem";
-
-          var heading = document.createElement("h2");
-          var tag = document.createElement("span");
-          tag.className = "tag";
-          tag.textContent = problemTag(problem.index, problem.type);
-          var name = document.createElement("span");
-          name.textContent = problem.type;
-          var diff = document.createElement("span");
-          var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
-          diff.className = "diff " + level;
-          diff.textContent = DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
-          heading.append(tag, name, diff);
-
-          var prompt = document.createElement("div");
-          prompt.className = "prompt";
-          var source = problem.prompt || "";
-          if (/<\/?[a-z][\w:-]*\b[^>]*>/i.test(source)) {
-            // Keep HTML problems visible as text here; the real app renders them in a sandboxed frame.
-            prompt.textContent = plainText(source) || "(empty prompt)";
-          } else {
-            prompt.textContent = source || "(empty prompt)";
-            renderMath(prompt);
-          }
-
-          var form = document.createElement("form");
-          var input = document.createElement("input");
-          input.type = "text";
-          input.maxLength = 5000;
-          input.placeholder = "Your answer";
-          input.setAttribute("aria-label", "Answer for " + tag.textContent);
-          var button = document.createElement("button");
-          button.type = "submit";
-          button.textContent = "Submit";
-          form.append(input, button);
-
-          var result = document.createElement("p");
-          result.className = "testing-result";
-          result.hidden = true;
-
-          form.addEventListener("submit", async function (event) {
-            event.preventDefault();
-            if (button.disabled) return;
-            button.disabled = true;
-            result.hidden = true;
-            try {
-              // test-problem runs the saved logic/answer without writing anything.
-              var data = await apiCall("test-problem", {
-                logic: problem.logic || "",
-                expected: problem.answer || "",
-                answer: input.value
-              });
-              result.hidden = false;
-              if (data.systemError) {
-                result.className = "testing-result err";
-                result.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
-              } else if (data.correct) {
-                result.className = "testing-result ac";
-                result.textContent = "AC" + (typeof data.score === "number" ? " · " + data.score + "/100" : "");
-              } else {
-                result.className = "testing-result wa";
-                var msg = data.comment && data.comment !== "WA" ? data.comment : "Wrong answer.";
-                result.textContent = "WA · " + msg + (typeof data.score === "number" ? " (" + data.score + "/100)" : "");
-              }
-            } catch (error) {
-              result.hidden = false;
-              result.className = "testing-result err";
-              result.textContent = error.message;
-            } finally {
-              button.disabled = false;
-            }
-          });
-
-          card.append(heading, prompt, form, result);
-          return card;
-        }
-
-        async function loadProblems() {
-          loadButton.disabled = true;
-          setStatus("Loading…");
-          listEl.replaceChildren();
-          try {
-            var data = await apiCall("bootstrap");
-            var problems = Array.isArray(data.problems) ? data.problems : [];
-            var matched = problems.filter(inRange).sort(function (a, b) {
-              return a.index - b.index || a.type.localeCompare(b.type);
-            });
-            if (matched.length === 0) {
-              var empty = document.createElement("p");
-              empty.className = "testing-empty";
-              empty.textContent = "No problems with index 26000–26099 were returned.";
-              listEl.append(empty);
-              setStatus("Loaded, but the range is empty.");
-              return;
-            }
-            for (var i = 0; i < matched.length; i += 1) listEl.append(renderProblem(matched[i]));
-            setStatus("Loaded " + matched.length + " problem" + (matched.length === 1 ? "" : "s") + " in 26000–26099.", "ok");
-          } catch (error) {
-            var p = document.createElement("p");
-            p.className = "testing-empty";
-            p.textContent = error.message;
-            listEl.append(p);
-            setStatus(error.message, "err");
-          } finally {
-            loadButton.disabled = false;
-          }
-        }
-
-        // Prefill from the shared session so a logged-in admin can just press Load.
-        var stored = readStoredToken();
-        if (stored) {
-          tokenInput.value = stored;
-          setStatus("Using the session token already stored in this browser.");
-        } else {
-          setStatus("Paste a token to load problems. The API rejects requests without one.", "err");
-        }
-
-        loadButton.addEventListener("click", loadProblems);
-        clearButton.addEventListener("click", function () {
-          tokenInput.value = "";
-          listEl.replaceChildren();
-          setStatus("Token cleared.", "");
-        });
-      })();
-    </script>
-  </body>
-</html>
+async function handlePublicCheck(req, res, db, body) {
+  const index = body.index;
+  const type = typeof body.type === 'string' ? body.type : '';
+  const given = typeof body.answer === 'string' ? body.answer : '';
+  if (!Number.isInteger(index) || !PROBLEM_TYPES.includes(type)) {
+    return res.status(400).json({ success: false, message: 'Missing problem.' });
+  }
+  const problem = await db.collection('problems').findOne({ index, type });
+  if (!problem || !isPublicProblem(problem)) {
+    return res.status(404).json({ success: false, message: 'Problem not available.' });
+  }
+  if (given.length > MAX_TEST_TEXT) {
+    return res.status(400).json({ success: false, message: 'Answer is too long.' });
+  }
+  const logic = typeof problem.logic === 'string' ? problem.logic.trim() : '';
+  if (logic) {
+    const judged = runProblemLogic(logic, problem.answer, given);
+    return res.status(200).json({
+      success: true,
+      correct: judged.correct,
+      systemError: judged.systemError,
+      score: judged.score,
+      comment: judged.comment,
+      error: judged.error,
+    });
+  }
+  const correct = answersMatch(problem.answer, given);
+  return res.status(200).json({
+    success: true,
+    correct,
+    systemError: false,
+    score: correct ? 100 : 0,
+    comment: correct ? 'AC' : 'WA',
+    error: '',
+  });
+}
