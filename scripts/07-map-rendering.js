@@ -24,7 +24,7 @@ function renderMapCounts(map) {
     ["oi", "OI", counts.oi],
     ["science", "Science", counts.science],
     ["puzzle", "Puzzle", counts.puzzle],
-    ["testing", "Testing", counts.testing],
+    ...(mapMode(map) === "testing" ? [["testing", "Testing", counts.testing]] : []),
     ["obstacle", "Obstacles", counts.obstacle],
     ["spawnpoint", "Spawn points", counts.spawnpoint],
     ["empty", "Empty", counts.empty],
@@ -42,22 +42,18 @@ function renderMapCounts(map) {
   }
 }
 function renderMaps() {
+  const mode = newMapMode === "testing" ? "testing" : "official";
+  const group = maps.filter((map) => mapMode(map) === mode);
   mapList.replaceChildren();
-  emptyMessage.hidden = maps.length > 0;
-  mapList.hidden = maps.length === 0;
-  const groups = [
-    ["official", "Official maps"],
-    ["testing", "Testing maps"],
-  ];
-  for (const [mode, title] of groups) {
-    const group = maps.filter((map) => mapMode(map) === mode);
-    if (group.length === 0) continue;
-    const heading = document.createElement("li");
-    heading.className = "map-group-label";
-    heading.textContent = title;
-    mapList.append(heading);
-    for (const map of group) mapList.append(mapListItem(map));
+  const none = group.length === 0;
+  if (emptyMessage) {
+    emptyMessage.hidden = !none;
+    emptyMessage.textContent = maps.length === 0
+      ? "No maps yet."
+      : mode === "testing" ? "No testing maps yet." : "No official maps yet.";
   }
+  mapList.hidden = none;
+  for (const map of group) mapList.append(mapListItem(map));
 }
 
 function mapListItem(map) {
@@ -92,6 +88,7 @@ function renderEditor() {
   renderMapCounts(map);
   if (editorNameInput) editorNameInput.value = map.name;
   renderMapModeButtons(mapModeChoices, mapMode(map));
+  if (editorView) editorView.dataset.mapMode = mapMode(map);
   syncTestingPlaceTools();
   if (deleteOpenMapButton) deleteOpenMapButton.setAttribute("aria-label", `Delete map ${map.name}`);
   editorGrid.dataset.cols = String(map.cols);

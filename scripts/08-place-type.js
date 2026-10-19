@@ -81,6 +81,7 @@ function renderPlacePick() {
 
 function syncTestingPlaceTools() {
   const testingMap = mapMode(currentMap()) === "testing";
+  if (editorView) editorView.dataset.mapMode = testingMap ? "testing" : "official";
   for (const button of document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']")) {
     button.hidden = !testingMap;
   }

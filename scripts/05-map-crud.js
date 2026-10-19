@@ -29,6 +29,7 @@ function onCreateMapModeClick(event) {
   if (!button) return;
   newMapMode = button.dataset.mapMode === "testing" ? "testing" : "official";
   renderMapModeButtons(createMapMode, newMapMode);
+  renderMaps();
 }
 
 function onMapModeClick(event) {

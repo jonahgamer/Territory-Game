@@ -1068,7 +1068,7 @@ async function handleChooseSpawn(req, res, db, user, body) {
   const teams = cleanTeams(contest.teams);
   const spawnVotes = cleanSpawnVotes(contest.spawnVotes).filter((vote) => !(vote.teamId === team.id && sameName(vote.username, username)));
   spawnVotes.push({ teamId: team.id, username, cell });
-  await col.updateOne(
+    await col.updateOne(
     { id: contestId, spawnResolved: { $ne: true } },
     {
       $set: {

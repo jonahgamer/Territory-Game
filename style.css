@@ -1367,6 +1367,11 @@ button[type="submit"],
   margin-top: 16px;
 }
 
+#editor-view:not([data-map-mode="testing"]) [data-place-type="testing"],
+#editor-view:not([data-map-mode="testing"]) [data-pick-type="testing"] {
+  display: none !important;
+}
+
 #place-manual,
 #place-pick {
   display: flex;
