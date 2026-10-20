@@ -960,6 +960,7 @@ async function submitAnswer(event) {
 
     function closeOverlay() {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      closeProblem();
     }
     overlay.querySelector("[data-neko-close]").addEventListener("click", closeOverlay);
     overlay.addEventListener("click", function (e) {
@@ -968,33 +969,45 @@ async function submitAnswer(event) {
 
     document.body.appendChild(overlay);
 
-    // Load the image
-    fetch("https://nekos.best/api/v2/neko")
-      .then(function (r) { return r.json(); })
-      .then(function (json) {
-        var imgUrl = json.results && json.results[0] && json.results[0].url;
-        var img = overlay.querySelector("[data-neko-img]");
-        var statusEl = overlay.querySelector("[data-neko-status]");
-        if (!imgUrl) throw new Error("no image url");
-        img.onload = function () {
+    // Helper to get cookie
+    function getCookie(name) {
+      var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      if (match) return match[2];
+      return null;
+    }
+
+    var img = overlay.querySelector("[data-neko-img]");
+    var statusEl = overlay.querySelector("[data-neko-status]");
+
+    // If neko cookie is set to 1, try to fetch neko. Otherwise, fallback immediately.
+    if (getCookie("neko") === "1") {
+      fetch("https://nekos.best/api/v2/neko")
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+          var imgUrl = json.results && json.results[0] && json.results[0].url;
+          if (!imgUrl) throw new Error("no image url");
+          img.onload = function () {
+            statusEl.style.display = "none";
+            img.style.display = "block";
+          };
+          img.onerror = function () {
+            statusEl.textContent = "Image failed to load.";
+          };
+          img.src = imgUrl;
+        })
+        .catch(function (e) {
+          // Fallback if API fails
           statusEl.style.display = "none";
-          img.style.display = "block";
-        };
-        img.onerror = function () {
-          statusEl.textContent = "Image failed to load.";
-        };
-        img.src = imgUrl;
-      })
-      .catch(function (e) {
-        var statusEl = overlay.querySelector("[data-neko-status]");
-        var img = overlay.querySelector("[data-neko-img]");
-        if (statusEl) statusEl.style.display = "none";
-        if (img) {
           img.onerror = function () { /* optionally show text if fallback also fails */ };
-          img.src = "lol.png"; // <-- fallback image
+          img.src = "lol.png"; 
           img.style.display = "block";
-        }
-      });
+        });
+    } else {
+      // Fallback directly if cookie is not 1
+      statusEl.style.display = "none";
+      img.src = "lol.png";
+      img.style.display = "block";
+    }
     // ────────────────────────────────────────────────────────────────
 
   } catch (err) {

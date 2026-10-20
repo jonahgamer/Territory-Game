@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings · Territory Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <style>
+      body {
+        background: #060910;
+        color: var(--ink);
+        font-family: var(--font-ui);
+        padding: 24px 16px;
+        max-width: 40rem;
+        margin: 0 auto;
+      }
+      h1 { font-size: 24px; margin-bottom: 8px; }
+      p { color: var(--muted); margin-bottom: 24px; }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        background: #101820;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        margin-bottom: 24px;
+      }
+      .toggle-row span { font-size: 16px; }
+      input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+      }
+      .save-btn {
+        padding: 12px 24px;
+        background: rgba(62, 224, 255, 0.14);
+        border: 1px solid var(--cyan);
+        color: var(--cyan);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .save-btn:hover { background: rgba(62, 224, 255, 0.24); }
+    </style>
+  </head>
+  <body>
+    <h1>Settings</h1>
+    <p>Manage your preferences. Changes are saved locally in your browser.</p>
+
+    <div class="toggle-row">
+      <span>Show Neko image on Accepted popup</span>
+      <input type="checkbox" id="neko-toggle" />
+    </div>
+
+    <button class="save-btn" id="save-btn">Save Preferences</button>
+
+    <script>
+      // Read cookie
+      function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        if (match) return match[2];
+        return null;
+      }
+
+      // Set cookie (expires in 1 year)
+      function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+          var date = new Date();
+          date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+          expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/";
+      }
+
+      // Delete cookie
+      function deleteCookie(name) {
+        document.cookie = name + '=; Max-Age=-99999999; path=/';
+      }
+
+      // Initialize checkbox state
+      var toggle = document.getElementById("neko-toggle");
+      toggle.checked = getCookie("neko") === "1";
+
+      // Save button
+      document.getElementById("save-btn").addEventListener("click", function () {
+        if (toggle.checked) {
+          setCookie("neko", "1", 365);
+        } else {
+          deleteCookie("neko");
+        }
+        alert("Preferences saved!");
+      });
+    </script>
+  </body>
+</html>
