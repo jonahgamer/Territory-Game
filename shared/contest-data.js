@@ -1,4 +1,6 @@
 import { contestantId, sameContestant } from "./session.js";
+import { contestSchedule, serverNow } from "./contest-time.js";
+import { cleanEnergyLedger, energyNow, readEnergySettings } from "./energy.js";
 
 export function normalizeTeams(value) {
   if (!Array.isArray(value)) return [];
@@ -58,6 +60,7 @@ export function normalizeClaims(value) {
 
 export function normalizeContest(raw) {
   const teams = normalizeTeams(raw.teams);
+  const energy = readEnergySettings(raw);
   return {
     id: raw.id,
     name: raw.name,
@@ -70,6 +73,13 @@ export function normalizeContest(raw) {
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
     mode: raw.mode === "testing" ? "testing" : "competition",
     spawnMode: raw.spawnMode === "random" ? "random" : "choose",
+    energyRegen: energy.regen,
+    energyRegenSeconds: energy.regenSeconds,
+    energyAttemptCost: energy.attemptCost,
+    energyAttemptMin: energy.attemptMin,
+    energySolveBelow: energy.solveBelow,
+    energySolve: energy.solve,
+    energy: cleanEnergyLedger(raw.energy),
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes),
@@ -89,6 +99,18 @@ export function teamShort(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   return String(name || "").trim().slice(0, 3).toUpperCase();
+}
+
+export function teamEnergy(contest, teamId, now = serverNow()) {
+  const schedule = contestSchedule(contest);
+  const stored = cleanEnergyLedger(contest?.energy).find((entry) => entry.teamId === teamId) || null;
+  return energyNow({
+    settings: readEnergySettings(contest),
+    liveAt: schedule?.liveAt,
+    endAt: schedule?.endAt,
+    now,
+    stored,
+  });
 }
 
 export function teamForUser(contest, username = contestantId()) {

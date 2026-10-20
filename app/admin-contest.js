@@ -8,7 +8,7 @@ import {
   contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamForUser } from "../shared/contest-data.js";
+import { normalizeContest, teamEnergy, teamForUser } from "../shared/contest-data.js";
 import { layoutMapGrid, mapMode, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_SCORE, DIFFICULTY_NAME } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
@@ -69,6 +69,9 @@ function bindEvents() {
   });
   for (const id of ["#contest-start-input", "#contest-duration-input", "#contest-spawn-input", "#contest-ready-input"]) {
     document.querySelector(id)?.addEventListener("change", commitSchedule);
+  }
+  for (const id of ["#energy-regen", "#energy-regen-seconds", "#energy-attempt-cost", "#energy-attempt-min", "#energy-solve-below", "#energy-solve-easy", "#energy-solve-normal", "#energy-solve-hard", "#energy-solve-insane"]) {
+    document.querySelector(id)?.addEventListener("change", commitEnergy);
   }
   document.querySelector("#delete-open-contest")?.addEventListener("click", deleteContest);
   document.querySelector("#team-form")?.addEventListener("submit", saveTeam);
@@ -142,6 +145,7 @@ function render() {
   document.querySelector("#contest-name-input").value = c.name;
   fillMapSelect();
   fillSchedule();
+  fillEnergy();
   updateSpawnNote();
   renderSpawnMode();
   renderMode();
@@ -196,6 +200,57 @@ function updateSpawnNote() {
   note.textContent = count === 0
     ? `${map.name} has no spawn points yet. Place them on the map.`
     : `${map.name} has ${count} spawn point${count === 1 ? "" : "s"}.`;
+}
+
+function fillEnergy() {
+  const c = state.current;
+  const solve = c.energySolve || {};
+  const set = (id, value) => {
+    const input = document.querySelector(id);
+    if (input) input.value = Number.isInteger(value) ? String(value) : "";
+  };
+  set("#energy-regen", c.energyRegen);
+  set("#energy-regen-seconds", c.energyRegenSeconds);
+  set("#energy-attempt-cost", c.energyAttemptCost);
+  set("#energy-attempt-min", c.energyAttemptMin);
+  set("#energy-solve-below", c.energySolveBelow);
+  set("#energy-solve-easy", solve.easy);
+  set("#energy-solve-normal", solve.normal);
+  set("#energy-solve-hard", solve.hard);
+  set("#energy-solve-insane", solve.insane);
+}
+
+function readEnergyNumber(id, max, min = 0) {
+  const n = Number(document.querySelector(id)?.value);
+  if (!Number.isInteger(n) || n < min || n > max) return null;
+  return n;
+}
+
+function commitEnergy() {
+  const error = document.querySelector("#contest-energy-error");
+  const regen = readEnergyNumber("#energy-regen", 100);
+  const seconds = readEnergyNumber("#energy-regen-seconds", 86400, 1);
+  const cost = readEnergyNumber("#energy-attempt-cost", 100);
+  const attemptMin = readEnergyNumber("#energy-attempt-min", 100);
+  const solveBelow = readEnergyNumber("#energy-solve-below", 100);
+  const easy = readEnergyNumber("#energy-solve-easy", 100);
+  const normal = readEnergyNumber("#energy-solve-normal", 100);
+  const hard = readEnergyNumber("#energy-solve-hard", 100);
+  const insane = readEnergyNumber("#energy-solve-insane", 100);
+  if ([regen, seconds, cost, attemptMin, solveBelow, easy, normal, hard, insane].some((n) => n === null)) {
+    error.hidden = false;
+    error.textContent = "Energy values must be whole numbers. Restore amounts are 0 to 100, and the clock interval is 1 to 86400 seconds.";
+    return;
+  }
+  error.hidden = true;
+  const c = state.current;
+  c.energyRegen = regen;
+  c.energyRegenSeconds = seconds;
+  c.energyAttemptCost = cost;
+  c.energyAttemptMin = attemptMin;
+  c.energySolveBelow = solveBelow;
+  c.energySolve = { easy, normal, hard, insane };
+  persistContests();
 }
 
 function renderSpawnMode() {
@@ -264,8 +319,13 @@ function renderTeams() {
     if (team.id === state.editingTeamId) item.classList.add("editing");
     const name = el("span", "contest-name-label");
     name.append(el("span", "team-color-dot"), document.createTextNode(team.name));
-    const detail = el("span", "team-detail",
-      `${team.members.length} member${team.members.length === 1 ? "" : "s"} · ${team.members.join(" · ")}`);
+    const detail = el("span", "team-detail");
+    const energy = el("span", null, "");
+    energy.dataset.teamEnergy = team.id;
+    detail.append(
+      document.createTextNode(`${team.members.length} member${team.members.length === 1 ? "" : "s"} · ${team.members.join(" · ")} · Energy `),
+      energy
+    );
     const edit = el("button", "account-action", "Edit");
     edit.type = "button";
     edit.addEventListener("click", () => beginEdit(team));
@@ -408,6 +468,7 @@ function applyPlayState(data) {
   state.current.spawnVotes = next.spawnVotes || [];
   state.current.spawns = next.spawns || [];
   state.current.claims = next.claims || [];
+  if (Array.isArray(next.energy)) state.current.energy = next.energy;
   if (next.mode) state.current.mode = next.mode;
   noteServerTime(data.serverNow);
 }
@@ -506,6 +567,9 @@ function paintClock() {
   const text = phaseClock(state.current);
   node.hidden = !text;
   node.textContent = text;
+  for (const energy of document.querySelectorAll("[data-team-energy]")) {
+    energy.textContent = `${teamEnergy(state.current, energy.dataset.teamEnergy)}/100`;
+  }
 }
 
 function startClock() {

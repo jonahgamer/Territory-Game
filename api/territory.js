@@ -27,6 +27,7 @@ import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 import { runProblemLogic } from './logic.js';
+import { cleanEnergyLedger, energyAfterAttempt, energyNow, readEnergySettings } from '../shared/energy.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -447,8 +448,45 @@ function contestPayload(contest, map, problems, user) {
       claims: visibleClaims,
       leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, map, problems || []),
       frozen,
+      ...energyFields(contest, admin ? null : team?.id, Date.now()),
     },
   };
+}
+
+function energyFields(contest, onlyTeamId, now) {
+  const settings = readEnergySettings(contest);
+  const ledger = cleanEnergyLedger(contest?.energy).filter((entry) => !onlyTeamId || entry.teamId === onlyTeamId);
+  return {
+    energyRegen: settings.regen,
+    energyRegenSeconds: settings.regenSeconds,
+    energyAttemptCost: settings.attemptCost,
+    energyAttemptMin: settings.attemptMin,
+    energySolveBelow: settings.solveBelow,
+    energySolve: settings.solve,
+    energy: ledger,
+  };
+}
+
+function teamEnergyValue(contest, teamId, now) {
+  const timing = contestWindow(contest);
+  const stored = cleanEnergyLedger(contest?.energy).find((entry) => entry.teamId === teamId) || null;
+  return energyNow({
+    settings: readEnergySettings(contest),
+    liveAt: timing?.liveAt,
+    endAt: timing?.endAt,
+    now,
+    stored,
+  });
+}
+
+function nextTeamEnergy(contest, teamId, now, difficulty, correct) {
+  const settings = readEnergySettings(contest);
+  const current = teamEnergyValue(contest, teamId, now);
+  if (current < settings.attemptMin) return { blocked: true, current, settings };
+  const next = energyAfterAttempt(current, settings, difficulty, correct);
+  const energy = cleanEnergyLedger(contest?.energy).filter((entry) => entry.teamId !== teamId);
+  energy.push({ teamId, value: next, at: now });
+  return { blocked: false, current, next, energy, settings };
 }
 
 function isRandomSpawn(contest) {
@@ -493,6 +531,7 @@ function normalizeContest(v) {
     if (ids.includes(id)) continue;
     ids.push(id);
   }
+  const energy = readEnergySettings(v);
   return {
     id: v.id,
     name,
@@ -504,6 +543,12 @@ function normalizeContest(v) {
     readyMinutes: v.readyMinutes,
     mode: v.mode === 'testing' ? 'testing' : 'competition',
     spawnMode,
+    energyRegen: energy.regen,
+    energyRegenSeconds: energy.regenSeconds,
+    energyAttemptCost: energy.attemptCost,
+    energyAttemptMin: energy.attemptMin,
+    energySolveBelow: energy.solveBelow,
+    energySolve: energy.solve,
   };
 }
 
@@ -669,6 +714,13 @@ async function handleBootstrap(req, res, db, user) {
       spawnMinutes: Number.isInteger(c.spawnMinutes) ? c.spawnMinutes : null,
       readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
       spawnMode: c.spawnMode === 'random' ? 'random' : 'choose',
+      energyRegen: play.energyRegen,
+      energyRegenSeconds: play.energyRegenSeconds,
+      energyAttemptCost: play.energyAttemptCost,
+      energyAttemptMin: play.energyAttemptMin,
+      energySolveBelow: play.energySolveBelow,
+      energySolve: play.energySolve,
+      energy: play.energy,
       teams,
       spawnResolved: play.spawnResolved,
       resolvedTeams: play.resolvedTeams,
@@ -793,6 +845,12 @@ async function handleSaveContests(req, res, db, user, body) {
           readyMinutes: contest.readyMinutes,
           mode: contest.mode === 'testing' ? 'testing' : 'competition',
           spawnMode: contest.spawnMode === 'random' ? 'random' : 'choose',
+          energyRegen: contest.energyRegen,
+          energyRegenSeconds: contest.energyRegenSeconds,
+          energyAttemptCost: contest.energyAttemptCost,
+          energyAttemptMin: contest.energyAttemptMin,
+          energySolveBelow: contest.energySolveBelow,
+          energySolve: contest.energySolve,
           updatedAt: new Date(),
         };
         const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
@@ -806,6 +864,7 @@ async function handleSaveContests(req, res, db, user, body) {
           update.claims = [];
           update.spawnResolved = false;
           update.resolvedTeams = [];
+          update.energy = [];
         } else if (!sameMap || !sameMode || !sameSpawnMode) {
           update.spawnChoices = [];
           update.spawnVotes = [];
@@ -813,6 +872,7 @@ async function handleSaveContests(req, res, db, user, body) {
           update.claims = [];
           update.spawnResolved = false;
           update.resolvedTeams = [];
+          update.energy = [];
         }
         await col.updateOne(
           { id: contest.id },
@@ -1083,6 +1143,7 @@ async function handleRemoveTeam(req, res, db, user, body) {
     spawnVotes: cleanSpawnVotes(contest.spawnVotes).filter((vote) => vote.teamId !== teamId),
     spawns: cleanTeamCells(contest.spawns).filter((spawn) => spawn.teamId !== teamId),
     claims: cleanClaims(contest.claims).filter((claim) => claim.teamId !== teamId),
+    energy: cleanEnergyLedger(contest.energy).filter((entry) => entry.teamId !== teamId),
     updatedAt: new Date(),
   };
   if (teams.length === 0) update.spawnResolved = false;
@@ -1194,37 +1255,65 @@ async function handleSolve(req, res, db, user, body) {
 
   const mapCell = map.cells[cell];
   const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
-  const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
-if (logic) {
-  const judged = runProblemLogic(logic, problem.answer, body.answer);
-  if (judged.systemError) {
-    return res.status(500).json({
-      success: false,
-      message: judged.comment || 'The checker could not run.',
-      serverNow: now,
-    });
-  }
-  if (!judged.correct) {
+  const difficulty = problemDifficulty(problem);
+  const gate = nextTeamEnergy(contest, team.id, now, difficulty, false);
+  if (gate.blocked) {
     return res.status(400).json({
       success: false,
-      message: judged.comment || 'That answer is not right.',
+      message: `The team has ${gate.current} energy. An attempt needs at least ${gate.settings.attemptMin}.`,
       serverNow: now,
+      contest: contestPayload(contest, map, problems, user).contest,
     });
   }
-} else if (!problem || !answersMatch(problem.answer, body.answer)) {
+
+  const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
+  let correct = false;
+  if (logic) {
+    const judged = runProblemLogic(logic, problem.answer, body.answer);
+    if (judged.systemError) {
+      return res.status(500).json({
+        success: false,
+        message: judged.comment || 'The checker could not run.',
+        serverNow: now,
+      });
+    }
+    correct = judged.correct === true;
+    if (!correct) {
+      const spent = nextTeamEnergy(contest, team.id, now, difficulty, false);
+      await col.updateOne({ id: contestId }, { $set: { energy: spent.energy, updatedAt: new Date() } });
+      const missed = await col.findOne({ id: contestId });
+      return res.status(400).json({
+        success: false,
+        message: judged.comment || 'That answer is not right.',
+        serverNow: now,
+        contest: contestPayload(missed, map, problems, user).contest,
+      });
+    }
+  } else if (!problem || !answersMatch(problem.answer, body.answer)) {
     const message = problem && String(problem.answer || '').trim()
       ? 'That answer is not right.'
       : 'This problem has no answer yet.';
-    return res.status(400).json({ success: false, message, serverNow: now });
+    const spent = nextTeamEnergy(contest, team.id, now, difficulty, false);
+    await col.updateOne({ id: contestId }, { $set: { energy: spent.energy, updatedAt: new Date() } });
+    const missed = await col.findOne({ id: contestId });
+    return res.status(400).json({
+      success: false,
+      message,
+      serverNow: now,
+      contest: contestPayload(missed, map, problems, user).contest,
+    });
+  } else {
+    correct = true;
   }
 
+  const spent = nextTeamEnergy(contest, team.id, now, difficulty, correct);
   const claim = { cell, teamId: team.id, solvedBy: username, solvedAt: now };
   const claimFilter = testing
     ? { id: contestId, claims: { $not: { $elemMatch: { cell, teamId: team.id } } } }
     : { id: contestId, 'claims.cell': { $ne: cell } };
   const result = await col.updateOne(
     claimFilter,
-    { $push: { claims: claim }, $set: { updatedAt: new Date() } }
+    { $push: { claims: claim }, $set: { energy: spent.energy, updatedAt: new Date() } }
   );
   if (result.matchedCount === 0) {
     return res.status(400).json({

@@ -7,7 +7,8 @@ import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
+import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_NAME, DIFFICULTY_SCORE, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag } from "../shared/difficulty.js";
@@ -96,6 +97,7 @@ function render() {
   const summary = document.querySelector("#student-team-summary");
   summary.hidden = false;
   summary.textContent = `Members: ${team.members.join(", ")} · Score: ${row?.score ?? 0} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
+  paintEnergy();
 
   writeStatus(contest, phase, map, frozen);
   renderRoster(contest, map, phase);
@@ -417,6 +419,7 @@ function showProblem(contest, map, phase) {
   const pts = DIFFICULTY_SCORE[d] || 2;
   document.querySelector("#student-problem-tag").textContent = `${DIFFICULTY_NAME[d] || "Normal"} · ${pts} point${pts === 1 ? "" : "s"}`;
   form.hidden = false;
+  paintEnergy();
   document.querySelector("#student-answer-error").hidden = true;
   document.querySelector("#student-answer-success").hidden = true;
   const input = document.querySelector("#student-answer");
@@ -475,14 +478,24 @@ async function submitAnswer(event) {
   if (!contest || !map || !team || state.selectedCell === null) return;
   const cell = state.selectedCell;
   const submit = document.querySelector("#student-answer-form button");
+  const settings = readEnergySettings(contest);
+  const energy = teamEnergy(contest, team.id);
+  if (energy < settings.attemptMin) {
+    const errorEl = document.querySelector("#student-answer-error");
+    errorEl.hidden = false;
+    errorEl.textContent = `The team has ${energy} energy. An attempt needs at least ${settings.attemptMin}.`;
+    return;
+  }
   if (submit.disabled) return;
   const label = submit.textContent;
+  submit.dataset.busy = "1";
   submit.disabled = true; submit.textContent = "Checking...";
   const errorEl = document.querySelector("#student-answer-error");
   errorEl.hidden = true;
 
   const approval = await statement.approveSubmit();
   if (approval.blocked) {
+    submit.dataset.busy = "";
     submit.disabled = false; submit.textContent = label;
     errorEl.hidden = false;
     errorEl.textContent = approval.message || "Finish the problem before submitting.";
@@ -505,8 +518,10 @@ async function submitAnswer(event) {
     success.textContent = "Answer accepted. Close this problem to continue.";
   } catch (err) {
     contest.claims = prevClaims;
+    if (err.data?.contest) applyPlayState(err.data);
     failure = err.message;
   }
+  submit.dataset.busy = "";
   submit.disabled = false; submit.textContent = label;
   render();
   if (failure) {
@@ -527,7 +542,40 @@ function applyPlayState(data) {
   if (Array.isArray(next.spawnVotes)) c.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
   if (Array.isArray(next.spawns)) c.spawns = normalizeTeamCells(next.spawns);
   if (Array.isArray(next.claims)) c.claims = normalizeClaims(next.claims);
+  if (Array.isArray(next.energy)) c.energy = next.energy;
+  if (Number.isInteger(next.energyRegen)) c.energyRegen = next.energyRegen;
+  if (Number.isInteger(next.energyRegenSeconds)) c.energyRegenSeconds = next.energyRegenSeconds;
+  if (Number.isInteger(next.energyAttemptCost)) c.energyAttemptCost = next.energyAttemptCost;
+  if (Number.isInteger(next.energyAttemptMin)) c.energyAttemptMin = next.energyAttemptMin;
+  if (Number.isInteger(next.energySolveBelow)) c.energySolveBelow = next.energySolveBelow;
+  if (next.energySolve) c.energySolve = next.energySolve;
   noteServerTime(data.serverNow);
+}
+
+function paintEnergy() {
+  const contest = state.contest;
+  const team = contest && teamForUser(contest);
+  const node = document.querySelector("#student-energy");
+  const track = document.querySelector("#student-energy-track");
+  const fill = document.querySelector("#student-energy-fill");
+  if (!contest || !team || !node || !track || !fill) return;
+  const settings = readEnergySettings(contest);
+  const value = teamEnergy(contest, team.id);
+  node.hidden = false;
+  track.hidden = false;
+  node.textContent = value < settings.attemptMin
+    ? `Energy ${value} / 100. An attempt needs at least ${settings.attemptMin}.`
+    : `Energy ${value} / 100. Restores ${settings.regen} every ${settings.regenSeconds}s. Each attempt spends ${settings.attemptCost}.`;
+  fill.style.width = `${value}%`;
+  fill.classList.toggle("low", value < settings.attemptMin);
+  const submit = document.querySelector("#student-answer-form button");
+  const block = document.querySelector("#student-energy-block");
+  const blocked = value < settings.attemptMin;
+  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked;
+  if (block) {
+    block.hidden = !blocked;
+    block.textContent = `The team has ${value} energy. An attempt needs at least ${settings.attemptMin}.`;
+  }
 }
 
 function paintClock() {
@@ -543,6 +591,7 @@ function startClock() {
   state.clock = setInterval(() => {
     if (!document.querySelector("#student-grid")) { clearInterval(state.clock); state.clock = null; return; }
     paintClock();
+    paintEnergy();
     const phase = contestPhase(state.contest);
     const map = state.maps.find((m) => m.id === state.contest.mapId);
     const frozen = isFrozen(state.contest, map);

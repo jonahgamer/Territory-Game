@@ -30,6 +30,12 @@ const CONFLICT_FIELDS = {
     { key: "spawnMinutes", label: "Spawn time" },
     { key: "readyMinutes", label: "Wait after spawn" },
     { key: "spawnMode", label: "Spawn assignment" },
+    { key: "energyRegen", label: "Energy restored" },
+    { key: "energyRegenSeconds", label: "Energy restore interval" },
+    { key: "energyAttemptCost", label: "Energy spent per attempt" },
+    { key: "energyAttemptMin", label: "Minimum energy to attempt" },
+    { key: "energySolveBelow", label: "Solve restore applies below" },
+    { key: "energySolve", label: "Energy restored by difficulty" },
   ],
 };
 

@@ -56,7 +56,21 @@
           <label>Wait after spawn (min) <input id="contest-ready-input" type="number" min="0" max="10080" /></label>
           <p id="contest-spawn-mode-note" class="field-note" hidden>Teams are placed on random spawn points when the contest starts. There is no choosing period. The wait still runs before solving begins.</p>
         </fieldset>
+        <fieldset class="contest-schedule" id="contest-energy">
+          <legend>Energy</legend>
+          <p class="field-note">Each team shares one pool. The maximum is 100. During the solving period the clock restores energy, and each attempt spends energy. A correct answer also restores the difficulty amount while the team is below the line you set.</p>
+          <label>Restore <input id="energy-regen" type="number" min="0" max="100" /></label>
+          <label>Every (seconds) <input id="energy-regen-seconds" type="number" min="1" max="86400" /></label>
+          <label>Spent per attempt <input id="energy-attempt-cost" type="number" min="0" max="100" /></label>
+          <label>Cannot attempt below <input id="energy-attempt-min" type="number" min="0" max="100" /></label>
+          <label>Solve restore applies below <input id="energy-solve-below" type="number" min="0" max="100" /></label>
+          <label>Easy restore <input id="energy-solve-easy" type="number" min="0" max="100" /></label>
+          <label>Normal restore <input id="energy-solve-normal" type="number" min="0" max="100" /></label>
+          <label>Hard restore <input id="energy-solve-hard" type="number" min="0" max="100" /></label>
+          <label>Insane restore <input id="energy-solve-insane" type="number" min="0" max="100" /></label>
+        </fieldset>
         <p id="contest-schedule-error" class="form-error" hidden></p>
+        <p id="contest-energy-error" class="form-error" hidden></p>
       </form>
 
       <div class="kind-choices" id="contest-mode-choices" role="group" aria-label="Contest mode">

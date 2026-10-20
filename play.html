@@ -60,6 +60,8 @@
       <p id="student-spawn-note" class="field-note" hidden></p>
       <p id="student-joined" class="field-note" hidden></p>
       <p id="student-team-summary" class="field-note" hidden></p>
+      <p id="student-energy" class="energy-readout" hidden></p>
+      <div id="student-energy-track" class="energy-track" hidden><div id="student-energy-fill" class="energy-fill"></div></div>
 
       <h2 id="student-leaderboard-heading" hidden>Leaderboard</h2>
       <ol id="student-leaderboard" class="leaderboard" hidden></ol>
@@ -84,6 +86,7 @@
             <form id="student-answer-form" hidden>
               <label>Answer <input id="student-answer" type="text" maxlength="5000" /></label>
               <button type="submit">Submit</button>
+              <p id="student-energy-block" class="form-error" hidden></p>
               <p id="student-answer-error" class="form-error" hidden></p>
             </form>
             <p id="student-answer-success" class="status-note" hidden></p>
