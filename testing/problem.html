@@ -213,7 +213,9 @@
           var img = overlay.querySelector("[data-neko-img]");
           var statusEl = overlay.querySelector("[data-neko-status]");
 
+          // Strict check: only fetch if cookie is exactly "1"
           if (getCookie("neko") === "1") {
+            // console.log("Neko cookie found. Fetching API...");
             fetch("https://nekos.best/api/v2/neko")
               .then(function (r) { return r.json(); })
               .then(function (json) {
@@ -229,12 +231,14 @@
                 img.src = imgUrl;
               })
               .catch(function (e) {
+                // console.warn("Neko API failed, using fallback.", e);
                 statusEl.style.display = "none";
-                img.onerror = function () { /* optionally show text if fallback also fails */ };
                 img.src = "lol.png";
                 img.style.display = "block";
               });
           } else {
+            // Fallback immediately
+            // console.log("No Neko cookie. Using fallback.");
             statusEl.style.display = "none";
             img.src = "lol.png";
             img.style.display = "block";
@@ -538,7 +542,6 @@
               error.style.color = "#3ddc6a";
               error.textContent = "Accepted";
               
-              // Call the popup helper
               showAcceptPopup();
 
             } else {
