@@ -40,12 +40,20 @@ const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 6;
 const ZOOM_STEP = 1.25;
 
+// ── Dot sizing ───────────────────────────────────────────
+// Dot is 78% of the cell (was 50%), with a proportional font
+// that scales down as the cell shrinks. Font size is set in
+// `em`-relative terms via the `--cell-font` custom property
+// on the dot, derived from the cell's actual pixel size when
+// possible, falling back to a vw-based estimate.
+const DOT_DIAMETER_PCT = 78;
+
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
   maps: [], problems: [], contest: null,
   selectedCell: null, syncAt: 0, clock: null, lastMouse: Date.now(),
   phase: "", frozen: false, spawnCache: new Map(),
-  view: { scale: 1, x: 0, y: 0 }, // pan/zoom transform
+  view: { scale: 1, x: 0, y: 0 },
 };
 
 // ── Statement view ───────────────────────────────────────
@@ -91,7 +99,6 @@ function bindEvents() {
     if (wasIdle) state.syncAt = 0;
   }, { passive: true });
 
-  // ── Pan / zoom wiring ────────────────────────────────
   installPanZoom();
 }
 
@@ -105,56 +112,41 @@ function answerOpenMode() {
 // ──────────────────────────────────────────────────────────
 // PAN + ZOOM
 // ──────────────────────────────────────────────────────────
-// The grid element (#student-grid) is the ONLY thing that is
-// transformed. Its parent (#student-board) becomes the fixed
-// viewport: overflow:hidden, so the panning grid never spills
-// out of the board. The transform is applied as
-//   translate(tx, ty) scale(s)
-// with the origin at the top-left corner. We keep the maths in
-// `state.view` so anything (buttons, wheel, drag, pinch) can
-// mutate it and call applyView().
-// ──────────────────────────────────────────────────────────
 function installPanZoom() {
   const board = document.querySelector("#student-board");
   const grid  = document.querySelector("#student-grid");
   if (!board || !grid) return;
 
-  // Viewport styling: board becomes a clipping frame for the grid.
   board.style.position = "relative";
   board.style.overflow = "hidden";
-  board.style.touchAction = "none";  // let us own all touch gestures
+  board.style.touchAction = "none";
   board.style.cursor = "grab";
 
-  // The grid keeps its own layout; we only add a transform on top.
   grid.style.transformOrigin = "0 0";
   grid.style.willChange = "transform";
   grid.style.userSelect = "none";
 
-  // Keep the view in sync with `state.view`.
   const applyView = () => {
     const { scale, x, y } = state.view;
     grid.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    // Recompute dot font size after a transform change so the
+    // letters scale with the cell.
+    refreshDotFontSizes();
   };
   state.applyView = applyView;
 
-  // ── Zoom-at-point helper ────────────────────────────
-  // Zoom about a screen point (cx, cy) so that whatever map
-  // coordinate is under the cursor/finger stays put.
   const zoomAt = (cx, cy, factor) => {
     const v = state.view;
     const nextScale = clamp(v.scale * factor, ZOOM_MIN, ZOOM_MAX);
     if (nextScale === v.scale) return;
-    // Point in the grid's local coordinate space.
     const localX = (cx - v.x) / v.scale;
     const localY = (cy - v.y) / v.scale;
-    // Solve for new translation so that local point stays at (cx, cy).
     v.x = cx - localX * nextScale;
     v.y = cy - localY * nextScale;
     v.scale = nextScale;
     applyView();
   };
 
-  // ── Mouse: wheel = zoom, drag with any button = pan ──
   board.addEventListener("wheel", (event) => {
     if (!event.target.closest("#student-board")) return;
     event.preventDefault();
@@ -163,22 +155,15 @@ function installPanZoom() {
     zoomAt(event.clientX - rect.left, event.clientY - rect.top, factor);
   }, { passive: false });
 
-  // ── Pointer events cover mouse, pen and touch uniformly ──
-  // We track every pointer; if there's one pointer it pans,
-  // if there are two we pinch-zoom. Multi-touch state is kept
-  // in `pointers`.
   const pointers = new Map();
-  let pinchStart = null;  // { dist, scale, midX, midY, viewX, viewY }
+  let pinchStart = null;
   let dragging = false;
-  let dragStart = null;   // { px, py, vx, vy }
-  let moved = false;      // used to suppress the click after a drag
+  let dragStart = null;
+  let moved = false;
 
   const getMid = () => {
     const pts = [...pointers.values()];
-    return {
-      x: (pts[0].x + pts[1].x) / 2,
-      y: (pts[0].y + pts[1].y) / 2,
-    };
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
   };
   const getDist = () => {
     const pts = [...pointers.values()];
@@ -188,26 +173,16 @@ function installPanZoom() {
   };
 
   board.addEventListener("pointerdown", (event) => {
-    // Don't start a drag when the user clicks an occupied/disabled
-    // cell that isn't interactive? We still want to allow panning
-    // from anywhere, so we always record the pointer.
     if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
     board.setPointerCapture?.(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     moved = false;
 
     if (pointers.size === 1) {
-      // Single pointer: start panning.
       dragging = true;
-      dragStart = {
-        px: event.clientX,
-        py: event.clientY,
-        vx: state.view.x,
-        vy: state.view.y,
-      };
+      dragStart = { px: event.clientX, py: event.clientY, vx: state.view.x, vy: state.view.y };
       board.style.cursor = "grabbing";
     } else if (pointers.size === 2) {
-      // Second pointer: switch to pinch-zoom.
       dragging = false;
       const mid = getMid();
       const rect = board.getBoundingClientRect();
@@ -223,10 +198,7 @@ function installPanZoom() {
   });
 
   board.addEventListener("pointermove", (event) => {
-    if (!pointers.has(event.pointerId)) {
-      // Not one of ours — still allow the hover tooltip.
-      return;
-    }
+    if (!pointers.has(event.pointerId)) return;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointers.size === 1 && dragging && dragStart) {
@@ -235,14 +207,12 @@ function installPanZoom() {
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
       state.view.x = dragStart.vx + dx;
       state.view.y = dragStart.vy + dy;
-      state.applyView();
+      applyView();
     } else if (pointers.size === 2 && pinchStart) {
       moved = true;
       const dist = getDist();
       const factor = dist / pinchStart.dist;
       const nextScale = clamp(pinchStart.scale * factor, ZOOM_MIN, ZOOM_MAX);
-      // Zoom about the initial pinch midpoint, then follow the
-      // midpoint as the fingers move (so panning is natural).
       const localX = (pinchStart.midX - pinchStart.viewX) / pinchStart.scale;
       const localY = (pinchStart.midY - pinchStart.viewY) / pinchStart.scale;
       const mid = getMid();
@@ -252,7 +222,7 @@ function installPanZoom() {
       state.view.scale = nextScale;
       state.view.x = cx - localX * nextScale;
       state.view.y = cy - localY * nextScale;
-      state.applyView();
+      applyView();
     }
   });
 
@@ -260,20 +230,12 @@ function installPanZoom() {
     if (!pointers.has(event.pointerId)) return;
     pointers.delete(event.pointerId);
     if (pointers.size === 0) {
-      dragging = false;
-      dragStart = null;
-      pinchStart = null;
+      dragging = false; dragStart = null; pinchStart = null;
       board.style.cursor = "grab";
     } else if (pointers.size === 1) {
-      // Dropped from 2 pointers to 1: restart panning from here.
       const remaining = [...pointers.values()][0];
       dragging = true;
-      dragStart = {
-        px: remaining.x,
-        py: remaining.y,
-        vx: state.view.x,
-        vy: state.view.y,
-      };
+      dragStart = { px: remaining.x, py: remaining.y, vx: state.view.x, vy: state.view.y };
       pinchStart = null;
     }
   };
@@ -281,31 +243,58 @@ function installPanZoom() {
   board.addEventListener("pointercancel", endPointer);
   board.addEventListener("pointerleave", endPointer);
 
-  // Suppress click after a real drag so the cell isn't selected
-  // accidentally when the user just wants to pan the map.
   board.addEventListener("click", (event) => {
     if (moved) {
       event.stopPropagation();
       event.preventDefault();
       moved = false;
     }
-  }, true); // capture phase: run before the cell click handler
+  }, true);
 
-  // ── Zoom buttons (also help mobile users) ───────────
-  const zoomInBtn  = document.querySelector("#student-zoom-in");
-  const zoomOutBtn = document.querySelector("#student-zoom-out");
+  const zoomInBtn    = document.querySelector("#student-zoom-in");
+  const zoomOutBtn   = document.querySelector("#student-zoom-out");
   const zoomResetBtn = document.querySelector("#student-zoom-reset");
-  if (zoomInBtn)  zoomInBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, ZOOM_STEP));
-  if (zoomOutBtn) zoomOutBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, 1 / ZOOM_STEP));
+  if (zoomInBtn)    zoomInBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, ZOOM_STEP));
+  if (zoomOutBtn)   zoomOutBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, 1 / ZOOM_STEP));
   if (zoomResetBtn) zoomResetBtn.addEventListener("click", () => {
     state.view = { scale: 1, x: 0, y: 0 };
     state.applyView();
   });
+
+  // Keep dot letters crisp when the viewport resizes.
+  window.addEventListener("resize", () => refreshDotFontSizes(), { passive: true });
+}
+
+// Recalculate the font size for every team dot after a zoom/resize.
+// The dot spans 78% of the cell; font is set to ~55% of that
+// diameter (so three letters fit with margin), clamped to a
+// minimum readable size. Works whether the dot is a child of the
+// cell (it always is) — we read the cell's rendered size.
+function refreshDotFontSizes() {
+  const dots = document.querySelectorAll("#student-grid .cell-team-dot");
+  for (const dot of dots) {
+    const cell = dot.parentElement;
+    if (!cell) continue;
+    const w = cell.clientWidth;
+    const h = cell.clientHeight;
+    const cellSize = Math.min(w, h);
+    if (!cellSize) continue;
+    // The transform scales the grid, so clientWidth is already the
+    // on-screen size after scale? No — clientWidth is the layout
+    // size; the visual size is layout × state.view.scale.
+    const visual = cellSize * state.view.scale;
+    const dotDiameter = visual * (DOT_DIAMETER_PCT / 100);
+    // Font: about 55% of the dot diameter, with a floor of 6px
+    // and a cap of 32px so it doesn't explode when zoomed in.
+    const fontPx = clamp(dotDiameter * 0.55, 6, 32);
+    dot.style.fontSize = `${fontPx}px`;
+    dot.style.letterSpacing = fontPx > 10 ? "0.5px" : "0";
+  }
 }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// ── Render (unchanged apart from applyView hook) ─────────
+// ── Render ───────────────────────────────────────────────
 function render() {
   const contest = state.contest;
   const map = state.maps.find((m) => m.id === contest.mapId);
@@ -346,8 +335,9 @@ function render() {
   renderSpawnAgreement(contest, map, phase);
   paintClock();
 
-  // Re-apply the current pan/zoom after a render.
   state.applyView?.();
+  // After a fresh render the dots have no font size yet.
+  requestAnimationFrame(() => refreshDotFontSizes());
 }
 
 function writeStatus(contest, phase, map, frozen) {
@@ -485,6 +475,12 @@ function renderGrid(contest, map, phase, frozen, team) {
 #student-grid .student-cell.cell-occupied::after {
   content: none !important;
 }
+#student-grid .cell-team-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
 `;
   grid.append(style);
 
@@ -535,8 +531,8 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.top = "50%";
       dot.style.left = "50%";
       dot.style.transform = "translate(-50%, -50%)";
-      dot.style.width = "50%";
-      dot.style.height = "50%";
+      dot.style.width = `${DOT_DIAMETER_PCT}%`;
+      dot.style.height = `${DOT_DIAMETER_PCT}%`;
       dot.style.borderRadius = "50%";
       dot.style.background = teamColor(contest, owner.id);
       dot.style.border = owner.id === team.id
@@ -547,12 +543,12 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.justifyContent = "center";
       dot.style.boxSizing = "border-box";
       dot.style.fontFamily = '"Share Tech Mono", monospace';
-      dot.style.fontSize = "0.55rem";
       dot.style.fontWeight = "700";
       dot.style.lineHeight = "1";
       dot.style.color = "#ffffff";
       dot.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
       dot.style.pointerEvents = "none";
+      dot.style.overflow = "hidden";
       dot.textContent = teamShort(owner.name).slice(0, 3).toUpperCase();
       dot.title = owner.name;
       button.append(dot);
