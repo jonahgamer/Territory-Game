@@ -79,6 +79,18 @@ export function normalizeContest(raw) {
   };
 }
 
+export function teamColor(contest, teamId) {
+  const found = (contest?.teams || []).findIndex((team) => team.id === teamId);
+  const slot = found < 0 ? 0 : found;
+  return `hsl(${(slot * 137.508 + 8) % 360} 82% 62%)`;
+}
+
+export function teamShort(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return String(name || "").trim().slice(0, 3).toUpperCase();
+}
+
 export function teamForUser(contest, username = contestantId()) {
   return (contest?.teams || []).find((team) =>
     (team.members || []).some((m) => sameContestant(m, username))

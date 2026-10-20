@@ -7,7 +7,7 @@ import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
 } from "../shared/contest-time.js";
-import { teamForUser, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
+import { teamForUser, teamColor, teamShort, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_NAME, DIFFICULTY_SCORE, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag } from "../shared/difficulty.js";
@@ -230,13 +230,16 @@ function renderGrid(contest, map, phase, frozen, team) {
     if (owner && owner.id === team.id) {
       button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
       button.classList.add("owned", "mine");
-      button.style.setProperty("--team", `hsl(${(contest.teams.indexOf(owner) * 137.508 + 8) % 360} 82% 62%)`);
+      button.style.setProperty("--team", teamColor(contest, owner.id));
       button.classList.add("territory-dot");
       button.disabled = true;
     } else if (owner) {
       button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
       button.classList.add("taken");
-      button.style.setProperty("--team", `hsl(${(contest.teams.indexOf(owner) * 137.508 + 8) % 360} 82% 62%)`);
+      button.style.setProperty("--team", teamColor(contest, owner.id));
+      const mark = el("span", "cell-owner", teamShort(owner.name));
+      mark.title = owner.name;
+      button.append(mark);
       button.disabled = true;
     } else {
       button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
@@ -251,7 +254,8 @@ function renderGrid(contest, map, phase, frozen, team) {
     }
 
     if (state.selectedCell === index) button.setAttribute("aria-pressed", "true");
-    button.setAttribute("aria-label", cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1));
+    const place = cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1);
+    button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
     grid.append(button);
   });
   paintPhotoGrid(grid, map, findProblem);

@@ -1070,11 +1070,25 @@ button[type="submit"],
 }
 
 .grid-cell.student-cell.problem.taken {
+  color: var(--team, #f4feff);
   box-shadow: inset 0 0 0 3px var(--team, #f4feff);
 }
 
 .grid-cell.student-cell.problem.taken::after {
-  inset: 9px;
+  inset: 7px 6px 15px;
+  filter: drop-shadow(0 0 1px #060910) drop-shadow(0 0 1px #060910);
+}
+
+.grid-cell.student-cell.taken .cell-owner {
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  padding: 1px 0;
+  background: rgba(6, 9, 16, 0.88);
+  color: var(--team, #f4feff);
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .grid-cell.student-cell.problem.owned,
