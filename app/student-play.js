@@ -18,21 +18,31 @@ import { createStatementView } from "../shared/statement.js";
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
 
-// ── Difficulty colour reference (same as admin-map-difficulty-view.js) ──
+// ── Difficulty colour reference: 4 shades of green ──────
+// Tier value 1..4 → progressively darker / more saturated green.
 const TIER_VALUE = { easy: 1, normal: 2, medium: 2, hard: 3, insane: 4 };
-const ANCHOR = {
-  1: { r: 0x2e, g: 0x7d, b: 0x32 }, // easy   green
-  2: { r: 0xf9, g: 0xa8, b: 0x25 }, // med    yellow
-  3: { r: 0xd3, g: 0x2f, b: 0x2f }, // hard   red
-  4: { r: 0x7b, g: 0x1f, b: 0xa2 }, // insane purple
+
+// Four muted greens, easy → insane. Kept soft (no sharp neon).
+const GREEN_ANCHOR = {
+  1: { r: 0x86, g: 0xbf, b: 0x8a }, // easy   – pale sage green
+  2: { r: 0x5c, g: 0xa0, b: 0x6a }, // med    – mid green
+  3: { r: 0x2e, g: 0x7d, b: 0x4a }, // hard   – deep green
+  4: { r: 0xb6, g: 0x72, b: 0x3a }, // insane – very dark forest green
 };
+
+// Non-problem cell colours (dimmer than the admin view).
 const OTHER_COLOURS = {
-  obstacle:   { r: 0x2c, g: 0x2c, b: 0x3a },
-  spawnpoint: { r: 0x0a, g: 0x7e, b: 0xa4 },
-  empty:      { r: 0x1a, g: 0x1a, b: 0x24 },
-  unknown:    { r: 0x9e, g: 0x9e, b: 0x9e },
+  obstacle:   { r: 0xb6, g: 0xb6, b: 0xb6 }, // very dark grey-blue
+  spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 }, // dim teal
+  empty:      { r: 0x11, g: 0x11, b: 0x17 }, // near-black
+  unknown:    { r: 0x5a, g: 0x5a, b: 0x5a }, // muted grey
 };
+
+// How strongly a cell's own tier pulls the final colour back to
+// its anchor. 0 = pure neighbour blend, 1 = pure own tier.
 const TIER_ANCHOR_STRENGTH = 0.45;
+
+// Neighbour weights for the 8-cell ring.
 const NEIGHBOUR_WEIGHTS = [
   [-1, -1, 0.5], [ 0, -1, 1.0], [ 1, -1, 0.5],
   [-1,  0, 1.0],                 [ 1,  0, 1.0],
@@ -236,7 +246,7 @@ function isFrozen(contest, map) {
   return problems.every((i) => claimed.has(i));
 }
 
-// ── Difficulty colour helpers (mirrors admin-map-difficulty-view.js) ──
+// ── Difficulty colour helpers (green shades) ────────────
 function blendedTierValue(index, cols, rows, tierValues) {
   const cx = index % cols;
   const cy = Math.floor(index / cols);
@@ -256,7 +266,7 @@ function blendedTierValue(index, cols, rows, tierValues) {
 
 function colourForBlendedValue(blended, ownTier, anchorStrength) {
   const base = interpolateAnchors(clamp(blended, 1, 4));
-  const anchor = ANCHOR[ownTier] || ANCHOR[1];
+  const anchor = GREEN_ANCHOR[ownTier] || GREEN_ANCHOR[1];
   return mix(base, anchor, anchorStrength);
 }
 
@@ -264,7 +274,7 @@ function interpolateAnchors(v) {
   const lo = Math.floor(v);
   const hi = Math.min(lo + 1, 4);
   const t = v - lo;
-  return mix(ANCHOR[lo], ANCHOR[hi], t);
+  return mix(GREEN_ANCHOR[lo], GREEN_ANCHOR[hi], t);
 }
 
 function mix(a, b, t) {
@@ -281,7 +291,12 @@ function rgbToCss({ r, g, b }) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// ── Grid rendering ───────────────────────────────────────
+// Dim a colour toward a fixed dark baseline (for unoccupied cells).
+function dimColour(rgb, amount) {
+  const base = { r: 0x08, g: 0x08, b: 0x0c };
+  return mix(rgb, base, amount);
+}
+
 // ── Grid rendering ───────────────────────────────────────
 function renderGrid(contest, map, phase, frozen, team) {
   const grid = document.querySelector("#student-grid");
@@ -310,7 +325,6 @@ function renderGrid(contest, map, phase, frozen, team) {
     const claim = (contest.claims || []).find((c) => c.cell === index);
     const owner = ownerAt(contest, index, cell);
 
-    // Base class (may still be used by tooltip / selection logic).
     button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
 
     // ── Base difficulty / kind colour ──────────────────────
@@ -328,25 +342,21 @@ function renderGrid(contest, map, phase, frozen, team) {
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
     else                                   rgb = OTHER_COLOURS.empty;
 
+    // Unoccupied cells: dim further so occupied dots stand out.
+    if (!owner) rgb = dimColour(rgb, 0.35);
+
     const css = rgbToCss(rgb);
     button.style.background = css;
+    button.style.color = "#ffffff";
+    button.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
+    button.style.position = "relative";
 
-    // Dim unoccupied cells; dim rival cells slightly; self stays solid.
-    if (!owner) {
-      button.style.filter = "brightness(0.6)";
-    } else if (owner.id !== team.id) {
-      button.style.filter = "brightness(0.82)";
-    } else {
-      button.style.filter = "brightness(0.95)";
-    }
-
-    // ── Ownership overlay ──────────────────────────────────
+    // ── Occupied overlay: dot with team short name, no "X" ──
     if (owner) {
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.style.setProperty("--team", teamColor(contest, owner.id));
 
-      // Dot: diameter = half of the cell size.
       const dot = el("span", "cell-team-dot");
       dot.style.position = "absolute";
       dot.style.top = "50%";
@@ -374,11 +384,10 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.title = owner.name;
       button.append(dot);
 
-      button.disabled = true;
-      // No text / no "cross" for occupied cells.
+      // No text content for occupied cells (dot only).
       button.textContent = "";
+      button.disabled = true;
     } else {
-      // Playable logic is unchanged from the original.
       const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
       const canSpawn = choosing && cell.kind === "spawnpoint";
       button.disabled = !(reachable || canSpawn);
