@@ -930,6 +930,73 @@ async function submitAnswer(event) {
     const success = document.querySelector("#student-answer-success");
     success.hidden = false;
     success.textContent = "Answer accepted. Close this problem to continue.";
+
+    // ── SHOW POP-UP ON SUCCESS ──────────────────────────────────────
+    var overlay = document.createElement("div");
+    overlay.setAttribute("style",
+      "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);" +
+      "display:flex;align-items:center;justify-content:center;" +
+      "padding:12px;box-sizing:border-box;"
+    );
+
+    overlay.innerHTML =
+      '<div style="position:relative;background:#081220;border:2px solid #3ee0ff;' +
+        'border-radius:6px;padding:12px;box-shadow:0 0 24px rgba(62,224,255,0.35);' +
+        'max-width:100%;max-height:100%;display:flex;flex-direction:column;' +
+        'align-items:center;box-sizing:border-box;">' +
+
+        '<button type="button" aria-label="Close" data-neko-close ' +
+          'style="align-self:flex-end;margin:0 0 8px 0;min-width:44px;min-height:44px;' +
+          'border:1px solid #3ee0ff;border-radius:4px;background:rgba(62,224,255,0.14);' +
+          'color:#3ee0ff;font-size:22px;line-height:1;cursor:pointer;padding:0;">×</button>' +
+
+        '<div data-neko-status style="color:#d7f6ff;font-size:14px;padding:8px;">Loading…</div>' +
+        '<h2 style="color:lime">ACCEPTED!</h2>' +
+        '<img data-neko-img alt="" ' +
+          'style="max-width:100%;max-height:70vh;width:auto;height:auto;' +
+          'display:none;border-radius:4px;">' +
+
+      '</div>';
+
+    function closeOverlay() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    overlay.querySelector("[data-neko-close]").addEventListener("click", closeOverlay);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) closeOverlay();
+    });
+
+    document.body.appendChild(overlay);
+
+    // Load the image
+    fetch("https://nekos.best/api/v2/neko")
+      .then(function (r) { return r.json(); })
+      .then(function (json) {
+        var imgUrl = json.results && json.results[0] && json.results[0].url;
+        var img = overlay.querySelector("[data-neko-img]");
+        var statusEl = overlay.querySelector("[data-neko-status]");
+        if (!imgUrl) throw new Error("no image url");
+        img.onload = function () {
+          statusEl.style.display = "none";
+          img.style.display = "block";
+        };
+        img.onerror = function () {
+          statusEl.textContent = "Image failed to load.";
+        };
+        img.src = imgUrl;
+      })
+      .catch(function (e) {
+        var statusEl = overlay.querySelector("[data-neko-status]");
+        var img = overlay.querySelector("[data-neko-img]");
+        if (statusEl) statusEl.style.display = "none";
+        if (img) {
+          img.onerror = function () { /* optionally show text if fallback also fails */ };
+          img.src = "lol.png"; // <-- fallback image
+          img.style.display = "block";
+        }
+      });
+    // ────────────────────────────────────────────────────────────────
+
   } catch (err) {
     contest.claims = prevClaims;
     if (err.data?.contest) applyPlayState(err.data);
