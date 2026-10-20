@@ -22,10 +22,10 @@ const contestId = params.get("contest") || "";
 const TIER_VALUE = { easy: 1, normal: 2, medium: 2, hard: 3, insane: 4 };
 
 const GREEN_ANCHOR = {
-  1: { r: 0x86, g: 0xbf, b: 0x8a }, // easy   – pale sage green
-  2: { r: 0x5c, g: 0xa0, b: 0x6a }, // med    – mid green
-  3: { r: 0x2e, g: 0x7d, b: 0x4a }, // hard   – deep green
-  4: { r: 0xb6, g: 0x72, b: 0x3a }, // insane – very dark forest green
+  1: { r: 0x0a, g: 0x46, b: 0x05 }, // easy   – #0a4605 deep forest green
+  2: { r: 0x73, g: 0x86, b: 0x2e }, // med    – #73862e olive
+  3: { r: 0x97, g: 0x37, b: 0x1a }, // hard   – #97371a rust
+  4: { r: 0x64, g: 0x15, b: 0x60 }, // insane – #641560 plum
 };
 
 const OTHER_COLOURS = {
@@ -41,9 +41,8 @@ const ZOOM_MAX = 6;
 const ZOOM_STEP = 1.25;
 
 // ── Dot sizing ───────────────────────────────────────────
-// Occupied-team dot: 78 % of the cell.
-// Spawn-point dot: 96 % of the cell + pulsing ring, so it's
-// clearly larger and more obvious than a team dot.
+// Occupied-team dot (non-spawn): 78 % of the cell.
+// Spawn dot (claimed or not):    96 % of the cell + pulsing ring.
 const DOT_DIAMETER_PCT = 78;
 const SPAWN_DIAMETER_PCT = 96;
 
@@ -284,9 +283,6 @@ function installPanZoom() {
   window.addEventListener("resize", () => refreshDotFontSizes(), { passive: true });
 }
 
-// Recalculate the font size for every dot (team + spawn) after a
-// zoom/resize. Dots are sized in % of the cell, and this keeps the
-// 3-letter label proportional at any zoom level.
 function refreshDotFontSizes() {
   const dots = document.querySelectorAll("#student-grid .cell-team-dot, #student-grid .cell-spawn-dot");
   for (const dot of dots) {
@@ -298,7 +294,7 @@ function refreshDotFontSizes() {
     const isSpawn = dot.classList.contains("cell-spawn-dot");
     const pct = isSpawn ? SPAWN_DIAMETER_PCT : DOT_DIAMETER_PCT;
     const diameter = visual * (pct / 100);
-    const ratio = isSpawn ? 0.62 : 0.55;   // spawn text slightly larger
+    const ratio = isSpawn ? 0.62 : 0.55;
     const fontPx = clamp(diameter * ratio, 6, 36);
     dot.style.fontSize = `${fontPx}px`;
     dot.style.letterSpacing = fontPx > 10 ? "0.5px" : "0";
@@ -495,13 +491,9 @@ function renderGrid(contest, map, phase, frozen, team) {
   overflow: hidden;
 }
 
-/* ── Spawn-point dot: larger + pulsing ring so it reads as
-      the "you are here" marker at a glance. ── */
+/* ── Spawn-point dot: larger + pulsing ring. Applies to both
+      unclaimed (SPAWN text) and claimed (team label) spawns. ── */
 #student-grid .cell-spawn-dot {
-  box-shadow:
-    0 0 0 3px rgba(255, 255, 255, 0.95),
-    0 0 0 7px rgba(183, 250, 0, 0.55),
-    0 0 18px 6px rgba(183, 250, 0, 0.45);
   animation: spawn-pulse 1.8s ease-in-out infinite;
 }
 
@@ -531,6 +523,7 @@ function renderGrid(contest, map, phase, frozen, team) {
 
     const claim = (contest.claims || []).find((c) => c.cell === index);
     const owner = ownerAt(contest, index, cell);
+    const isSpawnCell = cell.kind === "spawnpoint";
 
     button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
 
@@ -557,8 +550,43 @@ function renderGrid(contest, map, phase, frozen, team) {
 
     if (cell.kind === "obstacle") button.classList.add("obstacle-cell");
 
-    if (owner) {
-      // ── Occupied: team dot ───────────────────────────
+    if (owner && isSpawnCell) {
+      // ── Claimed spawn: large pulsing team dot, no SPAWN text ──
+      button.classList.add(owner.id === team.id ? "owned" : "taken");
+      button.classList.add(owner.id === team.id ? "mine" : "rival");
+      button.classList.add("cell-occupied");
+      button.classList.add("spawn-cell");
+      button.style.setProperty("--team", teamColor(contest, owner.id));
+      button.textContent = "";
+
+      const dot = el("span", "cell-spawn-dot cell-team-dot");
+      dot.style.position = "absolute";
+      dot.style.top = "50%";
+      dot.style.left = "50%";
+      dot.style.transform = "translate(-50%, -50%)";
+      dot.style.width = `${SPAWN_DIAMETER_PCT}%`;
+      dot.style.height = `${SPAWN_DIAMETER_PCT}%`;
+      dot.style.borderRadius = "50%";
+      dot.style.background = teamColor(contest, owner.id);
+      dot.style.border = owner.id === team.id
+        ? "2px solid rgba(255,255,255,0.95)"
+        : "1.5px solid rgba(255,255,255,0.7)";
+      dot.style.boxSizing = "border-box";
+      dot.style.fontFamily = '"Share Tech Mono", monospace';
+      dot.style.fontWeight = "700";
+      dot.style.lineHeight = "1";
+      dot.style.color = "#ffffff";
+      dot.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
+      dot.style.pointerEvents = "none";
+      dot.style.overflow = "hidden";
+      dot.textContent = teamShort(owner.name).slice(0, 3).toUpperCase();
+      dot.title = owner.name;
+      button.append(dot);
+
+      button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
+      button.disabled = true;
+    } else if (owner) {
+      // ── Claimed non-spawn: normal team dot ─────────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.classList.add("cell-occupied");
@@ -594,8 +622,8 @@ function renderGrid(contest, map, phase, frozen, team) {
 
       button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
       button.disabled = true;
-    } else if (cell.kind === "spawnpoint") {
-      // ── Unclaimed spawn point: large, obvious marker ──
+    } else if (isSpawnCell) {
+      // ── Unclaimed spawn point: large obvious marker, SPAWN text ──
       button.classList.add("spawn-cell");
       button.style.background = "rgba(183, 250, 0, 0.10)";
       button.textContent = "";
@@ -624,8 +652,7 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.title = "Spawn point";
       button.append(dot);
 
-      const reachable = choosing;
-      button.disabled = !reachable;
+      button.disabled = !choosing;
       if (choosing) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
         if (myVote && myVote.cell === index) button.classList.add("mine");
