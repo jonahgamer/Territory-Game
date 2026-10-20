@@ -1,4 +1,4 @@
-import { sameContestant } from "./session.js";
+import { contestantId, sameContestant } from "./session.js";
 
 export function normalizeTeams(value) {
   if (!Array.isArray(value)) return [];
@@ -79,7 +79,7 @@ export function normalizeContest(raw) {
   };
 }
 
-export function teamForUser(contest, username) {
+export function teamForUser(contest, username = contestantId()) {
   return (contest?.teams || []).find((team) =>
     (team.members || []).some((m) => sameContestant(m, username))
   ) || null;
