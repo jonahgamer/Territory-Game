@@ -257,6 +257,28 @@ function renderGrid(contest, map, phase, frozen, team) {
   grid.style.borderSpacing = "0";
   grid.replaceChildren();
 
+  // One injected stylesheet handles flat obstacle backgrounds and
+  // removes any inherited pseudo-content ("X") on occupied cells.
+  const style = document.createElement("style");
+  style.textContent = `
+#student-grid .student-cell.obstacle-cell {
+  background: rgb(0x3a, 0x3a, 0x3a) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+#student-grid .student-cell.obstacle-cell::before,
+#student-grid .student-cell.obstacle-cell::after {
+  content: none !important;
+  background: none !important;
+}
+#student-grid .student-cell.cell-occupied::before,
+#student-grid .student-cell.cell-occupied::after {
+  content: none !important;
+}
+`;
+  grid.append(style);
+
   const choosing = phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random";
 
   map.cells.forEach((cell, index) => {
@@ -279,27 +301,31 @@ function renderGrid(contest, map, phase, frozen, team) {
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
     else                                   rgb = OTHER_COLOURS.empty;
 
-    // Dim unoccupied cells further.
-    if (!owner) rgb = mix(rgb, OTHER_COLOURS.empty, 0.35);
+    // Dim unoccupied cells further — but obstacles stay flat/plain.
+    if (!owner && cell.kind !== "obstacle") rgb = mix(rgb, OTHER_COLOURS.empty, 0.35);
 
     button.style.background = rgbToCss(rgb);
+    button.style.backgroundImage = "none";
     button.style.color = "#ffffff";
     button.style.textShadow = "0 1px 2px rgba(0,0,0,0.55)";
     button.style.margin = "0";
     button.style.border = "0";
     button.style.borderRadius = "0";
+    button.style.boxShadow = "none";
     button.style.position = "relative";
+
+    // Mark obstacles so the injected CSS keeps them a single flat colour.
+    if (cell.kind === "obstacle") button.classList.add("obstacle-cell");
 
     if (owner) {
       // ── Occupied: dot overrides any cross/text ───────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
+      button.classList.add("cell-occupied");
       button.style.setProperty("--team", teamColor(contest, owner.id));
 
-      // Wipe any pre-existing text node / pseudo "X" by clearing text
-      // and suppressing pseudo-element content on this cell.
+      // Wipe any pre-existing text node / pseudo "X".
       button.textContent = "";
-      button.classList.add("cell-occupied");
 
       const dot = el("span", "cell-team-dot");
       dot.style.position = "absolute";
@@ -350,13 +376,6 @@ function renderGrid(contest, map, phase, frozen, team) {
     button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
     grid.append(button);
   });
-
-  // Suppress any pseudo-element "X" from shared CSS on occupied cells.
-  const style = document.createElement("style");
-  style.textContent = `#student-grid .student-cell.cell-occupied::before,
-#student-grid .student-cell.cell-occupied::after { content: none !important; }`;
-  grid.append(style);
-
   paintPhotoGrid(grid, map, findProblem);
 }
 
