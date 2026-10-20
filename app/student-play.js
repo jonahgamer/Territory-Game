@@ -75,7 +75,18 @@ async function run() {
   render();
   startClock();
 }
+function bindBackToTop() {
+  const btn = document.querySelector("#back-to-top");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    // 1) Reset the map view to its initial state.
+    state.view = { scale: 1, x: 0, y: 0 };
+    state.applyView?.();
 
+    // 2) Scroll the page back to the top.
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
 function bindEvents() {
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
   const grid = document.querySelector("#student-grid");
@@ -93,8 +104,8 @@ function bindEvents() {
     state.lastMouse = Date.now();
     if (wasIdle) state.syncAt = 0;
   }, { passive: true });
-
   installPanZoom();
+  bindBackToTop();
 }
 
 function answerOpenMode() {
