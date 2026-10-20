@@ -433,6 +433,7 @@ function contestPayload(contest, map, problems, user) {
       name: contest.name,
       mapId: contest.mapId,
       mode: testing ? 'testing' : 'competition',
+      spawnMode: isRandomSpawn(contest) ? 'random' : 'choose',
       teams: visibleTeams,
       spawnResolved: resolved,
       resolvedTeams: testing && !admin ? (mineResolved && team ? [team.id] : []) : resolvedIds,
@@ -448,6 +449,10 @@ function contestPayload(contest, map, problems, user) {
       frozen,
     },
   };
+}
+
+function isRandomSpawn(contest) {
+  return contest?.spawnMode === 'random';
 }
 
 function contestWindow(contest) {
@@ -477,7 +482,9 @@ function normalizeContest(v) {
   if (!name || name.length > MAX_NAME_LEN) return null;
   if (typeof v.mapId !== 'string') return null;
   if (!Array.isArray(v.contestantIds)) return null;
-  if (!contestWindow(v)) return null;
+  const spawnMode = v.spawnMode === 'random' ? 'random' : 'choose';
+  const spawnMinutes = spawnMode === 'random' ? 0 : v.spawnMinutes;
+  if (!contestWindow({ ...v, spawnMinutes })) return null;
   const ids = [];
   for (const raw of v.contestantIds) {
     if (typeof raw !== 'string') continue;
@@ -493,9 +500,10 @@ function normalizeContest(v) {
     contestantIds: ids,
     startAt: v.startAt,
     durationMinutes: v.durationMinutes,
-    spawnMinutes: v.spawnMinutes,
+    spawnMinutes,
     readyMinutes: v.readyMinutes,
     mode: v.mode === 'testing' ? 'testing' : 'competition',
+    spawnMode,
   };
 }
 
@@ -660,6 +668,7 @@ async function handleBootstrap(req, res, db, user) {
       durationMinutes: Number.isInteger(c.durationMinutes) ? c.durationMinutes : null,
       spawnMinutes: Number.isInteger(c.spawnMinutes) ? c.spawnMinutes : null,
       readyMinutes: Number.isInteger(c.readyMinutes) ? c.readyMinutes : null,
+      spawnMode: c.spawnMode === 'random' ? 'random' : 'choose',
       teams,
       spawnResolved: play.spawnResolved,
       resolvedTeams: play.resolvedTeams,
@@ -783,9 +792,11 @@ async function handleSaveContests(req, res, db, user, body) {
           spawnMinutes: contest.spawnMinutes,
           readyMinutes: contest.readyMinutes,
           mode: contest.mode === 'testing' ? 'testing' : 'competition',
+          spawnMode: contest.spawnMode === 'random' ? 'random' : 'choose',
           updatedAt: new Date(),
         };
         const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
+        const sameSpawnMode = stored && isRandomSpawn(stored) === (contest.spawnMode === 'random');
         if (!stored) {
           update.teams = [];
           update.contestantIds = [];
@@ -795,7 +806,7 @@ async function handleSaveContests(req, res, db, user, body) {
           update.claims = [];
           update.spawnResolved = false;
           update.resolvedTeams = [];
-        } else if (!sameMap || !sameMode) {
+        } else if (!sameMap || !sameMode || !sameSpawnMode) {
           update.spawnChoices = [];
           update.spawnVotes = [];
           update.spawns = [];
@@ -873,6 +884,24 @@ async function loadContestMap(db, contest) {
   return map;
 }
 
+async function assignRandomSpawns(db, contest, map, teams) {
+  const spawns = resolveSpawns(spawnCellIndexes(map), teams, []);
+  await db.collection('contests').updateOne(
+    { id: contest.id, spawnResolved: { $ne: true } },
+    {
+      $set: {
+        spawns,
+        spawnChoices: [],
+        spawnVotes: [],
+        resolvedTeams: teams.map((team) => team.id),
+        spawnResolved: true,
+        updatedAt: new Date(),
+      },
+    }
+  );
+  return db.collection('contests').findOne({ id: contest.id });
+}
+
 async function maybeResolveSpawns(db, contest, map, now) {
   if (!contest || !map) return contest;
   if (isTestingContest(contest)) return maybeResolveTestingSpawns(db, contest, map, now);
@@ -880,6 +909,10 @@ async function maybeResolveSpawns(db, contest, map, now) {
   const timing = contestWindow(contest);
   if (!timing || now < timing.startAt) return contest;
   const teams = cleanTeams(contest.teams);
+  if (isRandomSpawn(contest)) {
+    if (teams.length === 0) return contest;
+    return assignRandomSpawns(db, contest, map, teams);
+  }
   const choices = cleanTeamCells(contest.spawnChoices).filter((choice) => (
     teams.some((team) => team.id === choice.teamId)
   ));
@@ -899,6 +932,10 @@ async function maybeResolveTestingSpawns(db, contest, map, now) {
   const timing = contestWindow(contest);
   if (!timing || now < timing.startAt) return contest;
   const teams = cleanTeams(contest.teams);
+  if (isRandomSpawn(contest)) {
+    if (contest.spawnResolved === true || teams.length === 0) return contest;
+    return assignRandomSpawns(db, contest, map, teams);
+  }
   const choices = agreedSpawnChoices(teams, cleanSpawnVotes(contest.spawnVotes));
   const resolved = new Set(cleanResolvedTeams(contest.resolvedTeams));
   const spawns = cleanTeamCells(contest.spawns);
@@ -1068,6 +1105,9 @@ async function handleChooseSpawn(req, res, db, user, body) {
   const col = db.collection('contests');
   const contest = await col.findOne({ id: contestId });
   if (!contest) return res.status(404).json({ success: false, message: 'Contest not found' });
+  if (isRandomSpawn(contest)) {
+    return res.status(400).json({ success: false, message: 'Spawn points in this contest are assigned at random.', serverNow: Date.now() });
+  }
   const team = teamForUser(contest, username);
   if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
   if (contest.spawnResolved === true) {

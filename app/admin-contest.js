@@ -67,6 +67,26 @@ function bindEvents() {
   document.querySelector("#team-form")?.addEventListener("submit", saveTeam);
   document.querySelector("#team-cancel-edit")?.addEventListener("click", resetTeamForm);
   document.querySelector("#contestant-list")?.addEventListener("click", onTeamListClick);
+  document.querySelector("#contest-spawn-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-spawn-mode]");
+    if (!btn) return;
+    const spawnMode = btn.dataset.spawnMode === "random" ? "random" : "choose";
+    if ((state.current.spawnMode === "random" ? "random" : "choose") === spawnMode) return;
+    state.current.spawnMode = spawnMode;
+    if (spawnMode === "random") {
+      state.current.spawnMinutes = 0;
+      const input = document.querySelector("#contest-spawn-input");
+      if (input) input.value = "0";
+    }
+    state.current.spawns = [];
+    state.current.spawnChoices = [];
+    state.current.spawnVotes = [];
+    state.current.claims = [];
+    state.current.spawnResolved = false;
+    state.current.resolvedTeams = [];
+    render();
+    persistContests();
+  });
   document.querySelector("#contest-mode-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-contest-mode]");
     if (!btn) return;
@@ -114,6 +134,7 @@ function render() {
   fillMapSelect();
   fillSchedule();
   updateSpawnNote();
+  renderSpawnMode();
   renderMode();
 
   document.querySelector("#contest-mode-note").textContent = isTestingContest()
@@ -167,12 +188,24 @@ function updateSpawnNote() {
     : `${map.name} has ${count} spawn point${count === 1 ? "" : "s"}.`;
 }
 
+function renderSpawnMode() {
+  const random = state.current.spawnMode === "random";
+  for (const btn of document.querySelectorAll("[data-spawn-mode]")) {
+    btn.setAttribute("aria-pressed", String((btn.dataset.spawnMode === "random") === random));
+  }
+  const field = document.querySelector("#contest-spawn-field");
+  const note = document.querySelector("#contest-spawn-mode-note");
+  if (field) field.hidden = random;
+  if (note) note.hidden = !random;
+}
+
 function commitSchedule() {
   const c = state.current;
+  const random = c.spawnMode === "random";
   const schedule = readSchedule(
     document.querySelector("#contest-start-input").value,
     document.querySelector("#contest-duration-input").value,
-    document.querySelector("#contest-spawn-input").value,
+    random ? "0" : document.querySelector("#contest-spawn-input").value,
     document.querySelector("#contest-ready-input").value
   );
   const error = document.querySelector("#contest-schedule-error");

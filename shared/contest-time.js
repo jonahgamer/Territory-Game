@@ -81,7 +81,7 @@ export function phaseClock(contest, now = serverNow()) {
     : phase === "spawn" ? schedule.spawnEnd
     : phase === "ready" ? schedule.liveAt
     : schedule.endAt;
-  const label = phase === "before" ? "Until spawning"
+  const label = phase === "before" ? (schedule.spawn === 0 ? "Until the wait" : "Until spawning")
     : phase === "spawn" ? "Spawn time left"
     : phase === "ready" ? "Until the contest"
     : "Contest time left";
@@ -104,6 +104,9 @@ export function phaseSentence(contest, phase, frozen = false) {
   if (!schedule) return "The schedule is not set yet.";
   if (frozen && phase !== "ended") return "Every problem is solved. The board is frozen.";
   if (phase === "before") {
+    if (contest.spawnMode === "random") {
+      return `Teams are placed on random spawn points at ${formatContestTime(schedule.startAt)}. The contest begins ${formatContestTime(schedule.liveAt)}.`;
+    }
     if (schedule.spawn === 0) return `The contest begins ${formatContestTime(schedule.liveAt)}.`;
     return `Spawning starts ${formatContestTime(schedule.startAt)} and lasts ${schedule.spawn} min. The contest begins ${formatContestTime(schedule.liveAt)}.`;
   }
@@ -112,7 +115,12 @@ export function phaseSentence(contest, phase, frozen = false) {
       ? `Spawn points are assigned. The wait begins ${formatContestTime(schedule.spawnEnd)}.`
       : "Agree on one spawn point with your team before this phase ends.";
   }
-  if (phase === "ready") return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
+  if (phase === "ready") {
+    if (contest.spawnMode === "random") {
+      return `Spawn points were assigned at random. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
+    }
+    return `Spawning is closed. The contest begins ${formatContestTime(schedule.liveAt)}. Your team's outline is white.`;
+  }
   if (phase === "live") return `Solve a problem next to your territory before ${formatContestTime(schedule.endAt)}. Easy is 1, normal 2, hard 3, and insane 4.`;
   return `The contest ended ${formatContestTime(schedule.endAt)}. The board is frozen.`;
 }

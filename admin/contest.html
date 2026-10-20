@@ -48,8 +48,13 @@
           <legend>Schedule</legend>
           <label>Start <input id="contest-start-input" type="datetime-local" step="1" /></label>
           <label>Duration (min) <input id="contest-duration-input" type="number" min="1" max="10080" /></label>
-          <label>Spawn time (min) <input id="contest-spawn-input" type="number" min="0" max="10080" /></label>
+          <div class="kind-choices" id="contest-spawn-mode" role="group" aria-label="Spawn assignment">
+            <button type="button" data-spawn-mode="choose" aria-pressed="true">Choose spawn</button>
+            <button type="button" data-spawn-mode="random" aria-pressed="false">Random spawn</button>
+          </div>
+          <label id="contest-spawn-field">Spawn time (min) <input id="contest-spawn-input" type="number" min="0" max="10080" /></label>
           <label>Wait after spawn (min) <input id="contest-ready-input" type="number" min="0" max="10080" /></label>
+          <p id="contest-spawn-mode-note" class="field-note" hidden>Teams are placed on random spawn points when the contest starts. There is no choosing period. The wait still runs before solving begins.</p>
         </fieldset>
         <p id="contest-schedule-error" class="form-error" hidden></p>
       </form>

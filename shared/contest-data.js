@@ -69,6 +69,7 @@ export function normalizeContest(raw) {
     spawnMinutes: Number.isInteger(raw.spawnMinutes) ? raw.spawnMinutes : null,
     readyMinutes: Number.isInteger(raw.readyMinutes) ? raw.readyMinutes : null,
     mode: raw.mode === "testing" ? "testing" : "competition",
+    spawnMode: raw.spawnMode === "random" ? "random" : "choose",
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes),

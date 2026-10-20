@@ -88,7 +88,7 @@ Logic is optional JavaScript. Empty logic compares trim and case. A script sees 
 
 Teams have 1 to 5 students. Usernames are resolved against real accounts, ignoring case, and a unique display name is accepted. A student is on at most one team in a contest. There cannot be more teams than spawn points.
 
-During spawn, each member votes. The team choice exists only when every member has voted for the same cell. Teammates see each other’s votes. One member’s vote is the choice by itself. When every team has agreed, or when spawn time ends, the server assigns spawn points. A contested cell goes to one random team. Teams that never agreed get a free spawn if one remains.
+During spawn, each member votes. The team choice exists only when every member has voted for the same cell. Teammates see each other’s votes. One member’s vote is the choice by itself. When every team has agreed, or when spawn time ends, the server assigns spawn points. A contested cell goes to one random team. Teams that never agreed get a free spawn if one remains. A contest with `spawnMode` `random` has no choosing period: at the start time every team is placed on a random free spawn point, and the wait after that still runs.
 
 Territory starts at the spawn. A problem can be solved only when it shares an edge with that team’s territory, the contest is live, and nobody else has claimed it. The first correct team keeps the cell. Own cells are dark with a dot. Other teams’ cells keep the difficulty color, a dark X, and that team’s color. Admins see team initials. The board freezes at the end time or when every problem is solved.
 

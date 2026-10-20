@@ -134,7 +134,12 @@ function writeStatus(contest, phase, map, frozen) {
     note.textContent = count > 0 ? "Click the spawn point you want. It becomes your team's choice when every member picks that cell." : "This map has no spawn points.";
     return;
   }
-  if (phase === "before") { note.textContent = "The map is visible. Spawning has not started."; return; }
+  if (phase === "before") {
+    note.textContent = contest.spawnMode === "random"
+      ? "The map is visible. Your team will be placed on a random spawn point when the wait starts."
+      : "The map is visible. Spawning has not started.";
+    return;
+  }
   note.textContent = "Your team does not have a spawn point.";
 }
 
@@ -214,7 +219,7 @@ function renderGrid(contest, map, phase, frozen, team) {
   layoutMapGrid(grid, map.cols, map.rows);
   grid.replaceChildren();
 
-  const choosing = phase === "spawn" && !contest.spawnResolved;
+  const choosing = phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random";
   map.cells.forEach((cell, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -373,7 +378,7 @@ async function onGridClick(event) {
   const cell = map.cells[index];
   const phase = contestPhase(contest);
 
-  if (cell?.kind === "spawnpoint" && phase === "spawn" && !contest.spawnResolved) {
+  if (cell?.kind === "spawnpoint" && phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random") {
     await chooseSpawn(contest, index);
     return;
   }
