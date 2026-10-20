@@ -157,7 +157,7 @@ function renderRoster(contest, map, phase) {
   const row = document.createElement("tr");
   const name = document.createElement("td");
   const dot = el("span", "team-color-dot");
-  dot.style.setProperty("--team", `hsl(${(state.contest.teams.indexOf(team) * 137.508 + 8) % 360} 82% 62%)`);
+  dot.style.setProperty("--team", teamColor(contest, team.id));
   name.append(dot, document.createTextNode(team.name));
   const members = el("td", "team-members-cell");
   for (const m of team.members || []) members.append(el("span", "team-member-chip", m));

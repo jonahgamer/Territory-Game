@@ -89,10 +89,17 @@ export function normalizeContest(raw) {
   };
 }
 
+// Kept off the difficulty hues (yellow, green, red, purple) and the type hues
+// (cyan, blue, orange, pink, lime) so a team mark stays visible on a cell.
+const TEAM_HUES = [302, 158, 106, 246];
+const TEAM_LIGHTS = [46, 34, 60];
+
 export function teamColor(contest, teamId) {
   const found = (contest?.teams || []).findIndex((team) => team.id === teamId);
   const slot = found < 0 ? 0 : found;
-  return `hsl(${(slot * 137.508 + 8) % 360} 82% 62%)`;
+  const hue = TEAM_HUES[slot % TEAM_HUES.length];
+  const light = TEAM_LIGHTS[Math.floor(slot / TEAM_HUES.length) % TEAM_LIGHTS.length];
+  return `hsl(${hue} 78% ${light}%)`;
 }
 
 export function teamShort(name) {

@@ -1071,7 +1071,9 @@ button[type="submit"],
 
 .grid-cell.student-cell.problem.taken {
   color: var(--team, #f4feff);
-  box-shadow: inset 0 0 0 3px var(--team, #f4feff);
+  box-shadow:
+    inset 0 0 0 3px var(--team, #f4feff),
+    inset 0 0 0 5px #060910;
 }
 
 .grid-cell.student-cell.problem.taken::after {
