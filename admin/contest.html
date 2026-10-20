@@ -72,6 +72,11 @@
       <form id="team-form" class="problem-editor">
         <label>Team name <input id="team-name" type="text" maxlength="60" /></label>
         <label>Members (one per line) <textarea id="team-members" rows="5"></textarea></label>
+        <label>Add a contestant
+          <select id="team-member-pick">
+            <option value="">Choose a student…</option>
+          </select>
+        </label>
         <div class="team-form-actions">
           <button type="submit" class="save-changes" id="team-submit">Add team</button>
           <button type="button" class="account-action" id="team-cancel-edit" hidden>Cancel</button>

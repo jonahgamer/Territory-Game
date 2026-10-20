@@ -19,6 +19,7 @@ const contestId = new URLSearchParams(location.search).get("id") || "";
 const state = {
   contests: [], maps: [], problems: [], revisions: { contests: 0 },
   current: null, map: null, editingTeamId: null, adminViewTeamId: null,
+  students: [],
   syncAt: 0, clock: null, lastMouse: Date.now(),
 };
 
@@ -32,6 +33,12 @@ async function run() {
   state.current = state.contests.find((c) => c.id === contestId) || null;
   if (!state.current) throw new Error("Contest not found.");
   state.map = state.maps.find((m) => m.id === state.current.mapId) || null;
+  try {
+    const accounts = await api.listAccounts();
+    state.students = (accounts.accounts || []).filter((account) => account.role === "student" && account.banned !== true);
+  } catch {
+    state.students = [];
+  }
 
   bindEvents();
   render();
@@ -66,6 +73,8 @@ function bindEvents() {
   document.querySelector("#delete-open-contest")?.addEventListener("click", deleteContest);
   document.querySelector("#team-form")?.addEventListener("submit", saveTeam);
   document.querySelector("#team-cancel-edit")?.addEventListener("click", resetTeamForm);
+  document.querySelector("#team-members")?.addEventListener("input", fillContestantPicker);
+  document.querySelector("#team-member-pick")?.addEventListener("change", addPickedContestant);
   document.querySelector("#contestant-list")?.addEventListener("click", onTeamListClick);
   document.querySelector("#contest-spawn-mode")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-spawn-mode]");
@@ -147,6 +156,7 @@ function render() {
 
   renderTestingTeamView();
   renderTeams();
+  fillContestantPicker();
   renderLeaderboard();
   renderBoard();
   paintClock();
@@ -267,6 +277,74 @@ function renderTeams() {
   });
 }
 
+function memberLines() {
+  return document.querySelector("#team-members").value
+    .split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function fillContestantPicker() {
+  const select = document.querySelector("#team-member-pick");
+  if (!select) return;
+  const listed = new Set(memberLines().map((item) => item.toLowerCase()));
+  const taken = new Set();
+  for (const team of state.current?.teams || []) {
+    if (team.id === state.editingTeamId) continue;
+    for (const member of team.members || []) taken.add(String(member).toLowerCase());
+  }
+  const students = state.students.slice().sort((a, b) =>
+    String(a.displayName || a.username).localeCompare(String(b.displayName || b.username)));
+  const full = memberLines().length >= 5;
+  const openNames = [];
+  if (!full) {
+    for (const student of students) {
+      const key = String(student.username).toLowerCase();
+      if (listed.has(key) || taken.has(key)) continue;
+      openNames.push(student.username);
+    }
+  }
+  const signature = `${full ? "full" : students.length ? "choose" : "none"}\n${openNames.join("\n")}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  const placeholder = el("option", null, full
+    ? "This team already has 5 members"
+    : students.length ? "Choose a student…" : "No student accounts");
+  placeholder.value = "";
+  select.append(placeholder);
+  if (full) return;
+  let open = 0;
+  for (const student of students) {
+    const key = String(student.username).toLowerCase();
+    if (listed.has(key) || taken.has(key)) continue;
+    const option = el("option", null,
+      student.displayName && student.displayName.toLowerCase() !== key
+        ? `${student.displayName} (${student.username})`
+        : student.username);
+    option.value = student.username;
+    select.append(option);
+    open += 1;
+  }
+  if (students.length && open === 0) placeholder.textContent = "Every student is already on a team";
+}
+
+function addPickedContestant() {
+  const select = document.querySelector("#team-member-pick");
+  const username = select.value;
+  if (!username) return;
+  const members = memberLines();
+  if (members.length >= 5) {
+    select.value = "";
+    showPageToast("A team can have at most 5 members.", "warn");
+    fillContestantPicker();
+    return;
+  }
+  if (!members.some((member) => member.toLowerCase() === username.toLowerCase())) {
+    members.push(username);
+    document.querySelector("#team-members").value = members.join("\n");
+  }
+  fillContestantPicker();
+}
+
 function beginEdit(team) {
   state.editingTeamId = team.id;
   document.querySelector("#team-name").value = team.name;
@@ -275,6 +353,7 @@ function beginEdit(team) {
   document.querySelector("#team-cancel-edit").hidden = false;
   document.querySelector("#team-edit-note").hidden = false;
   document.querySelector("#team-edit-note").textContent = "Editing an existing team. Removed members lose their spawn pick.";
+  fillContestantPicker();
 }
 
 function resetTeamForm() {
@@ -285,6 +364,7 @@ function resetTeamForm() {
   document.querySelector("#team-cancel-edit").hidden = true;
   document.querySelector("#team-edit-note").hidden = true;
   document.querySelector("#team-form-error").hidden = true;
+  fillContestantPicker();
 }
 
 async function saveTeam(event) {

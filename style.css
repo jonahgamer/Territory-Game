@@ -1551,7 +1551,10 @@ button[type="submit"],
 }
 
 .problem-pages {
-  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 16px 0 12px;
 }
 
 .problem-bulk {
@@ -1667,6 +1670,12 @@ button[type="submit"],
 
 .problem-editor textarea {
   resize: vertical;
+}
+
+#team-member-pick {
+  width: min(28rem, 100%);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 #problem-prompt {
