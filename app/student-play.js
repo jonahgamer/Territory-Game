@@ -31,7 +31,7 @@ const GREEN_ANCHOR = {
 
 // Non-problem cell colours (dimmer than the admin view).
 const OTHER_COLOURS = {
-  obstacle:   { r: 0x2a, g: 0x2a, b: 0x2a }, // dark grey plain
+  obstacle:   { r: 0x3a, g: 0x3a, b: 0x3a }, // plain dark grey
   spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 }, // dim teal
   empty:      { r: 0x11, g: 0x11, b: 0x17 }, // near-black
   unknown:    { r: 0x5a, g: 0x5a, b: 0x5a }, // muted grey
@@ -288,12 +288,18 @@ function renderGrid(contest, map, phase, frozen, team) {
     button.style.margin = "0";
     button.style.border = "0";
     button.style.borderRadius = "0";
+    button.style.position = "relative";
 
     if (owner) {
-      // ── Occupied: dot only, no text, no "X" ──────────────
+      // ── Occupied: dot overrides any cross/text ───────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.style.setProperty("--team", teamColor(contest, owner.id));
+
+      // Wipe any pre-existing text node / pseudo "X" by clearing text
+      // and suppressing pseudo-element content on this cell.
+      button.textContent = "";
+      button.classList.add("cell-occupied");
 
       const dot = el("span", "cell-team-dot");
       dot.style.position = "absolute";
@@ -304,6 +310,10 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.height = "50%";
       dot.style.borderRadius = "50%";
       dot.style.background = teamColor(contest, owner.id);
+      // Outline of the dot.
+      dot.style.border = owner.id === team.id
+        ? "2px solid rgba(255,255,255,0.95)"
+        : "1.5px solid rgba(255,255,255,0.7)";
       dot.style.display = "flex";
       dot.style.alignItems = "center";
       dot.style.justifyContent = "center";
@@ -340,6 +350,13 @@ function renderGrid(contest, map, phase, frozen, team) {
     button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
     grid.append(button);
   });
+
+  // Suppress any pseudo-element "X" from shared CSS on occupied cells.
+  const style = document.createElement("style");
+  style.textContent = `#student-grid .student-cell.cell-occupied::before,
+#student-grid .student-cell.cell-occupied::after { content: none !important; }`;
+  grid.append(style);
+
   paintPhotoGrid(grid, map, findProblem);
 }
 
