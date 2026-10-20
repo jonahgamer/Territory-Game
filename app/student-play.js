@@ -31,7 +31,7 @@ const GREEN_ANCHOR = {
 
 const OTHER_COLOURS = {
   obstacle:   { r: 0x3a, g: 0x3a, b: 0x3a },
-  spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 },
+  spawnpoint: { r: 0x74, g: 0xb4, b: 0xc7 },
   empty:      { r: 0x11, g: 0x11, b: 0x17 },
   unknown:    { r: 0x5a, g: 0x5a, b: 0x5a },
 };
@@ -80,7 +80,46 @@ async function run() {
   render();
   startClock();
 }
+function bindBackToTop() {
+  const resetAndScroll = () => {
+    state.view = { scale: 1, x: 0, y: 0 };
+    state.applyView?.();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
+  const mobileBtn  = document.querySelector("#back-to-top");
+  const desktopBtn = document.querySelector("#back-to-top-desktop");
+
+  // Force the mobile button to render even if `.mobile-bar`
+  // rules (flex: 1 on the logo, nowrap, etc.) would hide or
+  // collapse it. Inline styles win over the stylesheet.
+  if (mobileBtn) {
+    Object.assign(mobileBtn.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "36px",
+      height: "36px",
+      minWidth: "36px",
+      flex: "0 0 auto",
+      padding: "0",
+      margin: "0 8px",
+      borderRadius: "6px",
+      border: "1px solid rgba(255,255,255,0.25)",
+      background: "rgba(255,255,255,0.08)",
+      color: "inherit",
+      fontSize: "16px",
+      cursor: "pointer",
+      visibility: "visible",
+      opacity: "1",
+      position: "relative",
+      zIndex: "2",
+    });
+    mobileBtn.addEventListener("click", resetAndScroll);
+  }
+
+  if (desktopBtn) desktopBtn.addEventListener("click", resetAndScroll);
+}
 function bindEvents() {
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
   const grid = document.querySelector("#student-grid");
@@ -103,15 +142,7 @@ function bindEvents() {
   bindBackToTop();
 }
 
-function bindBackToTop() {
-  const resetAndScroll = () => {
-    state.view = { scale: 1, x: 0, y: 0 };
-    state.applyView?.();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  document.querySelector("#back-to-top")?.addEventListener("click", resetAndScroll);
-  document.querySelector("#back-to-top-desktop")?.addEventListener("click", resetAndScroll);
-}
+
 
 function answerOpenMode() {
   const username = getSession()?.user?.username || "";
