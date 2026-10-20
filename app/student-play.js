@@ -41,7 +41,11 @@ const ZOOM_MAX = 6;
 const ZOOM_STEP = 1.25;
 
 // ── Dot sizing ───────────────────────────────────────────
+// Occupied-team dot: 78 % of the cell.
+// Spawn-point dot: 96 % of the cell + pulsing ring, so it's
+// clearly larger and more obvious than a team dot.
 const DOT_DIAMETER_PCT = 78;
+const SPAWN_DIAMETER_PCT = 96;
 
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
@@ -75,18 +79,7 @@ async function run() {
   render();
   startClock();
 }
-function bindBackToTop() {
-  const btn = document.querySelector("#back-to-top");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    // 1) Reset the map view to its initial state.
-    state.view = { scale: 1, x: 0, y: 0 };
-    state.applyView?.();
 
-    // 2) Scroll the page back to the top.
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
-}
 function bindEvents() {
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
   const grid = document.querySelector("#student-grid");
@@ -104,8 +97,19 @@ function bindEvents() {
     state.lastMouse = Date.now();
     if (wasIdle) state.syncAt = 0;
   }, { passive: true });
+
   installPanZoom();
   bindBackToTop();
+}
+
+function bindBackToTop() {
+  const resetAndScroll = () => {
+    state.view = { scale: 1, x: 0, y: 0 };
+    state.applyView?.();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  document.querySelector("#back-to-top")?.addEventListener("click", resetAndScroll);
+  document.querySelector("#mobile-back-to-top")?.addEventListener("click", resetAndScroll);
 }
 
 function answerOpenMode() {
@@ -117,12 +121,6 @@ function answerOpenMode() {
 
 // ──────────────────────────────────────────────────────────
 // PAN + ZOOM
-// ──────────────────────────────────────────────────────────
-// Important: DO NOT setPointerCapture on pointerdown. Capture
-// would retarget the subsequent click event to #student-board,
-// which breaks the grid's own click handler. We only capture
-// once the drag has actually moved past the threshold, so a
-// simple tap/click still reaches the cell.
 // ──────────────────────────────────────────────────────────
 function installPanZoom() {
   const board = document.querySelector("#student-board");
@@ -192,10 +190,8 @@ function installPanZoom() {
       dragging = true;
       dragStart = { px: event.clientX, py: event.clientY, vx: state.view.x, vy: state.view.y };
       board.style.cursor = "grabbing";
-      // NOTE: no setPointerCapture here.
     } else if (pointers.size === 2) {
       dragging = false;
-      // Once we're pinching, capture is safe and desirable.
       for (const id of pointers.keys()) {
         try { board.setPointerCapture(id); dragCapturedId = id; } catch {}
       }
@@ -221,9 +217,6 @@ function installPanZoom() {
       const dy = event.clientY - dragStart.py;
       if (!moved && Math.abs(dx) + Math.abs(dy) > 3) {
         moved = true;
-        // Now it's a real drag — capture the pointer so it keeps
-        // tracking even outside the board. A click won't fire
-        // because `moved` is true and we stop it below.
         try { board.setPointerCapture(event.pointerId); dragCapturedId = event.pointerId; } catch {}
       }
       if (moved) {
@@ -270,8 +263,6 @@ function installPanZoom() {
   board.addEventListener("pointercancel", endPointer);
   board.addEventListener("pointerleave", endPointer);
 
-  // Swallow only the click that follows a real drag. A plain
-  // click (no drag) passes through untouched to the cell.
   board.addEventListener("click", (event) => {
     if (moved) {
       event.stopPropagation();
@@ -293,18 +284,22 @@ function installPanZoom() {
   window.addEventListener("resize", () => refreshDotFontSizes(), { passive: true });
 }
 
+// Recalculate the font size for every dot (team + spawn) after a
+// zoom/resize. Dots are sized in % of the cell, and this keeps the
+// 3-letter label proportional at any zoom level.
 function refreshDotFontSizes() {
-  const dots = document.querySelectorAll("#student-grid .cell-team-dot");
+  const dots = document.querySelectorAll("#student-grid .cell-team-dot, #student-grid .cell-spawn-dot");
   for (const dot of dots) {
     const cell = dot.parentElement;
     if (!cell) continue;
-    const w = cell.clientWidth;
-    const h = cell.clientHeight;
-    const cellSize = Math.min(w, h);
+    const cellSize = Math.min(cell.clientWidth, cell.clientHeight);
     if (!cellSize) continue;
     const visual = cellSize * state.view.scale;
-    const dotDiameter = visual * (DOT_DIAMETER_PCT / 100);
-    const fontPx = clamp(dotDiameter * 0.55, 6, 32);
+    const isSpawn = dot.classList.contains("cell-spawn-dot");
+    const pct = isSpawn ? SPAWN_DIAMETER_PCT : DOT_DIAMETER_PCT;
+    const diameter = visual * (pct / 100);
+    const ratio = isSpawn ? 0.62 : 0.55;   // spawn text slightly larger
+    const fontPx = clamp(diameter * ratio, 6, 36);
     dot.style.fontSize = `${fontPx}px`;
     dot.style.letterSpacing = fontPx > 10 ? "0.5px" : "0";
   }
@@ -492,11 +487,37 @@ function renderGrid(contest, map, phase, frozen, team) {
 #student-grid .student-cell.cell-occupied::after {
   content: none !important;
 }
-#student-grid .cell-team-dot {
+#student-grid .cell-team-dot,
+#student-grid .cell-spawn-dot {
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* ── Spawn-point dot: larger + pulsing ring so it reads as
+      the "you are here" marker at a glance. ── */
+#student-grid .cell-spawn-dot {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.95),
+    0 0 0 7px rgba(183, 250, 0, 0.55),
+    0 0 18px 6px rgba(183, 250, 0, 0.45);
+  animation: spawn-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes spawn-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 7px rgba(183, 250, 0, 0.55),
+      0 0 18px 6px rgba(183, 250, 0, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 10px rgba(183, 250, 0, 0.35),
+      0 0 26px 10px rgba(183, 250, 0, 0.25);
+  }
 }
 `;
   grid.append(style);
@@ -537,6 +558,7 @@ function renderGrid(contest, map, phase, frozen, team) {
     if (cell.kind === "obstacle") button.classList.add("obstacle-cell");
 
     if (owner) {
+      // ── Occupied: team dot ───────────────────────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.classList.add("cell-occupied");
@@ -572,14 +594,46 @@ function renderGrid(contest, map, phase, frozen, team) {
 
       button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
       button.disabled = true;
-    } else {
-      const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
-      const canSpawn = choosing && cell.kind === "spawnpoint";
-      button.disabled = !(reachable || canSpawn);
-      if (canSpawn) {
+    } else if (cell.kind === "spawnpoint") {
+      // ── Unclaimed spawn point: large, obvious marker ──
+      button.classList.add("spawn-cell");
+      button.style.background = "rgba(183, 250, 0, 0.10)";
+      button.textContent = "";
+
+      const dot = el("span", "cell-spawn-dot");
+      dot.style.position = "absolute";
+      dot.style.top = "50%";
+      dot.style.left = "50%";
+      dot.style.transform = "translate(-50%, -50%)";
+      dot.style.width = `${SPAWN_DIAMETER_PCT}%`;
+      dot.style.height = `${SPAWN_DIAMETER_PCT}%`;
+      dot.style.borderRadius = "50%";
+      dot.style.background = "rgba(183, 250, 0, 0.85)";
+      dot.style.display = "flex";
+      dot.style.alignItems = "center";
+      dot.style.justifyContent = "center";
+      dot.style.boxSizing = "border-box";
+      dot.style.fontFamily = '"Share Tech Mono", monospace';
+      dot.style.fontWeight = "700";
+      dot.style.lineHeight = "1";
+      dot.style.color = "#111111";
+      dot.style.textShadow = "none";
+      dot.style.pointerEvents = "none";
+      dot.style.overflow = "hidden";
+      dot.textContent = "SPAWN";
+      dot.title = "Spawn point";
+      button.append(dot);
+
+      const reachable = choosing;
+      button.disabled = !reachable;
+      if (choosing) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
         if (myVote && myVote.cell === index) button.classList.add("mine");
       }
+    } else {
+      // ── Other cells (problem, empty, photo backdrop) ──
+      const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
+      button.disabled = !reachable;
       button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
     }
 

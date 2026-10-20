@@ -3061,3 +3061,65 @@ button[type="submit"],
   margin-top: 2px;
   color: var(--muted);
 }
+
+/* Brand row: logo + back-to-top button (sidebar / desktop only) */
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Base look shared by both buttons */
+.back-to-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.back-to-top:hover,
+.back-to-top:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.35);
+  outline: none;
+}
+
+.back-to-top:active {
+  transform: translateY(1px);
+}
+
+/* The mobile-bar variant is hidden on desktop… */
+.mobile-back-to-top {
+  display: none;
+  margin-left: auto;
+}
+
+/* Toolbar needs to lay out the back link + button side by side */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* …and the sidebar variant is hidden on mobile. Breakpoint is
+   illustrative — match whatever the project already uses to
+   switch .sidebar / .mobile-bar. */
+@media (max-width: 768px) {
+  #back-to-top {
+    display: none;
+  }
+  .mobile-back-to-top {
+    display: inline-flex;
+  }
+}
