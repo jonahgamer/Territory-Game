@@ -129,10 +129,7 @@
       (function () {
         var back = document.getElementById("practice-back");
         back.addEventListener("click", function () {
-          // Try to close the tab. Browsers only allow this for windows opened
-          // by script; if it is blocked, fall back to the category list.
           window.close();
-          // If the tab is still here after a moment, navigate instead.
           setTimeout(function () {
             if (!window.closed) window.location.href = "/testing/index.html";
           }, 150);
@@ -167,6 +164,83 @@
           status.textContent = message;
         }
         function tagOf(p) { return (TYPE_TAG[p.type] || "?") + p.index; }
+
+        // ── Cookie Helper ───────────────────────────────────────────
+        function getCookie(name) {
+          var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+          if (match) return match[2];
+          return null;
+        }
+
+        // ── Popup Helper ────────────────────────────────────────────
+        function showAcceptPopup() {
+          var overlay = document.createElement("div");
+          overlay.setAttribute("style",
+            "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);" +
+            "display:flex;align-items:center;justify-content:center;" +
+            "padding:12px;box-sizing:border-box;"
+          );
+
+          overlay.innerHTML =
+            '<div style="position:relative;background:#081220;border:2px solid #3ee0ff;' +
+              'border-radius:6px;padding:12px;box-shadow:0 0 24px rgba(62,224,255,0.35);' +
+              'max-width:100%;max-height:100%;display:flex;flex-direction:column;' +
+              'align-items:center;box-sizing:border-box;">' +
+
+              '<button type="button" aria-label="Close" data-neko-close ' +
+                'style="align-self:flex-end;margin:0 0 8px 0;min-width:44px;min-height:44px;' +
+                'border:1px solid #3ee0ff;border-radius:4px;background:rgba(62,224,255,0.14);' +
+                'color:#3ee0ff;font-size:22px;line-height:1;cursor:pointer;padding:0;">×</button>' +
+
+              '<div data-neko-status style="color:#d7f6ff;font-size:14px;padding:8px;">Loading…</div>' +
+              '<h2 style="color:lime">ACCEPTED!</h2>' +
+              '<img data-neko-img alt="" ' +
+                'style="max-width:100%;max-height:70vh;width:auto;height:auto;' +
+                'display:none;border-radius:4px;">' +
+
+            '</div>';
+
+          function close() {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          }
+          overlay.querySelector("[data-neko-close]").addEventListener("click", close);
+          overlay.addEventListener("click", function (e) {
+            if (e.target === overlay) close();
+          });
+
+          document.body.appendChild(overlay);
+
+          var img = overlay.querySelector("[data-neko-img]");
+          var statusEl = overlay.querySelector("[data-neko-status]");
+
+          if (getCookie("neko") === "1") {
+            fetch("https://nekos.best/api/v2/neko")
+              .then(function (r) { return r.json(); })
+              .then(function (json) {
+                var imgUrl = json.results && json.results[0] && json.results[0].url;
+                if (!imgUrl) throw new Error("no image url");
+                img.onload = function () {
+                  statusEl.style.display = "none";
+                  img.style.display = "block";
+                };
+                img.onerror = function () {
+                  statusEl.textContent = "Image failed to load.";
+                };
+                img.src = imgUrl;
+              })
+              .catch(function (e) {
+                statusEl.style.display = "none";
+                img.onerror = function () { /* optionally show text if fallback also fails */ };
+                img.src = "lol.png";
+                img.style.display = "block";
+              });
+          } else {
+            statusEl.style.display = "none";
+            img.src = "lol.png";
+            img.style.display = "block";
+          }
+        }
+        // ────────────────────────────────────────────────────────────
 
         // ── buildStatementDocument / setRichText copied from script.js ──
         var STATEMENT_KATEX_CSS = "https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css";
@@ -460,76 +534,14 @@
               error.hidden = false;
               error.textContent = "Runtime error: " + (data.error || data.comment || "checker failed");
             } else if (data.correct) {
-  error.hidden = false;
-  error.style.color = "#3ddc6a";
-  error.textContent = "Accepted";
+              error.hidden = false;
+              error.style.color = "#3ddc6a";
+              error.textContent = "Accepted";
+              
+              // Call the popup helper
+              showAcceptPopup();
 
-  // Build and show the popup right away (no async gate)
-  var overlay = document.createElement("div");
-  overlay.setAttribute("style",
-    "position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.85);" +
-    "display:flex;align-items:center;justify-content:center;" +
-    "padding:12px;box-sizing:border-box;"
-  );
-
-  overlay.innerHTML =
-    '<div style="position:relative;background:#081220;border:2px solid #3ee0ff;' +
-      'border-radius:6px;padding:12px;box-shadow:0 0 24px rgba(62,224,255,0.35);' +
-      'max-width:100%;max-height:100%;display:flex;flex-direction:column;' +
-      'align-items:center;box-sizing:border-box;">' +
-
-      '<button type="button" aria-label="Close" data-neko-close ' +
-        'style="align-self:flex-end;margin:0 0 8px 0;min-width:44px;min-height:44px;' +
-        'border:1px solid #3ee0ff;border-radius:4px;background:rgba(62,224,255,0.14);' +
-        'color:#3ee0ff;font-size:22px;line-height:1;cursor:pointer;padding:0;">×</button>' +
-
-      '<div data-neko-status style="color:#d7f6ff;font-size:14px;padding:8px;">Loading…</div>' +
-	'<h2 style="color:lime">ACCEPTED!</h2>' +
-      '<img data-neko-img alt="" ' +
-        'style="max-width:100%;max-height:70vh;width:auto;height:auto;' +
-        'display:none;border-radius:4px;">' +
-
-    '</div>';
-
-  function close() {
-    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-  }
-  overlay.querySelector("[data-neko-close]").addEventListener("click", close);
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay) close();
-  });
-
-  document.body.appendChild(overlay);
-
-  // Then load the image into the existing frame
-  fetch("https://nekos.best/api/v2/neko")
-    .then(function (r) { return r.json(); })
-    .then(function (json) {
-      var imgUrl = json.results && json.results[0] && json.results[0].url;
-      var img = overlay.querySelector("[data-neko-img]");
-      var statusEl = overlay.querySelector("[data-neko-status]");
-      if (!imgUrl) throw new Error("no image url");
-      img.onload = function () {
-        statusEl.style.display = "none";
-        img.style.display = "block";
-      };
-      img.onerror = function () {
-        statusEl.textContent = "Image failed to load.";
-      };
-      img.src = imgUrl;
-    })
-    .catch(function (e) {
-  var statusEl = overlay.querySelector("[data-neko-status]");
-  var img = overlay.querySelector("[data-neko-img]");
-  if (statusEl) statusEl.style.display = "none";
-  if (img) {
-    img.onerror = function () { /* optionally show text if fallback also fails */ };
-    img.src = "lol.png"; // <-- put your image link here
-    img.style.display = "block";
-  }
-});
-
-} else {
+            } else {
               error.hidden = false;
               error.textContent = data.comment && data.comment !== "WA" ? data.comment : "That answer is not right.";
             }
