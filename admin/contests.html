@@ -40,17 +40,24 @@
       </div>
 
       <form id="create-contest-form" class="create-map">
-        <label>Name <input id="contest-name" type="text" maxlength="60" required /></label>
-        <label>Map
+        <label class="create-line">Name <input id="contest-name" type="text" maxlength="60" required /></label>
+        <label class="create-line">Map
           <select id="contest-map"></select>
         </label>
         <p id="contest-map-note" class="field-note"></p>
         <fieldset class="contest-schedule">
           <legend>Schedule</legend>
-          <label>Start <input id="contest-start" type="datetime-local" step="1" required /></label>
-          <label>Duration (min) <input id="contest-duration" type="number" min="1" max="10080" required /></label>
-          <label>Spawn time (min) <input id="contest-spawn" type="number" min="0" max="10080" value="10" required /></label>
-          <label>Wait after spawn (min) <input id="contest-ready" type="number" min="0" max="10080" value="5" required /></label>
+          <label class="schedule-line" id="create-start-field">Start <input id="contest-start" type="datetime-local" step="1" required /></label>
+          <div class="kind-choices schedule-line" id="create-spawn-mode" role="group" aria-label="Spawn assignment">
+            <button type="button" data-spawn-mode="choose" aria-pressed="true">Choose spawn</button>
+            <button type="button" data-spawn-mode="random" aria-pressed="false">Random spawn</button>
+          </div>
+          <div class="schedule-times">
+            <label>Duration (min) <input id="contest-duration" type="number" min="1" max="10080" required /></label>
+            <label id="create-spawn-field">Spawn time (min) <input id="contest-spawn" type="number" min="0" max="10080" value="10" required /></label>
+            <label>Wait after spawn (min) <input id="contest-ready" type="number" min="0" max="10080" value="5" required /></label>
+          </div>
+          <p id="create-spawn-note" class="field-note" hidden>Teams are placed on random spawn points when the contest starts. There is no choosing period. The wait still runs before solving begins.</p>
         </fieldset>
         <button type="submit">Create contest</button>
         <p id="contest-form-error" class="form-error" hidden></p>

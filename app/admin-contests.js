@@ -13,6 +13,7 @@ const state = {
   maps: [],
   revisions: { contests: 0 },
   mode: "competition",
+  spawnMode: "choose",
 };
 
 // ── 数据加载 ─────────────────────────────────────────────
@@ -41,6 +42,12 @@ function bindEvents() {
     renderMapSelect();
   });
 
+  document.querySelector("#create-spawn-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-spawn-mode]");
+    if (!btn) return;
+    state.spawnMode = btn.dataset.spawnMode === "random" ? "random" : "choose";
+    renderSpawnMode();
+  });
   document.querySelector("#create-contest-form")?.addEventListener("submit", createContest);
   document.querySelector("#contest-map")?.addEventListener("change", () => {
     updateSpawnNote(document.querySelector("#contest-map"), document.querySelector("#contest-map-note"));
@@ -48,6 +55,19 @@ function bindEvents() {
 }
 
 // ── 渲染 ─────────────────────────────────────────────────
+function renderSpawnMode() {
+  const random = state.spawnMode === "random";
+  for (const btn of document.querySelectorAll("#create-spawn-mode [data-spawn-mode]")) {
+    btn.setAttribute("aria-pressed", String((btn.dataset.spawnMode === "random") === random));
+  }
+  const field = document.querySelector("#create-spawn-field");
+  const note = document.querySelector("#create-spawn-note");
+  const input = document.querySelector("#contest-spawn");
+  if (field) field.hidden = random;
+  if (note) note.hidden = !random;
+  if (input) input.required = !random;
+}
+
 function renderMode() {
   for (const btn of document.querySelectorAll("[data-contest-mode]")) {
     btn.setAttribute("aria-pressed", String(btn.dataset.contestMode === state.mode));
@@ -124,10 +144,11 @@ async function createContest(event) {
   if (!name || name.length > 60) { formError.hidden = false; formError.textContent = "Give the contest a name."; return; }
   if (!mapId || !state.maps.some((m) => m.id === mapId)) { formError.hidden = false; formError.textContent = "Choose a map."; return; }
 
+  const random = state.spawnMode === "random";
   const schedule = readSchedule(
     document.querySelector("#contest-start").value,
     document.querySelector("#contest-duration").value,
-    document.querySelector("#contest-spawn").value,
+    random ? "0" : document.querySelector("#contest-spawn").value,
     document.querySelector("#contest-ready").value
   );
   if (schedule.error) { formError.hidden = false; formError.textContent = schedule.error; return; }
@@ -145,6 +166,7 @@ async function createContest(event) {
     spawnMinutes: schedule.spawnMinutes,
     readyMinutes: schedule.readyMinutes,
     mode: state.mode,
+    spawnMode: state.spawnMode,
   };
   
   state.contests.unshift(newContest);

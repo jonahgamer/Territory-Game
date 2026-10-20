@@ -1305,6 +1305,37 @@ button[type="submit"],
   flex-basis: 100%;
 }
 
+#create-contest-form {
+  max-width: 52rem;
+}
+
+#create-contest-form > .create-line,
+#create-contest-form > .field-note,
+#create-contest-form .schedule-line,
+#create-contest-form #create-spawn-note {
+  flex-basis: 100%;
+}
+
+#create-contest-form #contest-name {
+  width: min(28rem, 100%);
+}
+
+#create-contest-form #contest-start {
+  width: min(18rem, 100%);
+}
+
+#create-contest-form #create-spawn-mode {
+  margin: 0;
+}
+
+#create-contest-form .schedule-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  flex-basis: 100%;
+}
+
 #contest-energy .field-note {
   flex-basis: 100%;
   margin: 0;
