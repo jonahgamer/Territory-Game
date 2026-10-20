@@ -18,9 +18,10 @@ import { createStatementView } from "../shared/statement.js";
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
 
-// ── Difficulty colour reference (muted greens, no sharp neon) ──
+// ── Difficulty colour reference ──────────────────────────
 const TIER_VALUE = { easy: 1, normal: 2, medium: 2, hard: 3, insane: 4 };
 
+// Four muted difficulty colours, easy → insane.
 const GREEN_ANCHOR = {
   1: { r: 0x0a, g: 0x46, b: 0x05 }, // easy   – #0a4605 deep forest green
   2: { r: 0x73, g: 0x86, b: 0x2e }, // med    – #73862e olive
@@ -42,7 +43,8 @@ const ZOOM_STEP = 1.25;
 
 // ── Dot sizing ───────────────────────────────────────────
 // Occupied-team dot (non-spawn): 78 % of the cell.
-// Spawn dot (claimed or not):    96 % of the cell + pulsing ring.
+// Occupied spawn dot:            96 % of the cell (still pulsing).
+// Unclaimed spawn:               plain, no dot.
 const DOT_DIAMETER_PCT = 78;
 const SPAWN_DIAMETER_PCT = 96;
 
@@ -108,7 +110,7 @@ function bindBackToTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   document.querySelector("#back-to-top")?.addEventListener("click", resetAndScroll);
-  document.querySelector("#mobile-back-to-top")?.addEventListener("click", resetAndScroll);
+  document.querySelector("#back-to-top-desktop")?.addEventListener("click", resetAndScroll);
 }
 
 function answerOpenMode() {
@@ -491,8 +493,7 @@ function renderGrid(contest, map, phase, frozen, team) {
   overflow: hidden;
 }
 
-/* ── Spawn-point dot: larger + pulsing ring. Applies to both
-      unclaimed (SPAWN text) and claimed (team label) spawns. ── */
+/* Claimed spawn dot: pulsing ring so it stays obviously a spawn. */
 #student-grid .cell-spawn-dot {
   animation: spawn-pulse 1.8s ease-in-out infinite;
 }
@@ -623,35 +624,8 @@ function renderGrid(contest, map, phase, frozen, team) {
       button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
       button.disabled = true;
     } else if (isSpawnCell) {
-      // ── Unclaimed spawn point: large obvious marker, SPAWN text ──
-      button.classList.add("spawn-cell");
-      button.style.background = "rgba(183, 250, 0, 0.10)";
+      // ── Unclaimed spawn: plain dim cell, no dot / no highlight ──
       button.textContent = "";
-
-      const dot = el("span", "cell-spawn-dot");
-      dot.style.position = "absolute";
-      dot.style.top = "50%";
-      dot.style.left = "50%";
-      dot.style.transform = "translate(-50%, -50%)";
-      dot.style.width = `${SPAWN_DIAMETER_PCT}%`;
-      dot.style.height = `${SPAWN_DIAMETER_PCT}%`;
-      dot.style.borderRadius = "50%";
-      dot.style.background = "rgba(183, 250, 0, 0.85)";
-      dot.style.display = "flex";
-      dot.style.alignItems = "center";
-      dot.style.justifyContent = "center";
-      dot.style.boxSizing = "border-box";
-      dot.style.fontFamily = '"Share Tech Mono", monospace';
-      dot.style.fontWeight = "700";
-      dot.style.lineHeight = "1";
-      dot.style.color = "#111111";
-      dot.style.textShadow = "none";
-      dot.style.pointerEvents = "none";
-      dot.style.overflow = "hidden";
-      dot.textContent = "SPAWN";
-      dot.title = "Spawn point";
-      button.append(dot);
-
       button.disabled = !choosing;
       if (choosing) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
