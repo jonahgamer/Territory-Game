@@ -21,7 +21,6 @@ const contestId = params.get("contest") || "";
 // ── Difficulty colour reference (muted greens, no sharp neon) ──
 const TIER_VALUE = { easy: 1, normal: 2, medium: 2, hard: 3, insane: 4 };
 
-// Four muted greens, easy → insane. Kept soft (no sharp neon).
 const GREEN_ANCHOR = {
   1: { r: 0x86, g: 0xbf, b: 0x8a }, // easy   – pale sage green
   2: { r: 0x5c, g: 0xa0, b: 0x6a }, // med    – mid green
@@ -29,19 +28,24 @@ const GREEN_ANCHOR = {
   4: { r: 0xb6, g: 0x72, b: 0x3a }, // insane – very dark forest green
 };
 
-// Non-problem cell colours (dimmer than the admin view).
 const OTHER_COLOURS = {
-  obstacle:   { r: 0x3a, g: 0x3a, b: 0x3a }, // plain dark grey
-  spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 }, // dim teal
-  empty:      { r: 0x11, g: 0x11, b: 0x17 }, // near-black
-  unknown:    { r: 0x5a, g: 0x5a, b: 0x5a }, // muted grey
+  obstacle:   { r: 0x3a, g: 0x3a, b: 0x3a },
+  spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 },
+  empty:      { r: 0x11, g: 0x11, b: 0x17 },
+  unknown:    { r: 0x5a, g: 0x5a, b: 0x5a },
 };
+
+// ── Pan / zoom limits ────────────────────────────────────
+const ZOOM_MIN = 0.35;
+const ZOOM_MAX = 6;
+const ZOOM_STEP = 1.25;
 
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
   maps: [], problems: [], contest: null,
   selectedCell: null, syncAt: 0, clock: null, lastMouse: Date.now(),
   phase: "", frozen: false, spawnCache: new Map(),
+  view: { scale: 1, x: 0, y: 0 }, // pan/zoom transform
 };
 
 // ── Statement view ───────────────────────────────────────
@@ -86,6 +90,9 @@ function bindEvents() {
     state.lastMouse = Date.now();
     if (wasIdle) state.syncAt = 0;
   }, { passive: true });
+
+  // ── Pan / zoom wiring ────────────────────────────────
+  installPanZoom();
 }
 
 function answerOpenMode() {
@@ -95,6 +102,210 @@ function answerOpenMode() {
   catch { return "current"; }
 }
 
+// ──────────────────────────────────────────────────────────
+// PAN + ZOOM
+// ──────────────────────────────────────────────────────────
+// The grid element (#student-grid) is the ONLY thing that is
+// transformed. Its parent (#student-board) becomes the fixed
+// viewport: overflow:hidden, so the panning grid never spills
+// out of the board. The transform is applied as
+//   translate(tx, ty) scale(s)
+// with the origin at the top-left corner. We keep the maths in
+// `state.view` so anything (buttons, wheel, drag, pinch) can
+// mutate it and call applyView().
+// ──────────────────────────────────────────────────────────
+function installPanZoom() {
+  const board = document.querySelector("#student-board");
+  const grid  = document.querySelector("#student-grid");
+  if (!board || !grid) return;
+
+  // Viewport styling: board becomes a clipping frame for the grid.
+  board.style.position = "relative";
+  board.style.overflow = "hidden";
+  board.style.touchAction = "none";  // let us own all touch gestures
+  board.style.cursor = "grab";
+
+  // The grid keeps its own layout; we only add a transform on top.
+  grid.style.transformOrigin = "0 0";
+  grid.style.willChange = "transform";
+  grid.style.userSelect = "none";
+
+  // Keep the view in sync with `state.view`.
+  const applyView = () => {
+    const { scale, x, y } = state.view;
+    grid.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  };
+  state.applyView = applyView;
+
+  // ── Zoom-at-point helper ────────────────────────────
+  // Zoom about a screen point (cx, cy) so that whatever map
+  // coordinate is under the cursor/finger stays put.
+  const zoomAt = (cx, cy, factor) => {
+    const v = state.view;
+    const nextScale = clamp(v.scale * factor, ZOOM_MIN, ZOOM_MAX);
+    if (nextScale === v.scale) return;
+    // Point in the grid's local coordinate space.
+    const localX = (cx - v.x) / v.scale;
+    const localY = (cy - v.y) / v.scale;
+    // Solve for new translation so that local point stays at (cx, cy).
+    v.x = cx - localX * nextScale;
+    v.y = cy - localY * nextScale;
+    v.scale = nextScale;
+    applyView();
+  };
+
+  // ── Mouse: wheel = zoom, drag with any button = pan ──
+  board.addEventListener("wheel", (event) => {
+    if (!event.target.closest("#student-board")) return;
+    event.preventDefault();
+    const rect = board.getBoundingClientRect();
+    const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+    zoomAt(event.clientX - rect.left, event.clientY - rect.top, factor);
+  }, { passive: false });
+
+  // ── Pointer events cover mouse, pen and touch uniformly ──
+  // We track every pointer; if there's one pointer it pans,
+  // if there are two we pinch-zoom. Multi-touch state is kept
+  // in `pointers`.
+  const pointers = new Map();
+  let pinchStart = null;  // { dist, scale, midX, midY, viewX, viewY }
+  let dragging = false;
+  let dragStart = null;   // { px, py, vx, vy }
+  let moved = false;      // used to suppress the click after a drag
+
+  const getMid = () => {
+    const pts = [...pointers.values()];
+    return {
+      x: (pts[0].x + pts[1].x) / 2,
+      y: (pts[0].y + pts[1].y) / 2,
+    };
+  };
+  const getDist = () => {
+    const pts = [...pointers.values()];
+    const dx = pts[0].x - pts[1].x;
+    const dy = pts[0].y - pts[1].y;
+    return Math.hypot(dx, dy);
+  };
+
+  board.addEventListener("pointerdown", (event) => {
+    // Don't start a drag when the user clicks an occupied/disabled
+    // cell that isn't interactive? We still want to allow panning
+    // from anywhere, so we always record the pointer.
+    if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
+    board.setPointerCapture?.(event.pointerId);
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    moved = false;
+
+    if (pointers.size === 1) {
+      // Single pointer: start panning.
+      dragging = true;
+      dragStart = {
+        px: event.clientX,
+        py: event.clientY,
+        vx: state.view.x,
+        vy: state.view.y,
+      };
+      board.style.cursor = "grabbing";
+    } else if (pointers.size === 2) {
+      // Second pointer: switch to pinch-zoom.
+      dragging = false;
+      const mid = getMid();
+      const rect = board.getBoundingClientRect();
+      pinchStart = {
+        dist: getDist(),
+        scale: state.view.scale,
+        midX: mid.x - rect.left,
+        midY: mid.y - rect.top,
+        viewX: state.view.x,
+        viewY: state.view.y,
+      };
+    }
+  });
+
+  board.addEventListener("pointermove", (event) => {
+    if (!pointers.has(event.pointerId)) {
+      // Not one of ours — still allow the hover tooltip.
+      return;
+    }
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (pointers.size === 1 && dragging && dragStart) {
+      const dx = event.clientX - dragStart.px;
+      const dy = event.clientY - dragStart.py;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      state.view.x = dragStart.vx + dx;
+      state.view.y = dragStart.vy + dy;
+      state.applyView();
+    } else if (pointers.size === 2 && pinchStart) {
+      moved = true;
+      const dist = getDist();
+      const factor = dist / pinchStart.dist;
+      const nextScale = clamp(pinchStart.scale * factor, ZOOM_MIN, ZOOM_MAX);
+      // Zoom about the initial pinch midpoint, then follow the
+      // midpoint as the fingers move (so panning is natural).
+      const localX = (pinchStart.midX - pinchStart.viewX) / pinchStart.scale;
+      const localY = (pinchStart.midY - pinchStart.viewY) / pinchStart.scale;
+      const mid = getMid();
+      const rect = board.getBoundingClientRect();
+      const cx = mid.x - rect.left;
+      const cy = mid.y - rect.top;
+      state.view.scale = nextScale;
+      state.view.x = cx - localX * nextScale;
+      state.view.y = cy - localY * nextScale;
+      state.applyView();
+    }
+  });
+
+  const endPointer = (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.delete(event.pointerId);
+    if (pointers.size === 0) {
+      dragging = false;
+      dragStart = null;
+      pinchStart = null;
+      board.style.cursor = "grab";
+    } else if (pointers.size === 1) {
+      // Dropped from 2 pointers to 1: restart panning from here.
+      const remaining = [...pointers.values()][0];
+      dragging = true;
+      dragStart = {
+        px: remaining.x,
+        py: remaining.y,
+        vx: state.view.x,
+        vy: state.view.y,
+      };
+      pinchStart = null;
+    }
+  };
+  board.addEventListener("pointerup", endPointer);
+  board.addEventListener("pointercancel", endPointer);
+  board.addEventListener("pointerleave", endPointer);
+
+  // Suppress click after a real drag so the cell isn't selected
+  // accidentally when the user just wants to pan the map.
+  board.addEventListener("click", (event) => {
+    if (moved) {
+      event.stopPropagation();
+      event.preventDefault();
+      moved = false;
+    }
+  }, true); // capture phase: run before the cell click handler
+
+  // ── Zoom buttons (also help mobile users) ───────────
+  const zoomInBtn  = document.querySelector("#student-zoom-in");
+  const zoomOutBtn = document.querySelector("#student-zoom-out");
+  const zoomResetBtn = document.querySelector("#student-zoom-reset");
+  if (zoomInBtn)  zoomInBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, ZOOM_STEP));
+  if (zoomOutBtn) zoomOutBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, 1 / ZOOM_STEP));
+  if (zoomResetBtn) zoomResetBtn.addEventListener("click", () => {
+    state.view = { scale: 1, x: 0, y: 0 };
+    state.applyView();
+  });
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ── Render (unchanged apart from applyView hook) ─────────
 function render() {
   const contest = state.contest;
   const map = state.maps.find((m) => m.id === contest.mapId);
@@ -134,6 +345,9 @@ function render() {
   renderGrid(contest, map, phase, frozen, team);
   renderSpawnAgreement(contest, map, phase);
   paintClock();
+
+  // Re-apply the current pan/zoom after a render.
+  state.applyView?.();
 }
 
 function writeStatus(contest, phase, map, frozen) {
@@ -233,7 +447,6 @@ function isFrozen(contest, map) {
   return problems.every((i) => claimed.has(i));
 }
 
-// ── Colour helpers (no neighbour weighting, muted anchors only) ──
 function mix(a, b, t) {
   return {
     r: Math.round(a.r + (b.r - a.r) * t),
@@ -246,23 +459,19 @@ function rgbToCss({ r, g, b }) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// ── Grid rendering ───────────────────────────────────────
 function renderGrid(contest, map, phase, frozen, team) {
   const grid = document.querySelector("#student-grid");
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
   layoutMapGrid(grid, map.cols, map.rows);
-  // No empty space between cells.
   grid.style.gap = "0";
   grid.style.borderSpacing = "0";
   grid.replaceChildren();
 
-  // One injected stylesheet handles flat obstacle backgrounds and
-  // removes any inherited pseudo-content ("X") on occupied cells.
   const style = document.createElement("style");
   style.textContent = `
 #student-grid .student-cell.obstacle-cell {
-  background: rgb(0x3a, 0x3a, 0x3a) !important;
+  background: rgb(58, 58, 58) !important;
   background-image: none !important;
   border: 0 !important;
   box-shadow: none !important;
@@ -291,7 +500,6 @@ function renderGrid(contest, map, phase, frozen, team) {
 
     button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
 
-    // ── Base colour: own tier anchor only (no blending) ──
     let rgb;
     if (cell.kind === "problem") {
       const prob = findProblem(cell.problemNo, cell.type);
@@ -301,7 +509,6 @@ function renderGrid(contest, map, phase, frozen, team) {
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
     else                                   rgb = OTHER_COLOURS.empty;
 
-    // Dim unoccupied cells further — but obstacles stay flat/plain.
     if (!owner && cell.kind !== "obstacle") rgb = mix(rgb, OTHER_COLOURS.empty, 0.35);
 
     button.style.background = rgbToCss(rgb);
@@ -314,17 +521,13 @@ function renderGrid(contest, map, phase, frozen, team) {
     button.style.boxShadow = "none";
     button.style.position = "relative";
 
-    // Mark obstacles so the injected CSS keeps them a single flat colour.
     if (cell.kind === "obstacle") button.classList.add("obstacle-cell");
 
     if (owner) {
-      // ── Occupied: dot overrides any cross/text ───────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.classList.add("cell-occupied");
       button.style.setProperty("--team", teamColor(contest, owner.id));
-
-      // Wipe any pre-existing text node / pseudo "X".
       button.textContent = "";
 
       const dot = el("span", "cell-team-dot");
@@ -336,7 +539,6 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.height = "50%";
       dot.style.borderRadius = "50%";
       dot.style.background = teamColor(contest, owner.id);
-      // Outline of the dot.
       dot.style.border = owner.id === team.id
         ? "2px solid rgba(255,255,255,0.95)"
         : "1.5px solid rgba(255,255,255,0.7)";
@@ -355,11 +557,9 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.title = owner.name;
       button.append(dot);
 
-      // Self-occupied slightly sharper than rivals.
       button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
       button.disabled = true;
     } else {
-      // Playable logic unchanged.
       const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
       const canSpawn = choosing && cell.kind === "spawnpoint";
       button.disabled = !(reachable || canSpawn);
@@ -367,7 +567,6 @@ function renderGrid(contest, map, phase, frozen, team) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
         if (myVote && myVote.cell === index) button.classList.add("mine");
       }
-      // No visible text for problem or photo maps.
       button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
     }
 
