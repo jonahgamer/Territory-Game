@@ -18,8 +18,7 @@ import { createStatementView } from "../shared/statement.js";
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
 
-// ── Difficulty colour reference: 4 shades of green ──────
-// Tier value 1..4 → progressively darker / more saturated green.
+// ── Difficulty colour reference (muted greens, no sharp neon) ──
 const TIER_VALUE = { easy: 1, normal: 2, medium: 2, hard: 3, insane: 4 };
 
 // Four muted greens, easy → insane. Kept soft (no sharp neon).
@@ -37,18 +36,6 @@ const OTHER_COLOURS = {
   empty:      { r: 0x11, g: 0x11, b: 0x17 }, // near-black
   unknown:    { r: 0x5a, g: 0x5a, b: 0x5a }, // muted grey
 };
-
-// How strongly a cell's own tier pulls the final colour back to
-// its anchor. 0 = pure neighbour blend, 1 = pure own tier.
-const TIER_ANCHOR_STRENGTH = 0.45;
-
-// Neighbour weights for the 8-cell ring.
-const NEIGHBOUR_WEIGHTS = [
-  [-1, -1, 0.5], [ 0, -1, 1.0], [ 1, -1, 0.5],
-  [-1,  0, 1.0],                 [ 1,  0, 1.0],
-  [-1,  1, 0.5], [ 0,  1, 1.0], [ 1,  1, 0.5],
-];
-const SELF_WEIGHT = 2.0;
 
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
@@ -246,37 +233,7 @@ function isFrozen(contest, map) {
   return problems.every((i) => claimed.has(i));
 }
 
-// ── Difficulty colour helpers (green shades) ────────────
-function blendedTierValue(index, cols, rows, tierValues) {
-  const cx = index % cols;
-  const cy = Math.floor(index / cols);
-  let sum = SELF_WEIGHT * tierValues[index];
-  let weightSum = SELF_WEIGHT;
-  for (const [dx, dy, w] of NEIGHBOUR_WEIGHTS) {
-    const nx = cx + dx;
-    const ny = cy + dy;
-    if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-    const nVal = tierValues[ny * cols + nx];
-    if (nVal == null) continue;
-    sum += w * nVal;
-    weightSum += w;
-  }
-  return sum / weightSum;
-}
-
-function colourForBlendedValue(blended, ownTier, anchorStrength) {
-  const base = interpolateAnchors(clamp(blended, 1, 4));
-  const anchor = GREEN_ANCHOR[ownTier] || GREEN_ANCHOR[1];
-  return mix(base, anchor, anchorStrength);
-}
-
-function interpolateAnchors(v) {
-  const lo = Math.floor(v);
-  const hi = Math.min(lo + 1, 4);
-  const t = v - lo;
-  return mix(GREEN_ANCHOR[lo], GREEN_ANCHOR[hi], t);
-}
-
+// ── Colour helpers (no neighbour weighting, muted anchors only) ──
 function mix(a, b, t) {
   return {
     r: Math.round(a.r + (b.r - a.r) * t),
@@ -285,16 +242,8 @@ function mix(a, b, t) {
   };
 }
 
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
 function rgbToCss({ r, g, b }) {
   return `rgb(${r}, ${g}, ${b})`;
-}
-
-// Dim a colour toward a fixed dark baseline (for unoccupied cells).
-function dimColour(rgb, amount) {
-  const base = { r: 0x08, g: 0x08, b: 0x0c };
-  return mix(rgb, base, amount);
 }
 
 // ── Grid rendering ───────────────────────────────────────
@@ -304,16 +253,6 @@ function renderGrid(contest, map, phase, frozen, team) {
   grid.dataset.rows = String(map.rows);
   layoutMapGrid(grid, map.cols, map.rows);
   grid.replaceChildren();
-
-  const { cols, rows } = map;
-
-  // Pre-compute each problem cell's own tier value.
-  const tierValues = map.cells.map((cell) => {
-    if (!cell || cell.kind !== "problem") return null;
-    const prob = findProblem(cell.problemNo, cell.type);
-    const diff = problemDifficulty(prob);
-    return TIER_VALUE[diff] ?? null;
-  });
 
   const choosing = phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random";
 
@@ -327,32 +266,25 @@ function renderGrid(contest, map, phase, frozen, team) {
 
     button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
 
-    // ── Base difficulty / kind colour ──────────────────────
+    // ── Base colour: own tier anchor only (no blending) ──
     let rgb;
     if (cell.kind === "problem") {
-      const own = tierValues[index];
-      if (own == null) {
-        rgb = OTHER_COLOURS.unknown;
-      } else {
-        const strength = owner ? TIER_ANCHOR_STRENGTH * (owner.id === team.id ? 1 : 0.75) : TIER_ANCHOR_STRENGTH;
-        const blended = blendedTierValue(index, cols, rows, tierValues);
-        rgb = colourForBlendedValue(blended, own, strength);
-      }
+      const prob = findProblem(cell.problemNo, cell.type);
+      const tier = TIER_VALUE[problemDifficulty(prob)] ?? null;
+      rgb = tier != null ? GREEN_ANCHOR[tier] : OTHER_COLOURS.unknown;
     } else if (cell.kind === "obstacle")   rgb = OTHER_COLOURS.obstacle;
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
     else                                   rgb = OTHER_COLOURS.empty;
 
-    // Unoccupied cells: dim further so occupied dots stand out.
-    if (!owner) rgb = dimColour(rgb, 0.35);
+    // Dim unoccupied cells further.
+    if (!owner) rgb = mix(rgb, OTHER_COLOURS.empty, 0.35);
 
-    const css = rgbToCss(rgb);
-    button.style.background = css;
+    button.style.background = rgbToCss(rgb);
     button.style.color = "#ffffff";
-    button.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
-    button.style.position = "relative";
+    button.style.textShadow = "0 1px 2px rgba(0,0,0,0.55)";
 
-    // ── Occupied overlay: dot with team short name, no "X" ──
     if (owner) {
+      // ── Occupied: dot only, no text, no "X" ──────────────
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
       button.style.setProperty("--team", teamColor(contest, owner.id));
@@ -366,28 +298,14 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.height = "50%";
       dot.style.borderRadius = "50%";
       dot.style.background = teamColor(contest, owner.id);
-      dot.style.display = "flex";
-      dot.style.alignItems = "center";
-      dot.style.justifyContent = "center";
-      dot.style.boxSizing = "border-box";
-      dot.style.fontFamily = '"Share Tech Mono", monospace';
-      dot.style.fontSize = "0.62rem";
-      dot.style.fontWeight = "700";
-      dot.style.lineHeight = "1";
-      dot.style.color = "#ffffff";
-      dot.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
       dot.style.pointerEvents = "none";
-      dot.style.border = owner.id === team.id
-        ? "2px solid rgba(255,255,255,0.85)"
-        : "1px solid rgba(255,255,255,0.55)";
-      dot.textContent = teamShort(owner.name).slice(0, 3).toUpperCase();
-      dot.title = owner.name;
       button.append(dot);
 
-      // No text content for occupied cells (dot only).
-      button.textContent = "";
+      // Self-occupied slightly sharper than rivals.
+      button.style.filter = owner.id === team.id ? "brightness(1.0)" : "brightness(0.85)";
       button.disabled = true;
     } else {
+      // Playable logic unchanged.
       const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
       const canSpawn = choosing && cell.kind === "spawnpoint";
       button.disabled = !(reachable || canSpawn);
@@ -395,6 +313,7 @@ function renderGrid(contest, map, phase, frozen, team) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
         if (myVote && myVote.cell === index) button.classList.add("mine");
       }
+      // No visible text for problem or photo maps.
       button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
     }
 
