@@ -8,8 +8,8 @@ import {
   contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamEnergy, teamForUser } from "../shared/contest-data.js";
-import { layoutMapGrid, mapMode, paintPhotoGrid } from "../shared/map-render.js";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js";
+import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js";
 import { DIFFICULTY_SCORE, DIFFICULTY_NAME } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 
@@ -537,11 +537,17 @@ function renderBoard() {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.index = String(index);
-    button.className = `grid-cell ${cell.kind}${cell.kind === "problem" ? ` ${cell.type} ${problemDifficulty(findBoardProblem(cell))}` : ""}`;
+    button.className = cellClassName(cell, findBoardProblem, "grid-cell");
+    if (!(mapBackdrop(state.map) === "photo" && cell?.kind === "problem")) fillCellLabel(button, cell);
     const owner = ownerAt(contest, index, cell);
     if (owner) {
       button.classList.add("owned");
-      button.style.setProperty("--team", `hsl(${(state.current.teams.indexOf(owner) * 137.508 + 8) % 360} 82% 62%)`);
+      const color = teamColor(state.current, owner.id);
+      button.style.setProperty("--team", color);
+      const mark = el("span", "cell-owner", teamShort(owner.name));
+      mark.title = owner.name;
+      mark.style.color = color;
+      button.append(mark);
     }
     button.disabled = true;
     grid.append(button);
