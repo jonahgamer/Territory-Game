@@ -31,7 +31,7 @@ const GREEN_ANCHOR = {
 
 // Non-problem cell colours (dimmer than the admin view).
 const OTHER_COLOURS = {
-  obstacle:   { r: 0xb6, g: 0xb6, b: 0xb6 }, // very dark grey-blue
+  obstacle:   { r: 0x2a, g: 0x2a, b: 0x2a }, // dark grey plain
   spawnpoint: { r: 0xb7, g: 0xfa, b: 0x00 }, // dim teal
   empty:      { r: 0x11, g: 0x11, b: 0x17 }, // near-black
   unknown:    { r: 0x5a, g: 0x5a, b: 0x5a }, // muted grey
@@ -252,6 +252,9 @@ function renderGrid(contest, map, phase, frozen, team) {
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
   layoutMapGrid(grid, map.cols, map.rows);
+  // No empty space between cells.
+  grid.style.gap = "0";
+  grid.style.borderSpacing = "0";
   grid.replaceChildren();
 
   const choosing = phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random";
@@ -282,6 +285,9 @@ function renderGrid(contest, map, phase, frozen, team) {
     button.style.background = rgbToCss(rgb);
     button.style.color = "#ffffff";
     button.style.textShadow = "0 1px 2px rgba(0,0,0,0.55)";
+    button.style.margin = "0";
+    button.style.border = "0";
+    button.style.borderRadius = "0";
 
     if (owner) {
       // ── Occupied: dot only, no text, no "X" ──────────────
@@ -298,7 +304,19 @@ function renderGrid(contest, map, phase, frozen, team) {
       dot.style.height = "50%";
       dot.style.borderRadius = "50%";
       dot.style.background = teamColor(contest, owner.id);
+      dot.style.display = "flex";
+      dot.style.alignItems = "center";
+      dot.style.justifyContent = "center";
+      dot.style.boxSizing = "border-box";
+      dot.style.fontFamily = '"Share Tech Mono", monospace';
+      dot.style.fontSize = "0.55rem";
+      dot.style.fontWeight = "700";
+      dot.style.lineHeight = "1";
+      dot.style.color = "#ffffff";
+      dot.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
       dot.style.pointerEvents = "none";
+      dot.textContent = teamShort(owner.name).slice(0, 3).toUpperCase();
+      dot.title = owner.name;
       button.append(dot);
 
       // Self-occupied slightly sharper than rivals.
