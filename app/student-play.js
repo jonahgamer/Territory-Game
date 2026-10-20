@@ -282,6 +282,7 @@ function rgbToCss({ r, g, b }) {
 }
 
 // ── Grid rendering ───────────────────────────────────────
+// ── Grid rendering ───────────────────────────────────────
 function renderGrid(contest, map, phase, frozen, team) {
   const grid = document.querySelector("#student-grid");
   grid.dataset.cols = String(map.cols);
@@ -330,10 +331,12 @@ function renderGrid(contest, map, phase, frozen, team) {
     const css = rgbToCss(rgb);
     button.style.background = css;
 
-    // Dim occupied cells a bit (self = stronger, rivals = weaker).
-    if (owner && owner.id !== team.id) {
+    // Dim unoccupied cells; dim rival cells slightly; self stays solid.
+    if (!owner) {
+      button.style.filter = "brightness(0.6)";
+    } else if (owner.id !== team.id) {
       button.style.filter = "brightness(0.82)";
-    } else if (owner && owner.id === team.id) {
+    } else {
       button.style.filter = "brightness(0.95)";
     }
 
@@ -372,6 +375,8 @@ function renderGrid(contest, map, phase, frozen, team) {
       button.append(dot);
 
       button.disabled = true;
+      // No text / no "cross" for occupied cells.
+      button.textContent = "";
     } else {
       // Playable logic is unchanged from the original.
       const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
