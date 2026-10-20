@@ -41,11 +41,6 @@ const ZOOM_MAX = 6;
 const ZOOM_STEP = 1.25;
 
 // ── Dot sizing ───────────────────────────────────────────
-// Dot is 78% of the cell (was 50%), with a proportional font
-// that scales down as the cell shrinks. Font size is set in
-// `em`-relative terms via the `--cell-font` custom property
-// on the dot, derived from the cell's actual pixel size when
-// possible, falling back to a vw-based estimate.
 const DOT_DIAMETER_PCT = 78;
 
 // ── 状态 ─────────────────────────────────────────────────
@@ -112,6 +107,12 @@ function answerOpenMode() {
 // ──────────────────────────────────────────────────────────
 // PAN + ZOOM
 // ──────────────────────────────────────────────────────────
+// Important: DO NOT setPointerCapture on pointerdown. Capture
+// would retarget the subsequent click event to #student-board,
+// which breaks the grid's own click handler. We only capture
+// once the drag has actually moved past the threshold, so a
+// simple tap/click still reaches the cell.
+// ──────────────────────────────────────────────────────────
 function installPanZoom() {
   const board = document.querySelector("#student-board");
   const grid  = document.querySelector("#student-grid");
@@ -129,8 +130,6 @@ function installPanZoom() {
   const applyView = () => {
     const { scale, x, y } = state.view;
     grid.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    // Recompute dot font size after a transform change so the
-    // letters scale with the cell.
     refreshDotFontSizes();
   };
   state.applyView = applyView;
@@ -160,6 +159,7 @@ function installPanZoom() {
   let dragging = false;
   let dragStart = null;
   let moved = false;
+  let dragCapturedId = null;
 
   const getMid = () => {
     const pts = [...pointers.values()];
@@ -174,7 +174,6 @@ function installPanZoom() {
 
   board.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
-    board.setPointerCapture?.(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     moved = false;
 
@@ -182,8 +181,13 @@ function installPanZoom() {
       dragging = true;
       dragStart = { px: event.clientX, py: event.clientY, vx: state.view.x, vy: state.view.y };
       board.style.cursor = "grabbing";
+      // NOTE: no setPointerCapture here.
     } else if (pointers.size === 2) {
       dragging = false;
+      // Once we're pinching, capture is safe and desirable.
+      for (const id of pointers.keys()) {
+        try { board.setPointerCapture(id); dragCapturedId = id; } catch {}
+      }
       const mid = getMid();
       const rect = board.getBoundingClientRect();
       pinchStart = {
@@ -204,10 +208,18 @@ function installPanZoom() {
     if (pointers.size === 1 && dragging && dragStart) {
       const dx = event.clientX - dragStart.px;
       const dy = event.clientY - dragStart.py;
-      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      state.view.x = dragStart.vx + dx;
-      state.view.y = dragStart.vy + dy;
-      applyView();
+      if (!moved && Math.abs(dx) + Math.abs(dy) > 3) {
+        moved = true;
+        // Now it's a real drag — capture the pointer so it keeps
+        // tracking even outside the board. A click won't fire
+        // because `moved` is true and we stop it below.
+        try { board.setPointerCapture(event.pointerId); dragCapturedId = event.pointerId; } catch {}
+      }
+      if (moved) {
+        state.view.x = dragStart.vx + dx;
+        state.view.y = dragStart.vy + dy;
+        applyView();
+      }
     } else if (pointers.size === 2 && pinchStart) {
       moved = true;
       const dist = getDist();
@@ -229,6 +241,10 @@ function installPanZoom() {
   const endPointer = (event) => {
     if (!pointers.has(event.pointerId)) return;
     pointers.delete(event.pointerId);
+    if (dragCapturedId === event.pointerId) {
+      try { board.releasePointerCapture(event.pointerId); } catch {}
+      dragCapturedId = null;
+    }
     if (pointers.size === 0) {
       dragging = false; dragStart = null; pinchStart = null;
       board.style.cursor = "grab";
@@ -243,6 +259,8 @@ function installPanZoom() {
   board.addEventListener("pointercancel", endPointer);
   board.addEventListener("pointerleave", endPointer);
 
+  // Swallow only the click that follows a real drag. A plain
+  // click (no drag) passes through untouched to the cell.
   board.addEventListener("click", (event) => {
     if (moved) {
       event.stopPropagation();
@@ -261,15 +279,9 @@ function installPanZoom() {
     state.applyView();
   });
 
-  // Keep dot letters crisp when the viewport resizes.
   window.addEventListener("resize", () => refreshDotFontSizes(), { passive: true });
 }
 
-// Recalculate the font size for every team dot after a zoom/resize.
-// The dot spans 78% of the cell; font is set to ~55% of that
-// diameter (so three letters fit with margin), clamped to a
-// minimum readable size. Works whether the dot is a child of the
-// cell (it always is) — we read the cell's rendered size.
 function refreshDotFontSizes() {
   const dots = document.querySelectorAll("#student-grid .cell-team-dot");
   for (const dot of dots) {
@@ -279,13 +291,8 @@ function refreshDotFontSizes() {
     const h = cell.clientHeight;
     const cellSize = Math.min(w, h);
     if (!cellSize) continue;
-    // The transform scales the grid, so clientWidth is already the
-    // on-screen size after scale? No — clientWidth is the layout
-    // size; the visual size is layout × state.view.scale.
     const visual = cellSize * state.view.scale;
     const dotDiameter = visual * (DOT_DIAMETER_PCT / 100);
-    // Font: about 55% of the dot diameter, with a floor of 6px
-    // and a cap of 32px so it doesn't explode when zoomed in.
     const fontPx = clamp(dotDiameter * 0.55, 6, 32);
     dot.style.fontSize = `${fontPx}px`;
     dot.style.letterSpacing = fontPx > 10 ? "0.5px" : "0";
@@ -336,7 +343,6 @@ function render() {
   paintClock();
 
   state.applyView?.();
-  // After a fresh render the dots have no font size yet.
   requestAnimationFrame(() => refreshDotFontSizes());
 }
 
