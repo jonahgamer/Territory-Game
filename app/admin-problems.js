@@ -132,6 +132,7 @@ function bindEvents() {
     render();
   });
 
+  document.querySelector("#problem-bulk-export")?.addEventListener("click", exportSelectedText);
   document.querySelector("#problem-bulk-delete")?.addEventListener("click", async () => {
     const chosen = selectedProblems();
     if (chosen.length === 0) return;
@@ -241,6 +242,28 @@ function plainText(html) {
 
 function selectedProblems() {
   return state.problems.filter((p) => p.type === state.activeType && state.selected.has(`${p.type}:${p.index}`));
+}
+
+function exportPlain(html) {
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  doc.querySelectorAll("script, style").forEach((node) => node.remove());
+  doc.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
+  doc.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, tr, blockquote").forEach((node) => node.append("\n"));
+  return (doc.body.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function exportSelectedText() {
+  const chosen = filteredProblems().filter((p) => state.selected.has(`${p.type}:${p.index}`));
+  if (chosen.length === 0) {
+    showPageToast("Select at least one problem.", "warn");
+    return;
+  }
+  const text = chosen.map((p) => {
+    const body = exportPlain(p.prompt);
+    return `${problemTag(p.index, p.type)}\n${body || "(No text)"}`;
+  }).join("\n\n");
+  sessionStorage.setItem("territory-problem-export", JSON.stringify({ count: chosen.length, text }));
+  location.assign("/admin/export-problems.html");
 }
 
 function problemUsage(index, type) {
@@ -454,6 +477,8 @@ function syncSelection() {
   if (count) count.textContent = chosen.length === 0 ? "None selected" : `${chosen.length} selected`;
   const delBtn = document.querySelector("#problem-bulk-delete");
   if (delBtn) delBtn.disabled = chosen.length === 0;
+  const exportBtn = document.querySelector("#problem-bulk-export");
+  if (exportBtn) exportBtn.disabled = chosen.length === 0;
   for (const btn of document.querySelectorAll("[data-bulk-difficulty]")) btn.disabled = chosen.length === 0;
 }
 

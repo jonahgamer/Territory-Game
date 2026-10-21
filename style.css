@@ -1341,6 +1341,28 @@ button[type="submit"],
   margin: 0;
 }
 
+.export-actions {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.export-text {
+  width: min(52rem, 100%);
+  min-height: 24rem;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre-wrap;
+  resize: vertical;
+}
+
 .energy-readout {
   margin: 8px 0 6px;
   font-family: var(--font-ui);
