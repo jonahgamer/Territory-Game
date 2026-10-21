@@ -245,25 +245,35 @@ function selectedProblems() {
 }
 
 function exportPlain(html) {
-  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
-  doc.querySelectorAll("script, style").forEach((node) => node.remove());
-  doc.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
-  doc.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, tr, blockquote").forEach((node) => node.append("\n"));
-  return (doc.body.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  try {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    doc.querySelectorAll("script, style").forEach((node) => node.remove());
+    doc.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
+    doc.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, tr, blockquote").forEach((node) => node.append("\n"));
+    return (doc.body?.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  } catch {
+    return plainText(html);
+  }
 }
 
 function exportSelectedText() {
+  for (const box of document.querySelectorAll("[data-select-problem]")) {
+    const key = `${box.dataset.selectType}:${box.dataset.selectProblem}`;
+    if (box.checked) state.selected.add(key);
+    else state.selected.delete(key);
+  }
   const chosen = filteredProblems().filter((p) => state.selected.has(`${p.type}:${p.index}`));
-  if (chosen.length === 0) {
+  const list = chosen.length ? chosen : selectedProblems();
+  if (list.length === 0) {
     showPageToast("Select at least one problem.", "warn");
     return;
   }
-  const text = chosen.map((p) => {
-    const body = exportPlain(p.prompt);
-    return `${problemTag(p.index, p.type)}\n${body || "(No text)"}`;
-  }).join("\n\n");
-  sessionStorage.setItem("territory-problem-export", JSON.stringify({ count: chosen.length, text }));
-  location.assign("/admin/export-problems.html");
+  const items = list.map((p) => `${p.type}:${p.index}`).join(",");
+  try {
+    const text = list.map((p) => `${problemTag(p.index, p.type)}\n${exportPlain(p.prompt) || "(No text)"}`).join("\n\n");
+    sessionStorage.setItem("territory-problem-export", JSON.stringify({ count: list.length, text }));
+  } catch { /* the export page can reload these problems from the link */ }
+  location.assign(`/admin/export-problems.html?items=${encodeURIComponent(items)}`);
 }
 
 function problemUsage(index, type) {
@@ -478,7 +488,8 @@ function syncSelection() {
   const delBtn = document.querySelector("#problem-bulk-delete");
   if (delBtn) delBtn.disabled = chosen.length === 0;
   const exportBtn = document.querySelector("#problem-bulk-export");
-  if (exportBtn) exportBtn.disabled = chosen.length === 0;
+  const anyChecked = document.querySelector("[data-select-problem]:checked");
+  if (exportBtn) exportBtn.disabled = chosen.length === 0 && !anyChecked;
   for (const btn of document.querySelectorAll("[data-bulk-difficulty]")) btn.disabled = chosen.length === 0;
 }
 
