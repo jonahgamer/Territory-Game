@@ -146,6 +146,11 @@
         var API_BASE = "/api/territory";
         var DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
         var DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+        function problemPoints(problem, level) {
+          var n = Number(problem && problem.score);
+          if (Number.isInteger(n) && n >= 0 && n <= 999) return n;
+          return DIFFICULTY_SCORE[level] || 2;
+        }
         var TYPE_TAG = { math: "M", oi: "O", science: "S", puzzle: "P", testing: "T" };
 
         var params = new URLSearchParams(location.search);
@@ -497,7 +502,7 @@
               return;
             }
             var level = DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
-            title.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[level] + " · " + DIFFICULTY_SCORE[level];
+            title.textContent = tagOf(problem) + " · " + DIFFICULTY_NAME[level] + " · " + problemPoints(problem, level);
             document.title = tagOf(problem) + " · Practice";
             activeStatementFrame = setRichText(prompt, problem.prompt || "", { tag: tagOf(problem) });
             if (answer.offsetParent !== null) answer.focus();

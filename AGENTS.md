@@ -62,7 +62,7 @@ Mongo database `territory_game` unless `MONGODB_DB` is set. Saves that replace a
 
 Maps are 1–40 by 1–40. A cell is `empty`, `obstacle`, `spawnpoint`, or `problem`. A problem cell stores `problemNo` and `type` (`math`, `oi`, `science`, `puzzle`). The tag is M, O, S, or P plus the index. An index is `XYABC`: `XY` is the year (`26` for now) and `ABC` is the problem number `000`–`999`, so `26000` displays as `M26000`. Any whole number from 1 to 99999 is still accepted. Identity is `(type, index)`.
 
-A problem is `{ index, type, prompt, answer, solution, logic, difficulty }`. `solution` is optional text for the worked solution. Difficulty is `easy` (1), `normal` (2), `hard` (3), or `insane` (4). Those points are the contest score. The grader’s 0–100 score is only pass or fail.
+A problem is `{ index, type, prompt, answer, solution, logic, difficulty, score }`. `solution` is optional text for the worked solution. `score` is the contest points for a correct answer, a whole number from 0 to 999. Difficulty is `easy`, `normal`, `hard`, or `insane`. Those still start at 1, 2, 3, and 4, and a missing `score` uses that default. A typed score stays when the difficulty changes. The grader’s 0–100 score is only pass or fail. Energy restored on a solve still follows the difficulty, not this score.
 
 A contest has `startAt`, `durationMinutes`, `spawnMinutes`, and `readyMinutes`. Spawn time plus the wait must be shorter than the duration. Phases, from `contestPhase()`:
 
@@ -104,6 +104,6 @@ Contest state polls about every 2 seconds while the mouse is moving and the tab 
 
 Confirm once for problem delete, index swap, bulk difficulty, and bulk delete. Confirm twice for map, contest, account, and team deletion. A type change that collides still confirms twice, then swaps types and flips map cells.
 
-Do not send `logic`, `answer`, or `solution` to students. Do not wipe `teams`, `spawnVotes`, `spawnChoices`, `spawns`, or `claims` from a contest-schedule save. Changing the contest’s map clears cell assignments and keeps the teams.
+Do not send `logic`, `answer`, or `solution` to students. Students do receive each problem's `score`. Do not wipe `teams`, `spawnVotes`, `spawnChoices`, `spawns`, or `claims` from a contest-schedule save. Changing the contest’s map clears cell assignments and keeps the teams.
 
 `TERRITORY_API.md` is the contract. Update it when an action’s body or rule changes.

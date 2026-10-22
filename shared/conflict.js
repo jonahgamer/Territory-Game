@@ -1,5 +1,6 @@
 import { el } from "./dom.js";
 import { showPageToast } from "./toast.js";
+import { problemScore } from "./difficulty.js";
 
 let saveConflictActive = false;
 let conflictState = null;
@@ -20,6 +21,7 @@ const CONFLICT_FIELDS = {
     { key: "prompt", label: "Problem" },
     { key: "answer", label: "Answer" },
     { key: "solution", label: "Solution" },
+    { key: "score", label: "Score" },
     { key: "logic", label: "Logic" },
     { key: "difficulty", label: "Difficulty" },
   ],
@@ -91,6 +93,7 @@ function changedCells(a, b) {
 
 function fieldValue(name, item, field) {
   if (name === "maps" && field === "geometry") return mapGeometry(item);
+  if (name === "problems" && field === "score") return problemScore(item);
   return item?.[field];
 }
 

@@ -66,6 +66,10 @@
           <button type="button" data-problem-difficulty="hard" aria-pressed="false">Hard</button>
           <button type="button" data-problem-difficulty="insane" aria-pressed="false">Insane</button>
         </div>
+        <label>Score
+          <input id="problem-score" type="number" min="0" max="999" step="1" inputmode="numeric" />
+        </label>
+        <p class="field-note">Contest points for a correct answer. Easy, Normal, Hard, and Insane fill in 1, 2, 3, and 4. A score you type stays when the difficulty changes.</p>
 
         <label>Prompt (HTML allowed)
           <textarea id="problem-prompt" rows="10"></textarea>

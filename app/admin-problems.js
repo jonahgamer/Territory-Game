@@ -8,7 +8,7 @@ import {
   PROBLEM_PAGE_SIZE, YEAR_INDEX_START, YEAR_INDEX_END,
   DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
 } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
+import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
 
 // ── 顶层状态 ─────────────────────────────────────────────
 const state = {
@@ -126,8 +126,12 @@ function bindEvents() {
     const chosen = selectedProblems();
     if (!DIFFICULTIES.includes(d) || chosen.length === 0) return;
     const label = chosen.length === 1 ? problemTag(chosen[0].index, chosen[0].type) : `${chosen.length} problems`;
-    if (!window.confirm(`Set ${label} to ${DIFFICULTY_NAME[d]}?`)) return;
-    for (const p of chosen) p.difficulty = d;
+    if (!window.confirm(`Set ${label} to ${DIFFICULTY_NAME[d]}? A typed score stays. Any score that still matches the old difficulty becomes ${difficultyScore(d)}.`)) return;
+    for (const p of chosen) {
+      const wasDefault = problemScore(p) === difficultyScore(problemDifficulty(p));
+      p.difficulty = d;
+      p.score = wasDefault ? difficultyScore(d) : problemScore(p);
+    }
     await persistProblems();
     render();
   });
@@ -379,7 +383,7 @@ function createProblemRow(problem) {
   openBtn.setAttribute("aria-label", `Edit ${tag}`);
   openBtn.append(
     el("span", `problem-key ${problem.type}`, tag),
-    el("span", `difficulty-chip ${level}`, DIFFICULTY_NAME[level]),
+    el("span", `difficulty-chip ${level}`, `${DIFFICULTY_NAME[level]} · ${problemScore(problem)}`),
     el("span", "problem-snippet", plainText(problem.prompt) || "(empty)")
   );
   openBtn.addEventListener("click", () => {

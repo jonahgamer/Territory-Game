@@ -28,6 +28,8 @@ import { ObjectId } from 'mongodb';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 import { runProblemLogic } from './logic.js';
 import { cleanEnergyLedger, energyAfterAttempt, energyNow, readEnergySettings } from '../shared/energy.js';
+import { problemScore } from '../shared/difficulty.js';
+import { MAX_PROBLEM_SCORE } from '../shared/constants.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -154,6 +156,13 @@ function normalizeProblem(v) {
   if (solution.length > MAX_PROBLEM_TEXT) return null;
   const logic = typeof v.logic === 'string' ? v.logic : '';
   if (logic.length > MAX_PROBLEM_LOGIC) return null;
+  const difficulty = DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal';
+  let score = DIFFICULTY_SCORE[difficulty];
+  if (v.score !== undefined && v.score !== null && v.score !== '') {
+    const n = typeof v.score === 'number' ? v.score : Number(v.score);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) return null;
+    score = n;
+  }
   return {
     index: v.index,
     type: v.type,
@@ -161,7 +170,8 @@ function normalizeProblem(v) {
     answer: v.answer,
     solution,
     logic,
-    difficulty: DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal',
+    difficulty,
+    score,
   };
 }
 
@@ -376,7 +386,7 @@ function buildLeaderboard(contest, map, problems) {
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== 'problem') continue;
       const problem = (problems || []).find((item) => item.index === cell.problemNo && item.type === cell.type);
-      score += DIFFICULTY_SCORE[problemDifficulty(problem)];
+      score += problemScore(problem);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };
@@ -696,6 +706,7 @@ async function handleBootstrap(req, res, db, user) {
       type: p.type,
       prompt: p.prompt,
       difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+      score: problemScore(p),
     };
     if (admin) {
       problem.answer = p.answer;
@@ -1640,6 +1651,7 @@ async function handlePublicProblems(req, res, db) {
       type: p.type,
       prompt: typeof p.prompt === 'string' ? p.prompt : '',
       difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+      score: problemScore(p),
     })),
   });
 }

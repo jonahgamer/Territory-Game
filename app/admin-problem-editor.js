@@ -4,8 +4,8 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadBootstrap } from "../shared/data.js";
 import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
+import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -20,6 +20,7 @@ const form = document.querySelector("#problem-editor-form");
 const titleEl = document.querySelector("#problem-editor-title");
 const indexInput = document.querySelector("#problem-index-input");
 const indexError = document.querySelector("#problem-index-error");
+const scoreEl = document.querySelector("#problem-score");
 const promptEl = document.querySelector("#problem-prompt");
 const answerEl = document.querySelector("#problem-answer");
 const solutionEl = document.querySelector("#problem-solution");
@@ -55,7 +56,7 @@ async function run() {
   const existing = state.problems.find((p) => p.index === index && p.type === type);
   state.draft = existing
     ? { ...existing, isNew: false }
-    : { index, type, prompt: "", answer: "", solution: "", logic: "", difficulty: "normal", isNew: true };
+    : { index, type, prompt: "", answer: "", solution: "", logic: "", difficulty: "normal", score: difficultyScore("normal"), isNew: true };
   state.dirty = false;
 
   titleEl.textContent = problemTag(index, type);
@@ -85,6 +86,7 @@ function render() {
     btn.setAttribute("aria-pressed", String(btn.dataset.problemDifficulty === draft.difficulty));
   }
 
+  if (scoreEl) scoreEl.value = String(problemScore(draft));
   promptEl.value = draft.prompt;
   answerEl.value = draft.answer;
   solutionEl.value = draft.solution || "";
@@ -115,11 +117,32 @@ function bindEvents() {
   document.querySelector("#problem-difficulty-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-problem-difficulty]");
     if (!btn) return;
-    if (!DIFFICULTIES.includes(btn.dataset.problemDifficulty)) return;
-    state.draft.difficulty = btn.dataset.problemDifficulty;
+    const nextDifficulty = btn.dataset.problemDifficulty;
+    if (!DIFFICULTIES.includes(nextDifficulty) || nextDifficulty === state.draft.difficulty) return;
+    const wasDefault = problemScore(state.draft) === difficultyScore(state.draft.difficulty);
+    state.draft.difficulty = nextDifficulty;
+    if (wasDefault) state.draft.score = difficultyScore(nextDifficulty);
     state.dirty = true;
     updateSaveState();
     render();
+  });
+
+  scoreEl?.addEventListener("input", () => {
+    const n = Number(scoreEl.value);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) return;
+    state.draft.score = n;
+    state.dirty = true;
+    updateSaveState();
+  });
+  scoreEl?.addEventListener("change", () => {
+    const n = Number(scoreEl.value);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) {
+      scoreEl.value = String(problemScore(state.draft));
+      return;
+    }
+    state.draft.score = n;
+    state.dirty = true;
+    updateSaveState();
   });
 
   promptEl?.addEventListener("input", () => {
@@ -343,10 +366,18 @@ async function save() {
   const answer = answerEl.value;
   const solution = solutionEl.value;
   const logic = logicEl.value;
+  const score = Number(scoreEl.value);
   draft.prompt = prompt;
   draft.answer = answer;
   draft.solution = solution;
   draft.logic = logic;
+
+  if (!Number.isInteger(score) || score < 0 || score > MAX_PROBLEM_SCORE) {
+    saveError.hidden = false;
+    saveError.textContent = `Score must be a whole number from 0 to ${MAX_PROBLEM_SCORE}.`;
+    return;
+  }
+  draft.score = score;
 
   if (!prompt.trim() || !answer.trim()) {
     saveError.hidden = false;
@@ -357,7 +388,7 @@ async function save() {
 
   let problem = state.problems.find((p) => p.index === draft.index && p.type === draft.type);
   if (!problem) {
-    problem = { index: draft.index, type: draft.type, prompt, answer, solution, logic, difficulty: draft.difficulty };
+    problem = { index: draft.index, type: draft.type, prompt, answer, solution, logic, difficulty: draft.difficulty, score };
     state.problems.push(problem);
     state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
   } else {
@@ -366,6 +397,7 @@ async function save() {
     problem.solution = solution;
     problem.logic = logic;
     problem.difficulty = draft.difficulty;
+    problem.score = score;
   }
   draft.isNew = false;
   state.dirty = false;

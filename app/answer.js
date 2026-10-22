@@ -2,7 +2,8 @@ import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js";
 import { noteServerTime } from "../shared/contest-time.js";
 import { createStatementView } from "../shared/statement.js";
-import { DIFFICULTY_NAME, DIFFICULTY_SCORE } from "../shared/constants.js";
+import { DIFFICULTY_NAME } from "../shared/constants.js";
+import { problemScore } from "../shared/difficulty.js";
 
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
@@ -53,7 +54,7 @@ async function loadProblem() {
     }
     const problem = (data.problems || []).find((p) => p.index === mapCell.problemNo && p.type === mapCell.type);
     const difficulty = problem?.difficulty && DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
-    const points = DIFFICULTY_SCORE[difficulty];
+    const points = problemScore(problem);
     title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
     const promptText = problem?.prompt?.trim() ? problem.prompt : "This problem has no text yet.";
     statement.render(promptText, title.textContent);

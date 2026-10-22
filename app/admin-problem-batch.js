@@ -5,7 +5,7 @@ import { loadBootstrap } from "../shared/data.js";
 import { api } from "../shared/api.js";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
-import { typeInfo } from "../shared/difficulty.js";
+import { typeInfo, difficultyScore } from "../shared/difficulty.js";
 
 
 
@@ -160,7 +160,7 @@ async function saveAll() {
       showError(`${label}: ${typeInfo(type).tag}${index} already exists.`); return;
     }
     seen.add(index);
-    entries.push({ index, type, prompt: v.prompt, answer: v.answer, logic: v.logic, difficulty: "normal" });
+    entries.push({ index, type, prompt: v.prompt, answer: v.answer, logic: v.logic, difficulty: "normal", score: difficultyScore("normal") });
   }
 
   if (entries.length === 0) { showError("Add at least one problem."); return; }

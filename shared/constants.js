@@ -17,6 +17,7 @@ export const PROBLEM_TYPES = [
 
 export const DIFFICULTIES = ["easy", "normal", "hard", "insane"];
 export const DIFFICULTY_SCORE = { easy: 1, normal: 2, hard: 3, insane: 4 };
+export const MAX_PROBLEM_SCORE = 999;
 export const DIFFICULTY_NAME = { easy: "Easy", normal: "Normal", hard: "Hard", insane: "Insane" };
 
 export const TEAM_COLOR_LIMIT = 256;

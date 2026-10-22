@@ -42,7 +42,7 @@ Every request needs `Authorization: Bearer <token>`.
 
 Returns the signed-in user, maps, problems, and contests.
 
-Students receive only the contests they are on, the maps for those contests, and the prompts of problems placed on those maps. They receive each problem's prompt, type, and difficulty, and do not receive the answer, the solution, or the logic. Admins receive every map, problem, answer, optional `solution`, and optional `logic` script. Everyone receives `versions`, the Credits notes, as plain text. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
+Students receive only the contests they are on, the maps for those contests, and the prompts of problems placed on those maps. They receive each problem's prompt, type, difficulty, and `score`, and do not receive the answer, the solution, or the logic. Admins receive every map, problem, answer, optional `solution`, `score`, and optional `logic` script. `score` is the contest points for a correct answer, a whole number from 0 to 999. A missing `score` uses the difficulty default: easy 1, normal 2, hard 3, insane 4. Everyone receives `versions`, the Credits notes, as plain text. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
 
 On a 409, the admin UI fetches this response again and opens a field-level diff instead of asking for a page refresh. Each added, deleted, or changed record can keep the local value, the server value, or a per-field mix. Applying the choices saves with the latest server revision.
 
@@ -90,13 +90,13 @@ A student on a team, only while spawning is open and spawn points are not assign
 
 ### `POST { "action": "solve", "contestId": "...", "cell": 0, "answer": "..." }`
 
-A student on a team, only while the contest is running, the cell is an unsolved problem, and it touches the team's spawn or a cell the team has solved. If the problem has logic, that JavaScript runs in a short-lived sandbox with `answer` and `expected`. It can return true or false, a score, or `{ score, comment }`, or set `result.score` and `result.comment`. A score of 100 accepts the answer, and the comment is shown when it does not. Otherwise the answer must match, ignoring capital letters and surrounding spaces. Easy scores 1, normal 2, hard 3, and insane 4. The first correct team keeps the cell. A wrong answer still spends energy, and the response includes the updated contest. A team below `energyAttemptMin` cannot attempt.
+A student on a team, only while the contest is running, the cell is an unsolved problem, and it touches the team's spawn or a cell the team has solved. If the problem has logic, that JavaScript runs in a short-lived sandbox with `answer` and `expected`. It can return true or false, a score, or `{ score, comment }`, or set `result.score` and `result.comment`. A score of 100 accepts the answer, and the comment is shown when it does not. Otherwise the answer must match, ignoring capital letters and surrounding spaces. A correct answer adds that problem's `score` to the team. The first correct team keeps the cell. A wrong answer still spends energy, and the response includes the updated contest. A team below `energyAttemptMin` cannot attempt.
 
 ### `POST { "action": "contest-state", "contestId": "..." }`
 
 Returns the team's view of teams, spawn choices, assigned spawns, solved cells, energy, and the leaderboard. An admin can read any contest. If spawn time has ended, this assigns any spawn points that are still open.
 
-The leaderboard lists `{ teamId, name, score, solved, territory }`. `score` is the sum of the difficulty points, `solved` is the number of problems the team claimed, and `territory` counts the team's spawn point plus every cell it solved. Ties are sorted by score, then by solved count, then by team name. `frozen` is true after the contest ends or after every problem has been solved.
+The leaderboard lists `{ teamId, name, score, solved, territory }`. `score` is the sum of the `score` of each problem the team solved, `solved` is the number of problems the team claimed, and `territory` counts the team's spawn point plus every cell it solved. Ties are sorted by score, then by solved count, then by team name. `frozen` is true after the contest ends or after every problem has been solved.
 
 ### `GET ?action=list-accounts`
 

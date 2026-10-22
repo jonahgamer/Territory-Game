@@ -10,8 +10,7 @@ import {
 } from "../shared/contest-time.js";
 import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js";
-import { DIFFICULTY_SCORE, DIFFICULTY_NAME } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
+import { problemScore } from "../shared/difficulty.js";
 
 
 
@@ -516,8 +515,7 @@ function buildLeaderboard(contest) {
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
-      const d = problemDifficulty(p);
-      score += DIFFICULTY_SCORE[d] || 0;
+      score += problemScore(p);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };

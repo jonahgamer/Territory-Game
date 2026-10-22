@@ -10,8 +10,8 @@ import {
 import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
-import { DIFFICULTY_NAME, DIFFICULTY_SCORE, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
-import { problemDifficulty, problemTag } from "../shared/difficulty.js";
+import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
+import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -461,8 +461,7 @@ function buildLeaderboard(contest, map) {
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
-      const d = p?.difficulty || "normal";
-      score += DIFFICULTY_SCORE[d] || 0;
+      score += problemScore(p);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };
@@ -707,7 +706,7 @@ function cellTipLines(contest, map, index, cell) {
   if (cell.kind === "problem") {
     const problem = findProblem(cell.problemNo, cell.type);
     const difficulty = problemDifficulty(problem);
-    const points = DIFFICULTY_SCORE[difficulty] || 0;
+    const points = problemScore(problem);
     lines.push(`${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`);
   } else if (cell.kind === "obstacle") lines.push("Obstacle");
   else if (cell.kind === "spawnpoint") lines.push("Spawn point");
@@ -829,8 +828,8 @@ function showProblem(contest, map, phase) {
 
   const problem = findProblem(cell.problemNo, cell.type);
   panel.hidden = false;
-  const d = problem?.difficulty || "normal";
-  const pts = DIFFICULTY_SCORE[d] || 2;
+  const d = problemDifficulty(problem);
+  const pts = problemScore(problem);
   document.querySelector("#student-problem-tag").textContent = `${DIFFICULTY_NAME[d] || "Normal"} · ${pts} point${pts === 1 ? "" : "s"}`;
   form.hidden = false;
   paintEnergy();
