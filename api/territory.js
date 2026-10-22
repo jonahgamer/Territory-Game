@@ -150,6 +150,8 @@ function normalizeProblem(v) {
   if (!PROBLEM_TYPES.includes(v.type)) return null;
   if (typeof v.prompt !== 'string' || v.prompt.length > MAX_PROBLEM_TEXT) return null;
   if (typeof v.answer !== 'string' || v.answer.length > MAX_PROBLEM_TEXT) return null;
+  const solution = typeof v.solution === 'string' ? v.solution : '';
+  if (solution.length > MAX_PROBLEM_TEXT) return null;
   const logic = typeof v.logic === 'string' ? v.logic : '';
   if (logic.length > MAX_PROBLEM_LOGIC) return null;
   return {
@@ -157,6 +159,7 @@ function normalizeProblem(v) {
     type: v.type,
     prompt: v.prompt,
     answer: v.answer,
+    solution,
     logic,
     difficulty: DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal',
   };
@@ -696,6 +699,7 @@ async function handleBootstrap(req, res, db, user) {
     };
     if (admin) {
       problem.answer = p.answer;
+      problem.solution = typeof p.solution === 'string' ? p.solution : '';
       problem.logic = typeof p.logic === 'string' ? p.logic : '';
     }
     return problem;

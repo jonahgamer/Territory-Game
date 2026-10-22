@@ -1780,6 +1780,10 @@ button[type="submit"],
   min-height: 16rem;
 }
 
+#problem-solution {
+  min-height: 10rem;
+}
+
 #problem-logic {
   min-height: 12rem;
   font-family: var(--font-ui);

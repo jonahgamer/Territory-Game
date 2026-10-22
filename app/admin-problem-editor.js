@@ -22,6 +22,7 @@ const indexInput = document.querySelector("#problem-index-input");
 const indexError = document.querySelector("#problem-index-error");
 const promptEl = document.querySelector("#problem-prompt");
 const answerEl = document.querySelector("#problem-answer");
+const solutionEl = document.querySelector("#problem-solution");
 const logicEl = document.querySelector("#problem-logic");
 const saveError = document.querySelector("#problem-save-error");
 const saveState = document.querySelector("#problem-save-state");
@@ -54,7 +55,7 @@ async function run() {
   const existing = state.problems.find((p) => p.index === index && p.type === type);
   state.draft = existing
     ? { ...existing, isNew: false }
-    : { index, type, prompt: "", answer: "", logic: "", difficulty: "normal", isNew: true };
+    : { index, type, prompt: "", answer: "", solution: "", logic: "", difficulty: "normal", isNew: true };
   state.dirty = false;
 
   titleEl.textContent = problemTag(index, type);
@@ -86,6 +87,7 @@ function render() {
 
   promptEl.value = draft.prompt;
   answerEl.value = draft.answer;
+  solutionEl.value = draft.solution || "";
   logicEl.value = draft.logic || "";
 
   const usage = problemUsage(draft.index, draft.type);
@@ -128,6 +130,12 @@ function bindEvents() {
   });
   answerEl?.addEventListener("input", () => {
     state.draft.answer = answerEl.value;
+    state.dirty = true;
+    updateSaveState();
+    requestAnimationFrame(renderPreview);
+  });
+  solutionEl?.addEventListener("input", () => {
+    state.draft.solution = solutionEl.value;
     state.dirty = true;
     updateSaveState();
     requestAnimationFrame(renderPreview);
@@ -301,7 +309,8 @@ function renderPreview() {
   previewEl.replaceChildren();
   const promptHtml = (promptEl.value || "").trim();
   const answerHtml = (answerEl.value || "").trim();
-  if (!promptHtml && !answerHtml) { previewEl.hidden = true; return; }
+  const solutionHtml = (solutionEl.value || "").trim();
+  if (!promptHtml && !answerHtml && !solutionHtml) { previewEl.hidden = true; return; }
   previewEl.hidden = false;
 
   const box = el("div", "problem-preview-box");
@@ -319,6 +328,12 @@ function renderPreview() {
     box.append(title, content);
     createStatementView(content, {}).render(answerHtml);
   }
+  if (solutionHtml) {
+    const title = el("div", "problem-preview-title", "Solution — preview");
+    const content = el("div", "problem-preview-content");
+    box.append(title, content);
+    createStatementView(content, {}).render(solutionHtml);
+  }
 }
 
 async function save() {
@@ -326,9 +341,11 @@ async function save() {
   if (!draft) return;
   const prompt = promptEl.value;
   const answer = answerEl.value;
+  const solution = solutionEl.value;
   const logic = logicEl.value;
   draft.prompt = prompt;
   draft.answer = answer;
+  draft.solution = solution;
   draft.logic = logic;
 
   if (!prompt.trim() || !answer.trim()) {
@@ -340,12 +357,13 @@ async function save() {
 
   let problem = state.problems.find((p) => p.index === draft.index && p.type === draft.type);
   if (!problem) {
-    problem = { index: draft.index, type: draft.type, prompt, answer, logic, difficulty: draft.difficulty };
+    problem = { index: draft.index, type: draft.type, prompt, answer, solution, logic, difficulty: draft.difficulty };
     state.problems.push(problem);
     state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
   } else {
     problem.prompt = prompt;
     problem.answer = answer;
+    problem.solution = solution;
     problem.logic = logic;
     problem.difficulty = draft.difficulty;
   }

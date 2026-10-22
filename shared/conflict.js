@@ -19,6 +19,7 @@ const CONFLICT_FIELDS = {
   problems: [
     { key: "prompt", label: "Problem" },
     { key: "answer", label: "Answer" },
+    { key: "solution", label: "Solution" },
     { key: "logic", label: "Logic" },
     { key: "difficulty", label: "Difficulty" },
   ],
