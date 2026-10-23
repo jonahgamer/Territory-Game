@@ -1,6 +1,3 @@
-// ──────────────────────────────────────────────────────────
-// PAN + ZOOM
-// ──────────────────────────────────────────────────────────
 function installPanZoom() {
   const board = document.querySelector("#student-board");
   const grid  = document.querySelector("#student-grid");
@@ -22,42 +19,26 @@ function installPanZoom() {
   };
   state.applyView = applyView;
 
-  // The grid's *untransformed* origin in client coordinates.
-  //
-  // gridRect.left is the visual (post-transform) left edge, which equals
-  //   naturalLeft + view.x
-  // so stripping view.x gives the stable natural position — regardless of
-  // how the grid is centered/offset inside the board, or how it's zoomed.
-  const gridBase = () => {
-    const r = grid.getBoundingClientRect();
-    return { left: r.left - state.view.x, top: r.top - state.view.y };
-  };
-
-  // Zoom toward a client-coordinate point.
-  const zoomAt = (clientX, clientY, factor) => {
+  const zoomAt = (cx, cy, factor) => {
     const v = state.view;
     const nextScale = clamp(v.scale * factor, ZOOM_MIN, ZOOM_MAX);
     if (nextScale === v.scale) return;
-
-    const base = gridBase();
-    const localX = (clientX - base.left - v.x) / v.scale;
-    const localY = (clientY - base.top  - v.y) / v.scale;
-
+    const localX = (cx - v.x) / v.scale;
+    const localY = (cy - v.y) / v.scale;
+    v.x = cx - localX * nextScale;
+    v.y = cy - localY * nextScale;
     v.scale = nextScale;
-    v.x = clientX - base.left - localX * nextScale;
-    v.y = clientY - base.top  - localY * nextScale;
     applyView();
   };
 
-  // ── Wheel zoom (desktop / trackpad) ──
   board.addEventListener("wheel", (event) => {
     if (!event.target.closest("#student-board")) return;
     event.preventDefault();
+    const rect = board.getBoundingClientRect();
     const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-    zoomAt(event.clientX, event.clientY, factor);
+    zoomAt(event.clientX - rect.left, event.clientY - rect.top, factor);
   }, { passive: false });
 
-  // ── Pointer handling: 1 finger = pan, 2 fingers = pinch (zoom + pan) ──
   const pointers = new Map();
   let pinchStart = null;
   let dragging = false;
@@ -90,18 +71,20 @@ function installPanZoom() {
       for (const id of pointers.keys()) {
         try { board.setPointerCapture(id); dragCapturedId = id; } catch {}
       }
-      // Capture the pinch relative to the *current* grid position. This is
-      // the key fix: we no longer assume the grid sits at (0,0) in the board.
-      const base = gridBase();
       const mid = getMid();
-      const scale = state.view.scale;
+      const rect = board.getBoundingClientRect();
+      const gridRect = grid.getBoundingClientRect();                      // NEW
+      const gridOffsetX = gridRect.left - rect.left - state.view.x;      // NEW
+      const gridOffsetY = gridRect.top  - rect.top  - state.view.y;      // NEW
       pinchStart = {
-        dist: Math.max(1, getDist()),          // guard against div-by-zero
-        scale,
-        localX: (mid.x - base.left - state.view.x) / scale,
-        localY: (mid.y - base.top  - state.view.y) / scale,
-        baseLeft: base.left,
-        baseTop: base.top,
+        dist: getDist(),
+        scale: state.view.scale,
+        midX: mid.x - rect.left,
+        midY: mid.y - rect.top,
+        viewX: state.view.x,
+        viewY: state.view.y,
+        gridOffsetX,                                                     // NEW
+        gridOffsetY,                                                     // NEW
       };
     }
   });
@@ -127,12 +110,15 @@ function installPanZoom() {
       const dist = getDist();
       const factor = dist / pinchStart.dist;
       const nextScale = clamp(pinchStart.scale * factor, ZOOM_MIN, ZOOM_MAX);
+      const localX = (pinchStart.midX - pinchStart.gridOffsetX - pinchStart.viewX) / pinchStart.scale; // NEW
+      const localY = (pinchStart.midY - pinchStart.gridOffsetY - pinchStart.viewY) / pinchStart.scale; // NEW
       const mid = getMid();
-      // Recompute base each frame so page scroll / layout shifts don't drift.
-      const base = gridBase();
+      const rect = board.getBoundingClientRect();
+      const cx = mid.x - rect.left;
+      const cy = mid.y - rect.top;
       state.view.scale = nextScale;
-      state.view.x = mid.x - base.left - pinchStart.localX * nextScale;
-      state.view.y = mid.y - base.top  - pinchStart.localY * nextScale;
+      state.view.x = cx - pinchStart.gridOffsetX - localX * nextScale;   // NEW
+      state.view.y = cy - pinchStart.gridOffsetY - localY * nextScale;   // NEW
       applyView();
     }
   });
@@ -166,18 +152,11 @@ function installPanZoom() {
     }
   }, true);
 
-  // ── Zoom buttons (also work on mobile) ──
   const zoomInBtn    = document.querySelector("#student-zoom-in");
   const zoomOutBtn   = document.querySelector("#student-zoom-out");
   const zoomResetBtn = document.querySelector("#student-zoom-reset");
-
-  const zoomAtBoardCenter = (factor) => {
-    const rect = board.getBoundingClientRect();
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
-  };
-
-  if (zoomInBtn)    zoomInBtn.addEventListener("click", () => zoomAtBoardCenter(ZOOM_STEP));
-  if (zoomOutBtn)   zoomOutBtn.addEventListener("click", () => zoomAtBoardCenter(1 / ZOOM_STEP));
+  if (zoomInBtn)    zoomInBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, ZOOM_STEP));
+  if (zoomOutBtn)   zoomOutBtn.addEventListener("click", () => zoomAt(board.clientWidth / 2, board.clientHeight / 2, 1 / ZOOM_STEP));
   if (zoomResetBtn) zoomResetBtn.addEventListener("click", () => {
     state.view = { scale: 1, x: 0, y: 0 };
     state.applyView();
