@@ -11,6 +11,7 @@ import {
 import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js";
 import { problemScore } from "../shared/difficulty.js";
+import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
 
 
 
@@ -31,7 +32,7 @@ async function run() {
   state.revisions = data.revisions;
   state.current = state.contests.find((c) => c.id === contestId) || null;
   if (!state.current) throw new Error("Contest not found.");
-  state.map = state.maps.find((m) => m.id === state.current.mapId) || null;
+  state.mapsForContest = contestMaps();
   try {
     const accounts = await api.listAccounts();
     state.students = (accounts.accounts || []).filter((account) => account.role === "student" && account.banned !== true);
@@ -52,17 +53,17 @@ function bindEvents() {
     document.querySelector("#contest-title").textContent = name;
     persistContests();
   });
-  document.querySelector("#contest-map-input")?.addEventListener("change", () => {
-    const mapId = document.querySelector("#contest-map-input").value;
-    if (!state.maps.some((m) => m.id === mapId) || state.current.mapId === mapId) return;
-    state.current.mapId = mapId;
-    state.current.spawns = [];
-    state.current.spawnChoices = [];
-    state.current.spawnVotes = [];
-    state.current.claims = [];
-    state.current.spawnResolved = false;
-    state.map = state.maps.find((m) => m.id === mapId) || null;
-    updateSpawnNote();
+  document.querySelector("#contest-map-add-button")?.addEventListener("click", addContestMap);
+  document.querySelector("#contest-map-list")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-remove-map]");
+    if (!btn) return;
+    removeContestMap(btn.dataset.removeMap);
+  });
+  document.querySelector("#teleport-connect")?.addEventListener("click", connectTeleports);
+  document.querySelector("#teleport-pairs")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-remove-teleport]");
+    if (!btn) return;
+    state.current.teleports = (state.current.teleports || []).filter((pair) => pair.id !== btn.dataset.removeTeleport);
     render();
     persistContests();
   });
@@ -165,20 +166,76 @@ function render() {
   paintClock();
 }
 
+function contestMaps() {
+  return contestMapIds(state.current).map((id) => state.maps.find((map) => map.id === id)).filter(Boolean);
+}
+
+function clearBoardState() {
+  state.current.spawns = [];
+  state.current.spawnChoices = [];
+  state.current.spawnVotes = [];
+  state.current.claims = [];
+  state.current.spawnResolved = false;
+  state.current.resolvedTeams = [];
+  state.current.energy = [];
+}
+
+function setContestMaps(ids) {
+  const next = [];
+  for (const id of ids) if (id && !next.includes(id)) next.push(id);
+  if (!next.length) return;
+  const prev = contestMapIds(state.current).slice().sort().join("\0");
+  state.current.mapIds = next;
+  state.current.mapId = next[0];
+  state.current.teleports = (state.current.teleports || []).filter((pair) => next.includes(pair.a.mapId) && next.includes(pair.b.mapId));
+  if (prev !== next.slice().sort().join("\0")) clearBoardState();
+  state.mapsForContest = contestMaps();
+}
+
+function addContestMap() {
+  const id = document.querySelector("#contest-map-add")?.value;
+  if (!id || contestMapIds(state.current).includes(id)) return;
+  setContestMaps([...contestMapIds(state.current), id]);
+  render();
+  persistContests();
+}
+
+function removeContestMap(id) {
+  const ids = contestMapIds(state.current).filter((mapId) => mapId !== id);
+  if (!ids.length) {
+    showPageToast("A contest needs at least one map.", "warn");
+    return;
+  }
+  setContestMaps(ids);
+  render();
+  persistContests();
+}
+
 function fillMapSelect() {
-  const select = document.querySelector("#contest-map-input");
-  if (!select) return;
+  const select = document.querySelector("#contest-map-add");
+  const list = document.querySelector("#contest-map-list");
+  if (!select || !list) return;
   const wanted = isTestingContest() ? "testing" : "official";
-  select.replaceChildren();
+  const chosen = new Set(contestMapIds(state.current));
+  select.replaceChildren(el("option", null, "Choose a map…"));
+  select.firstChild.value = "";
   for (const m of state.maps) {
+    if (chosen.has(m.id)) continue;
     const mode = mapMode(m);
-    if (mode !== wanted && m.id !== state.current.mapId) continue;
+    if (mode !== wanted) continue;
     const opt = el("option", null, `${m.name} · ${m.cols} × ${m.rows}${mode === "testing" ? " · Testing" : ""}`);
     opt.value = m.id;
     select.append(opt);
   }
-  if (state.current.mapId && state.maps.some((m) => m.id === state.current.mapId)) {
-    select.value = state.current.mapId;
+  list.replaceChildren();
+  for (const map of contestMaps()) {
+    const item = el("li");
+    item.append(el("span", null, `${map.name} · ${map.cols} × ${map.rows}`));
+    const remove = el("button", "account-action", "Remove");
+    remove.type = "button";
+    remove.dataset.removeMap = map.id;
+    item.append(remove);
+    list.append(item);
   }
 }
 
@@ -192,13 +249,13 @@ function fillSchedule() {
 
 function updateSpawnNote() {
   const note = document.querySelector("#contest-map-edit-note");
-  const map = state.map;
-  if (!map) { note.hidden = true; return; }
-  const count = (map.cells || []).filter((c) => c.kind === "spawnpoint").length;
+  const maps = contestMaps();
+  if (!maps.length) { note.hidden = true; return; }
+  const count = maps.reduce((sum, map) => sum + (map.cells || []).filter((cell) => cell.kind === "spawnpoint").length, 0);
   note.hidden = false;
   note.textContent = count === 0
-    ? `${map.name} has no spawn points yet. Place them on the map.`
-    : `${map.name} has ${count} spawn point${count === 1 ? "" : "s"}.`;
+    ? "These maps have no spawn points yet. Place them on a map."
+    : `These maps have ${count} spawn point${count === 1 ? "" : "s"}.`;
 }
 
 function fillEnergy() {
@@ -504,7 +561,7 @@ function renderLeaderboard() {
 }
 
 function buildLeaderboard(contest) {
-  const map = state.map;
+  const maps = contestMaps();
   const spawns = contest.spawnResolved ? (contest.spawns || []) : [];
   return (contest.teams || []).map((team) => {
     let score = 0, solved = 0;
@@ -512,6 +569,7 @@ function buildLeaderboard(contest) {
     for (const claim of contest.claims || []) {
       if (claim.teamId !== team.id) continue;
       territory += 1;
+      const map = maps.find((item) => item.id === (claim.mapId || primaryMapId(contest)));
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
@@ -523,45 +581,142 @@ function buildLeaderboard(contest) {
 }
 
 function renderBoard() {
-  const grid = document.querySelector("#contest-grid");
-  if (!grid) return;
-  if (!state.map) { grid.replaceChildren(); return; }
+  const boards = document.querySelector("#contest-boards");
+  if (!boards) return;
+  const maps = contestMaps();
+  boards.replaceChildren();
+  if (!maps.length) return;
   const contest = isTestingContest() ? contestAsTeam(state.current, state.adminViewTeamId) : state.current;
-  grid.dataset.cols = String(state.map.cols);
-  grid.dataset.rows = String(state.map.rows);
-  layoutMapGrid(grid, state.map.cols, state.map.rows);
-  grid.replaceChildren();
-  state.map.cells.forEach((cell, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.index = String(index);
-    button.className = cellClassName(cell, findBoardProblem, "grid-cell");
-    if (!(mapBackdrop(state.map) === "photo" && cell?.kind === "problem")) fillCellLabel(button, cell);
-    const owner = ownerAt(contest, index, cell);
-    if (owner) {
-      button.classList.add("owned");
-      const color = teamColor(state.current, owner.id);
-      button.style.setProperty("--team", color);
-      const mark = el("span", "cell-owner", teamShort(owner.name));
-      mark.title = owner.name;
-      mark.style.color = color;
-      button.append(mark);
+  for (const map of maps) {
+    const block = el("section", "contest-map-block");
+    block.append(el("h3", null, map.name));
+    const scroll = el("div", "grid-scroll");
+    const grid = el("div", "editor-grid");
+    grid.dataset.cols = String(map.cols);
+    grid.dataset.rows = String(map.rows);
+    layoutMapGrid(grid, map.cols, map.rows);
+    map.cells.forEach((cell, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.index = String(index);
+      button.className = cellClassName(cell, findBoardProblem, "grid-cell");
+      const label = teleportLabel(state.current, map.id, index);
+      if (!(mapBackdrop(map) === "photo" && cell?.kind === "problem")) fillCellLabel(button, cell, label);
+      const owner = ownerAt(contest, map.id, index, cell);
+      if (owner) {
+        button.classList.add("owned");
+        const color = teamColor(state.current, owner.id);
+        button.style.setProperty("--team", color);
+        const mark = el("span", "cell-owner", teamShort(owner.name));
+        mark.title = owner.name;
+        mark.style.color = color;
+        button.append(mark);
+      }
+      button.disabled = true;
+      grid.append(button);
+    });
+    paintPhotoGrid(grid, map, findBoardProblem);
+    scroll.append(grid);
+    block.append(scroll);
+    boards.append(block);
+  }
+  renderTeleports();
+}
+
+function teleportChoices() {
+  const used = new Set();
+  for (const pair of state.current.teleports || []) {
+    used.add(placeKey(pair.a.mapId, pair.a.cell));
+    used.add(placeKey(pair.b.mapId, pair.b.cell));
+  }
+  const choices = [];
+  for (const map of contestMaps()) {
+    map.cells.forEach((cell, index) => {
+      if (cell?.kind !== "teleport" || used.has(placeKey(map.id, index))) return;
+      const row = Math.floor(index / map.cols) + 1;
+      const column = (index % map.cols) + 1;
+      choices.push({ mapId: map.id, cell: index, label: `${map.name} · row ${row}, column ${column}` });
+    });
+  }
+  return choices;
+}
+
+function renderTeleports() {
+  const from = document.querySelector("#teleport-from");
+  const to = document.querySelector("#teleport-to");
+  const list = document.querySelector("#teleport-pairs");
+  const empty = document.querySelector("#teleport-empty");
+  if (!from || !to || !list || !empty) return;
+  const choices = teleportChoices();
+  const fill = (select) => {
+    const current = select.value;
+    select.replaceChildren(el("option", null, "Choose a teleport…"));
+    select.firstChild.value = "";
+    for (const choice of choices) {
+      const opt = el("option", null, choice.label);
+      opt.value = placeKey(choice.mapId, choice.cell);
+      select.append(opt);
     }
-    button.disabled = true;
-    grid.append(button);
+    if ([...select.options].some((opt) => opt.value === current)) select.value = current;
+  };
+  fill(from);
+  fill(to);
+  const pairs = state.current.teleports || [];
+  empty.hidden = pairs.length > 0;
+  list.hidden = pairs.length === 0;
+  list.replaceChildren();
+  for (const pair of pairs) {
+    const item = el("li");
+    item.append(el("span", null, `${pair.label}: ${placeText(pair.a)} ↔ ${placeText(pair.b)}`));
+    const remove = el("button", "account-action", "Disconnect");
+    remove.type = "button";
+    remove.dataset.removeTeleport = pair.id;
+    item.append(remove);
+    list.append(item);
+  }
+}
+
+function placeText(place) {
+  const map = state.maps.find((item) => item.id === place.mapId);
+  if (!map) return "Missing map";
+  return `${map.name} · row ${Math.floor(place.cell / map.cols) + 1}, column ${(place.cell % map.cols) + 1}`;
+}
+
+function connectTeleports() {
+  const from = document.querySelector("#teleport-from")?.value;
+  const to = document.querySelector("#teleport-to")?.value;
+  if (!from || !to || from === to) {
+    showPageToast("Choose two different teleport cells.", "warn");
+    return;
+  }
+  const choices = teleportChoices();
+  const a = choices.find((choice) => placeKey(choice.mapId, choice.cell) === from);
+  const b = choices.find((choice) => placeKey(choice.mapId, choice.cell) === to);
+  if (!a || !b) {
+    showPageToast("Those teleport cells are already connected.", "warn");
+    return;
+  }
+  const pairs = state.current.teleports || [];
+  pairs.push({
+    id: `tp-${Date.now().toString(36)}`,
+    label: nextTeleportLabel(pairs),
+    a: { mapId: a.mapId, cell: a.cell },
+    b: { mapId: b.mapId, cell: b.cell },
   });
-  paintPhotoGrid(grid, state.map, findBoardProblem);
+  state.current.teleports = pairs;
+  render();
+  persistContests();
 }
 
 function findBoardProblem(index, type) {
   return state.problems.find((p) => p.index === index && p.type === type) || null;
 }
 
-function ownerAt(contest, index, cell) {
-  const claim = (contest.claims || []).find((c) => c.cell === index);
+function ownerAt(contest, mapId, index, cell) {
+  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === mapId && c.cell === index);
   if (claim) return (contest.teams || []).find((t) => t.id === claim.teamId) || null;
   if (cell?.kind !== "spawnpoint" || !contest.spawnResolved) return null;
-  const spawn = (contest.spawns || []).find((s) => s.cell === index);
+  const spawn = (contest.spawns || []).find((s) => (s.mapId || primaryMapId(contest)) === mapId && s.cell === index);
   return spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) || null : null;
 }
 

@@ -823,6 +823,45 @@ button[type="submit"],
   letter-spacing: 0;
 }
 
+.preview-cell.teleport,
+.grid-cell.teleport,
+.swatch.teleport {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(244, 254, 255, 0.95) 0 16%, transparent 17%),
+    #101820;
+  color: #f4feff;
+  box-shadow: inset 0 0 0 2px #f4feff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.contest-map-block {
+  margin-top: 18px;
+}
+
+.contest-map-block h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.contest-map-list,
+.teleport-pairs {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.contest-map-list li,
+.teleport-pairs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .preview-cell.obstacle,
 .grid-cell.obstacle,
 .swatch.obstacle {

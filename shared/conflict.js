@@ -28,6 +28,8 @@ const CONFLICT_FIELDS = {
   contests: [
     { key: "name", label: "Name" },
     { key: "mapId", label: "Map" },
+    { key: "mapIds", label: "Maps" },
+    { key: "teleports", label: "Teleport paths" },
     { key: "startAt", label: "Start time" },
     { key: "durationMinutes", label: "Duration" },
     { key: "spawnMinutes", label: "Spawn time" },

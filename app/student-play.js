@@ -12,6 +12,7 @@ import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
+import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -32,6 +33,7 @@ const GREEN_ANCHOR = {
 const OTHER_COLOURS = {
   obstacle:   { r: 0x3a, g: 0x3a, b: 0x3a },
   spawnpoint: { r: 0x74, g: 0xb4, b: 0xc7 },
+  teleport:   { r: 0xd7, g: 0xf6, b: 0xff },
   empty:      { r: 0x11, g: 0x11, b: 0x17 },
   unknown:    { r: 0x5a, g: 0x5a, b: 0x5a },
 };
@@ -122,14 +124,14 @@ function bindBackToTop() {
 }
 function bindEvents() {
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
-  const grid = document.querySelector("#student-grid");
+  const grid = document.querySelector("#student-maps");
   grid?.addEventListener("click", onGridClick);
   grid?.addEventListener("pointerover", showCellTip);
   grid?.addEventListener("pointermove", showCellTip);
   grid?.addEventListener("pointerout", (event) => {
-    if (event.target.closest(".grid-cell") && event.relatedTarget?.closest?.("#student-grid .grid-cell") === event.target.closest(".grid-cell")) return;
+    if (event.target.closest(".grid-cell") && event.relatedTarget?.closest?.("#student-maps .grid-cell") === event.target.closest(".grid-cell")) return;
     const tip = document.querySelector("#cell-tooltip");
-    if (tip && !event.relatedTarget?.closest?.("#student-grid")) tip.hidden = true;
+    if (tip && !event.relatedTarget?.closest?.("#student-maps")) tip.hidden = true;
   });
   document.querySelector("#student-answer-form")?.addEventListener("submit", submitAnswer);
   document.addEventListener("mousemove", () => {
@@ -156,7 +158,7 @@ function answerOpenMode() {
 // ──────────────────────────────────────────────────────────
 function installPanZoom() {
   const board = document.querySelector("#student-board");
-  const grid  = document.querySelector("#student-grid");
+  const grid  = document.querySelector("#student-maps");
   if (!board || !grid) return;
 
   board.style.position = "relative";
@@ -317,7 +319,7 @@ function installPanZoom() {
 }
 
 function refreshDotFontSizes() {
-  const dots = document.querySelectorAll("#student-grid .cell-team-dot, #student-grid .cell-spawn-dot");
+  const dots = document.querySelectorAll("#student-maps .cell-team-dot, #student-maps .cell-spawn-dot");
   for (const dot of dots) {
     const cell = dot.parentElement;
     if (!cell) continue;
@@ -337,12 +339,17 @@ function refreshDotFontSizes() {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── Render ───────────────────────────────────────────────
+function playMaps(contest) {
+  return contestMapIds(contest).map((id) => state.maps.find((map) => map.id === id)).filter(Boolean);
+}
+
 function render() {
   const contest = state.contest;
-  const map = state.maps.find((m) => m.id === contest.mapId);
+  const maps = playMaps(contest);
+  const map = maps[0] || null;
   const team = teamForUser(contest);
   const phase = contestPhase(contest);
-  const frozen = isFrozen(contest, map);
+  const frozen = isFrozen(contest, maps);
   state.phase = phase;
   state.frozen = frozen;
 
@@ -366,14 +373,14 @@ function render() {
   const showScores = phase === "live" || phase === "ended" || frozen;
   document.querySelector("#student-leaderboard").hidden = !showScores;
   document.querySelector("#student-leaderboard-heading").hidden = !showScores;
-  document.querySelector("#student-board").hidden = !map;
+  document.querySelector("#student-board").hidden = maps.length === 0;
 
   if (!map) {
     document.querySelector("#spawn-agreement").hidden = true;
     paintClock();
     return;
   }
-  renderGrid(contest, map, phase, frozen, team);
+  renderMaps(contest, maps, phase, frozen, team);
   renderSpawnAgreement(contest, map, phase);
   paintClock();
 
@@ -458,9 +465,10 @@ function buildLeaderboard(contest, map) {
     for (const claim of contest.claims || []) {
       if (claim.teamId !== team.id) continue;
       territory += 1;
-      const cell = map?.cells?.[claim.cell];
-      if (!cell || cell.kind !== "problem") continue;
-      const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
+      const boardMap = playMaps(contest).find((item) => item.id === (claim.mapId || primaryMapId(contest)));
+      const boardCell = boardMap?.cells?.[claim.cell];
+      if (!boardCell || boardCell.kind !== "problem") continue;
+      const p = state.problems.find((x) => x.index === boardCell.problemNo && x.type === boardCell.type);
       score += problemScore(p);
       solved += 1;
     }
@@ -468,13 +476,20 @@ function buildLeaderboard(contest, map) {
   }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
-function isFrozen(contest, map) {
-  if (!contest || !map) return contestPhase(contest) === "ended";
+function isFrozen(contest, maps) {
+  const list = Array.isArray(maps) ? maps : [maps].filter(Boolean);
+  if (!contest || !list.length) return contestPhase(contest) === "ended";
   if (contestPhase(contest) === "ended") return true;
-  const problems = (map.cells || []).map((c, i) => c.kind === "problem" ? i : -1).filter((i) => i >= 0);
-  if (problems.length === 0) return false;
-  const claimed = new Set((contest.claims || []).map((c) => c.cell));
-  return problems.every((i) => claimed.has(i));
+  let problems = 0;
+  for (const map of list) {
+    for (let index = 0; index < (map.cells || []).length; index += 1) {
+      if (map.cells[index]?.kind !== "problem") continue;
+      problems += 1;
+      const held = (contest.claims || []).some((claim) => (claim.mapId || primaryMapId(contest)) === map.id && claim.cell === index);
+      if (!held) return false;
+    }
+  }
+  return problems > 0;
 }
 
 function mix(a, b, t) {
@@ -489,8 +504,24 @@ function rgbToCss({ r, g, b }) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-function renderGrid(contest, map, phase, frozen, team) {
-  const grid = document.querySelector("#student-grid");
+function renderMaps(contest, maps, phase, frozen, team) {
+  const host = document.querySelector("#student-maps");
+  if (!host) return;
+  host.replaceChildren();
+  for (const map of maps) {
+    const block = el("section", "contest-map-block");
+    if (maps.length > 1) block.append(el("h3", null, map.name));
+    const scroll = el("div", "grid-scroll");
+    const grid = el("div", "editor-grid");
+    scroll.append(grid);
+    block.append(scroll);
+    host.append(block);
+    renderGrid(contest, map, phase, frozen, team, grid);
+  }
+}
+
+function renderGrid(contest, map, phase, frozen, team, grid = document.querySelector("#student-maps")) {
+  if (!grid) return;
   grid.dataset.cols = String(map.cols);
   grid.dataset.rows = String(map.rows);
   layoutMapGrid(grid, map.cols, map.rows);
@@ -500,23 +531,23 @@ function renderGrid(contest, map, phase, frozen, team) {
 
   const style = document.createElement("style");
   style.textContent = `
-#student-grid .student-cell.obstacle-cell {
+#student-maps .student-cell.obstacle-cell {
   background: rgb(58, 58, 58) !important;
   background-image: none !important;
   border: 0 !important;
   box-shadow: none !important;
 }
-#student-grid .student-cell.obstacle-cell::before,
-#student-grid .student-cell.obstacle-cell::after {
+#student-maps .student-cell.obstacle-cell::before,
+#student-maps .student-cell.obstacle-cell::after {
   content: none !important;
   background: none !important;
 }
-#student-grid .student-cell.cell-occupied::before,
-#student-grid .student-cell.cell-occupied::after {
+#student-maps .student-cell.cell-occupied::before,
+#student-maps .student-cell.cell-occupied::after {
   content: none !important;
 }
-#student-grid .cell-team-dot,
-#student-grid .cell-spawn-dot {
+#student-maps .cell-team-dot,
+#student-maps .cell-spawn-dot {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -524,7 +555,7 @@ function renderGrid(contest, map, phase, frozen, team) {
 }
 
 /* Claimed spawn dot: pulsing ring so it stays obviously a spawn. */
-#student-grid .cell-spawn-dot {
+#student-maps .cell-spawn-dot {
   animation: spawn-pulse 1.8s ease-in-out infinite;
 }
 
@@ -551,9 +582,10 @@ function renderGrid(contest, map, phase, frozen, team) {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.index = String(index);
+    button.dataset.map = map.id;
 
-    const claim = (contest.claims || []).find((c) => c.cell === index);
-    const owner = ownerAt(contest, index, cell);
+    const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
+    const owner = ownerAt(contest, map.id, index, cell);
     const isSpawnCell = cell.kind === "spawnpoint";
 
     button.className = cellClassName(cell, findProblem, "grid-cell", "student-cell");
@@ -565,6 +597,7 @@ function renderGrid(contest, map, phase, frozen, team) {
       rgb = tier != null ? GREEN_ANCHOR[tier] : OTHER_COLOURS.unknown;
     } else if (cell.kind === "obstacle")   rgb = OTHER_COLOURS.obstacle;
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
+    else if (cell.kind === "teleport")     rgb = OTHER_COLOURS.teleport;
     else                                   rgb = OTHER_COLOURS.empty;
 
     if (!owner && cell.kind !== "obstacle") rgb = mix(rgb, OTHER_COLOURS.empty, 0.35);
@@ -659,16 +692,23 @@ function renderGrid(contest, map, phase, frozen, team) {
       button.disabled = !choosing;
       if (choosing) {
         const myVote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, getSession()?.user?.username));
-        if (myVote && myVote.cell === index) button.classList.add("mine");
+        if (myVote && myVote.mapId === map.id && myVote.cell === index) button.classList.add("mine");
       }
     } else {
-      // ── Other cells (problem, empty, photo backdrop) ──
-      const reachable = phase === "live" && !frozen && cell.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, index);
+      const paired = cell.kind === "teleport" && teleportPairAt(contest, map.id, index);
+      const reachable = phase === "live" && !frozen && !claim && adjacentToTeam(map, contest, team.id, index)
+        && (cell.kind === "problem" || (cell.kind === "teleport" && paired));
       button.disabled = !reachable;
-      button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
+      if (cell.kind === "teleport") button.textContent = teleportLabel(contest, map.id, index) || "T";
+      else button.textContent = mapBackdrop(map) === "photo" || cell.kind === "problem" ? "" : cellText(cell);
+    }
+    if (cell.kind === "teleport" && owner) {
+      const mark = el("span", "cell-label");
+      mark.textContent = teleportLabel(contest, map.id, index) || "T";
+      button.append(mark);
     }
 
-    if (state.selectedCell === index) button.setAttribute("aria-pressed", "true");
+    if (state.selectedCell === index && state.selectedMapId === map.id) button.setAttribute("aria-pressed", "true");
     const place = cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1);
     button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
     grid.append(button);
@@ -681,7 +721,7 @@ function showCellTip(event) {
   const button = event.target.closest?.(".grid-cell");
   if (!tip || !button) return;
   const contest = state.contest;
-  const map = state.maps.find((m) => m.id === contest?.mapId);
+  const map = state.maps.find((m) => m.id === (button.dataset.map || contest?.mapId));
   const index = Number(button.dataset.index);
   const cell = map?.cells?.[index];
   if (!map || !cell) { tip.hidden = true; return; }
@@ -710,15 +750,18 @@ function cellTipLines(contest, map, index, cell) {
     lines.push(`${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`);
   } else if (cell.kind === "obstacle") lines.push("Obstacle");
   else if (cell.kind === "spawnpoint") lines.push("Spawn point");
-  else lines.push("Empty");
-  const claim = (contest.claims || []).find((c) => c.cell === index);
+  else if (cell.kind === "teleport") {
+    const label = teleportLabel(contest, map.id, index);
+    lines.push(label ? `Teleport ${label}` : "Teleport, not connected");
+  } else lines.push("Empty");
+  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
   if (claim) {
     const team = (contest.teams || []).find((t) => t.id === claim.teamId);
     const when = claim.solvedAt ? formatContestTime(claim.solvedAt) : "";
     const who = claim.solvedBy ? ` · ${claim.solvedBy}` : "";
     lines.push(`Occupied by ${team?.name || "a team"}${who}${when ? ` at ${when}` : ""}`);
   } else if (cell.kind === "spawnpoint" && contest.spawnResolved) {
-    const spawn = (contest.spawns || []).find((s) => s.cell === index);
+    const spawn = (contest.spawns || []).find((s) => (s.mapId || primaryMapId(contest)) === map.id && s.cell === index);
     const team = spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) : null;
     if (team) lines.push(`Held by ${team.name}`);
   }
@@ -729,19 +772,25 @@ function findProblem(index, type) {
   return state.problems.find((p) => p.index === index && p.type === type) || null;
 }
 
-function ownerAt(contest, index, cell) {
-  const claim = (contest.claims || []).find((c) => c.cell === index);
+function ownerAt(contest, mapId, index, cell) {
+  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === mapId && c.cell === index);
   if (claim) return (contest.teams || []).find((t) => t.id === claim.teamId) || null;
   if (cell?.kind !== "spawnpoint" || !contest.spawnResolved) return null;
-  const spawn = (contest.spawns || []).find((s) => s.cell === index);
+  const spawn = (contest.spawns || []).find((s) => (s.mapId || primaryMapId(contest)) === mapId && s.cell === index);
   return spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) || null : null;
 }
 
 function adjacentToTeam(map, contest, teamId, cell) {
   if (!teamId || !map || !Number.isInteger(cell)) return false;
   const owned = new Set();
-  if (contest.spawnResolved) for (const s of contest.spawns || []) if (s.teamId === teamId) owned.add(s.cell);
-  for (const c of contest.claims || []) if (c.teamId === teamId) owned.add(c.cell);
+  if (contest.spawnResolved) {
+    for (const s of contest.spawns || []) {
+      if (s.teamId === teamId && (s.mapId || primaryMapId(contest)) === map.id) owned.add(s.cell);
+    }
+  }
+  for (const c of contest.claims || []) {
+    if (c.teamId === teamId && (c.mapId || primaryMapId(contest)) === map.id) owned.add(c.cell);
+  }
   const row = Math.floor(cell / map.cols);
   const col = cell % map.cols;
   const neighbors = [];
@@ -763,9 +812,10 @@ function renderSpawnAgreement(contest, map, phase) {
   const me = getSession()?.user?.username;
   for (const member of team.members) {
     const vote = (contest.spawnVotes || []).find((v) => v.teamId === team.id && sameContestant(v.username, member));
+    const voteMap = vote ? state.maps.find((item) => item.id === (vote.mapId || map.id)) || map : map;
     const row = document.createElement("tr");
     row.append(el("td", null, sameContestant(member, me) ? `${member} (you)` : member));
-    row.append(el("td", null, vote ? `row ${Math.floor(vote.cell / map.cols) + 1}, column ${(vote.cell % map.cols) + 1}` : "Waiting"));
+    row.append(el("td", null, vote && voteMap ? `${voteMap.name} · row ${Math.floor(vote.cell / voteMap.cols) + 1}, column ${(vote.cell % voteMap.cols) + 1}` : "Waiting"));
     const status = el("td", "member-status");
     const icon = el("i", vote ? "fa-solid fa-circle-check vote-yes" : "fa-solid fa-circle-question vote-no");
     icon.setAttribute("aria-label", vote ? "Voted" : "Not voted yet");
@@ -790,28 +840,35 @@ async function onGridClick(event) {
   const button = event.target.closest("[data-index]");
   if (!button || button.disabled) return;
   const contest = state.contest;
-  const map = state.maps.find((m) => m.id === contest.mapId);
+  const map = state.maps.find((m) => m.id === (button.dataset.map || primaryMapId(contest)));
   const team = teamForUser(contest);
   if (!map || !team) return;
   const index = Number(button.dataset.index);
   const cell = map.cells[index];
   const phase = contestPhase(contest);
+  const maps = playMaps(contest);
 
   if (cell?.kind === "spawnpoint" && phase === "spawn" && !contest.spawnResolved && contest.spawnMode !== "random") {
-    await chooseSpawn(contest, index);
+    await chooseSpawn(contest, map.id, index);
     return;
   }
-  if (cell?.kind === "problem" && phase === "live" && !isFrozen(contest, map)) {
-    const claim = (contest.claims || []).some((c) => c.cell === index);
+  if (cell?.kind === "teleport" && phase === "live" && !isFrozen(contest, maps)) {
+    await claimTeleport(contest, map.id, index);
+    return;
+  }
+  if (cell?.kind === "problem" && phase === "live" && !isFrozen(contest, maps)) {
+    const claim = (contest.claims || []).some((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
     if (claim || !adjacentToTeam(map, contest, team.id, index)) return;
     if (answerOpenMode() === "newtab") {
       const url = new URL("/answer.html", location.origin);
       url.searchParams.set("contest", contest.id);
+      url.searchParams.set("map", map.id);
       url.searchParams.set("cell", String(index));
       window.open(url.href, "_blank", "noopener");
       return;
     }
     state.selectedCell = index;
+    state.selectedMapId = map.id;
     render();
     showProblem(contest, map, phase);
   }
@@ -820,8 +877,8 @@ async function onGridClick(event) {
 function showProblem(contest, map, phase) {
   const team = teamForUser(contest);
   const cell = map.cells[state.selectedCell];
-  const claim = (contest.claims || []).find((c) => c.cell === state.selectedCell);
-  const playable = phase === "live" && !isFrozen(contest, map) && cell?.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, state.selectedCell);
+  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
+  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, state.selectedCell);
   const panel = document.querySelector("#student-problem");
   const form = document.querySelector("#student-answer-form");
   if (!playable) { panel.hidden = true; form.hidden = true; return; }
@@ -847,29 +904,31 @@ function closeProblem() {
   const panel = document.querySelector("#student-problem");
   if (panel.hidden) return;
   state.selectedCell = null;
+  state.selectedMapId = "";
   panel.hidden = true;
   document.querySelector("#student-answer-form").hidden = true;
   document.querySelector("#student-answer-success").hidden = true;
-  for (const b of document.querySelectorAll("#student-grid [aria-pressed='true']")) b.removeAttribute("aria-pressed");
+  for (const b of document.querySelectorAll("#student-maps [aria-pressed='true']")) b.removeAttribute("aria-pressed");
 }
 
-async function chooseSpawn(contest, cell) {
+async function chooseSpawn(contest, mapId, cell) {
   const team = teamForUser(contest);
   if (!team) return;
   const username = getSession()?.user?.username;
   const prevVotes = (contest.spawnVotes || []).slice();
   const prevChoices = (contest.spawnChoices || []).slice();
   contest.spawnVotes = prevVotes.filter((v) => !(v.teamId === team.id && sameContestant(v.username, username)));
-  contest.spawnVotes.push({ teamId: team.id, username, cell });
+  contest.spawnVotes.push({ teamId: team.id, username, mapId, cell });
   contest.spawnChoices = agreedSpawnChoices(contest);
   render();
   try {
-    const data = await api.chooseSpawn(contest.id, cell);
+    const data = await api.chooseSpawn(contest.id, cell, mapId);
     applyPlayState(data);
-    const map = state.maps.find((m) => m.id === contest.mapId);
     const finalSpawn = (contest.spawns || []).find((s) => s.teamId === team.id);
     const agreed = (contest.spawnChoices || []).find((c) => c.teamId === team.id);
-    const chosen = Number.isInteger(finalSpawn?.cell) ? finalSpawn.cell : agreed?.cell;
+    const chosenPlace = finalSpawn || agreed;
+    const map = state.maps.find((m) => m.id === (chosenPlace?.mapId || mapId));
+    const chosen = chosenPlace?.cell;
     if (map && Number.isInteger(chosen)) {
       showPageToast(`Spawn point: row ${Math.floor(chosen / map.cols) + 1}, column ${(chosen % map.cols) + 1}`, "ok");
     } else {
@@ -883,10 +942,22 @@ async function chooseSpawn(contest, cell) {
   render();
 }
 
+async function claimTeleport(contest, mapId, cell) {
+  try {
+    const data = await api.claimTeleport(contest.id, mapId, cell);
+    applyPlayState(data);
+    render();
+  } catch (err) {
+    if (err.data?.contest) applyPlayState(err.data);
+    showPageToast(err.message || "That teleport could not be used.", "warn");
+    render();
+  }
+}
+
 async function submitAnswer(event) {
   event.preventDefault();
   const contest = state.contest;
-  const map = state.maps.find((m) => m.id === contest.mapId);
+  const map = state.maps.find((m) => m.id === (state.selectedMapId || primaryMapId(contest)));
   const team = teamForUser(contest);
   if (!contest || !map || !team || state.selectedCell === null) return;
   const cell = state.selectedCell;
@@ -922,7 +993,7 @@ async function submitAnswer(event) {
 
   let failure = "";
   try {
-    const data = await api.solve(contest.id, cell, document.querySelector("#student-answer").value);
+    const data = await api.solve(contest.id, cell, document.querySelector("#student-answer").value, map.id);
     applyPlayState(data);
     document.querySelector("#student-answer").value = "";
     document.querySelector("#student-answer-form").hidden = true;
@@ -1031,10 +1102,13 @@ function applyPlayState(data) {
   if (typeof next.spawnResolved === "boolean") c.spawnResolved = next.spawnResolved;
   if (next.mode) c.mode = next.mode;
   if (Array.isArray(next.resolvedTeams)) c.resolvedTeams = next.resolvedTeams;
-  if (Array.isArray(next.spawnChoices)) c.spawnChoices = normalizeTeamCells(next.spawnChoices);
-  if (Array.isArray(next.spawnVotes)) c.spawnVotes = normalizeSpawnVotes(next.spawnVotes);
-  if (Array.isArray(next.spawns)) c.spawns = normalizeTeamCells(next.spawns);
-  if (Array.isArray(next.claims)) c.claims = normalizeClaims(next.claims);
+  if (Array.isArray(next.spawnChoices)) c.spawnChoices = normalizeTeamCells(next.spawnChoices, primaryMapId(c));
+  if (Array.isArray(next.spawnVotes)) c.spawnVotes = normalizeSpawnVotes(next.spawnVotes, primaryMapId(c));
+  if (Array.isArray(next.spawns)) c.spawns = normalizeTeamCells(next.spawns, primaryMapId(c));
+  if (Array.isArray(next.claims)) c.claims = normalizeClaims(next.claims, primaryMapId(c));
+  if (typeof next.mapId === "string" && next.mapId) c.mapId = next.mapId;
+  if (Array.isArray(next.mapIds)) c.mapIds = next.mapIds;
+  if (Array.isArray(next.teleports)) c.teleports = next.teleports;
   if (Array.isArray(next.energy)) c.energy = next.energy;
   if (Number.isInteger(next.energyRegen)) c.energyRegen = next.energyRegen;
   if (Number.isInteger(next.energyRegenSeconds)) c.energyRegenSeconds = next.energyRegenSeconds;
@@ -1082,12 +1156,12 @@ function paintClock() {
 function startClock() {
   if (state.clock) return;
   state.clock = setInterval(() => {
-    if (!document.querySelector("#student-grid")) { clearInterval(state.clock); state.clock = null; return; }
+    if (!document.querySelector("#student-maps")) { clearInterval(state.clock); state.clock = null; return; }
     paintClock();
     paintEnergy();
     const phase = contestPhase(state.contest);
-    const map = state.maps.find((m) => m.id === state.contest.mapId);
-    const frozen = isFrozen(state.contest, map);
+    const map = playMaps(state.contest)[0] || null;
+    const frozen = isFrozen(state.contest, playMaps(state.contest));
     const sig = `${phase}:${frozen}:${state.contest.spawnResolved}`;
     if (sig !== `${state.phase}:${state.frozen}:${state.contest.spawnResolved}`) render();
     else writeStatus(state.contest, phase, map, frozen);

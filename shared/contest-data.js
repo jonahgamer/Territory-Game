@@ -1,6 +1,7 @@
 import { contestantId, sameContestant } from "./session.js";
 import { contestSchedule, serverNow } from "./contest-time.js";
 import { cleanEnergyLedger, energyNow, readEnergySettings } from "./energy.js";
+import { contestMapIds, primaryMapId, cleanTeleports } from "./contest-board.js";
 
 export function normalizeTeams(value) {
   if (!Array.isArray(value)) return [];
@@ -17,38 +18,47 @@ export function normalizeTeams(value) {
     .filter((t) => t.members.length >= 1 && t.members.length <= 5);
 }
 
-export function normalizeTeamCells(value) {
+export function normalizeTeamCells(value, fallbackMapId = "") {
   if (!Array.isArray(value)) return [];
   const items = [];
   for (const item of value) {
     if (!item || typeof item.teamId !== "string" || !Number.isInteger(item.cell) || item.cell < 0) continue;
+    const mapId = typeof item.mapId === "string" && item.mapId ? item.mapId : fallbackMapId;
+    if (!mapId) continue;
     const i = items.findIndex((x) => x.teamId === item.teamId);
     if (i >= 0) items.splice(i, 1);
-    items.push({ teamId: item.teamId, cell: item.cell });
+    items.push({ teamId: item.teamId, mapId, cell: item.cell });
   }
   return items;
 }
 
-export function normalizeSpawnVotes(value) {
+export function normalizeSpawnVotes(value, fallbackMapId = "") {
   if (!Array.isArray(value)) return [];
   const votes = [];
   for (const v of value) {
     if (!v || typeof v.teamId !== "string" || typeof v.username !== "string" || !Number.isInteger(v.cell) || v.cell < 0) continue;
+    const mapId = typeof v.mapId === "string" && v.mapId ? v.mapId : fallbackMapId;
+    if (!mapId) continue;
     const i = votes.findIndex((x) => x.teamId === v.teamId && sameContestant(x.username, v.username));
     if (i >= 0) votes.splice(i, 1);
-    votes.push({ teamId: v.teamId, username: v.username, cell: v.cell });
+    votes.push({ teamId: v.teamId, username: v.username, mapId, cell: v.cell });
   }
   return votes;
 }
 
-export function normalizeClaims(value) {
+export function normalizeClaims(value, fallbackMapId = "") {
   if (!Array.isArray(value)) return [];
   const claims = [];
   const seen = new Set();
   for (const c of value) {
-    if (!c || typeof c.teamId !== "string" || !Number.isInteger(c.cell) || seen.has(c.cell)) continue;
-    seen.add(c.cell);
+    if (!c || typeof c.teamId !== "string" || !Number.isInteger(c.cell) || c.cell < 0) continue;
+    const mapId = typeof c.mapId === "string" && c.mapId ? c.mapId : fallbackMapId;
+    if (!mapId) continue;
+    const key = `${mapId}:${c.cell}:${c.teamId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     claims.push({
+      mapId,
       cell: c.cell,
       teamId: c.teamId,
       solvedBy: typeof c.solvedBy === "string" ? c.solvedBy : "",
@@ -61,10 +71,14 @@ export function normalizeClaims(value) {
 export function normalizeContest(raw) {
   const teams = normalizeTeams(raw.teams);
   const energy = readEnergySettings(raw);
+  const mapIds = contestMapIds(raw);
+  const fallback = mapIds[0] || "";
   return {
     id: raw.id,
     name: raw.name,
-    mapId: raw.mapId,
+    mapId: primaryMapId(raw),
+    mapIds,
+    teleports: cleanTeleports(raw.teleports, mapIds),
     contestantIds: teams.flatMap((t) => t.members),
     teams,
     startAt: Number.isInteger(raw.startAt) ? raw.startAt : null,
@@ -81,10 +95,10 @@ export function normalizeContest(raw) {
     energySolve: energy.solve,
     energy: cleanEnergyLedger(raw.energy),
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
-    spawnChoices: normalizeTeamCells(raw.spawnChoices),
-    spawnVotes: normalizeSpawnVotes(raw.spawnVotes),
-    spawns: normalizeTeamCells(raw.spawns),
-    claims: normalizeClaims(raw.claims),
+    spawnChoices: normalizeTeamCells(raw.spawnChoices, fallback),
+    spawnVotes: normalizeSpawnVotes(raw.spawnVotes, fallback),
+    spawns: normalizeTeamCells(raw.spawns, fallback),
+    claims: normalizeClaims(raw.claims, fallback),
     spawnResolved: raw.spawnResolved === true,
   };
 }
@@ -134,7 +148,8 @@ export function agreedSpawnChoices(contest) {
     );
     if (votes.length !== team.members.length) continue;
     const cell = votes[0].cell;
-    if (votes.every((v) => v.cell === cell)) choices.push({ teamId: team.id, cell });
+    const mapId = votes[0].mapId;
+    if (votes.every((v) => v.cell === cell && v.mapId === mapId)) choices.push({ teamId: team.id, mapId, cell });
   }
   return choices;
 }

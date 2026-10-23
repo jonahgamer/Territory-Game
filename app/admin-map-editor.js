@@ -430,6 +430,7 @@ function applyTool(index, mode) {
   strokeCount += 1;
   if (state.paintKind === "spawnpoint") map.cells[index] = { kind: "spawnpoint" };
   else if (state.paintKind === "obstacle") map.cells[index] = { kind: "obstacle" };
+  else if (state.paintKind === "teleport") map.cells[index] = { kind: "teleport" };
   else map.cells[index] = { kind: "empty" };
   paintCell(index);
   markDirty();

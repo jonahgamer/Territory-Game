@@ -82,11 +82,15 @@ export function cellText(cell) {
   return "";
 }
 
-export function fillCellLabel(button, cell) {
+export function fillCellLabel(button, cell, teleportLabel = "") {
   button.replaceChildren();
   if (!cell || cell.kind === "empty" || cell.kind === "obstacle") return;
   if (cell.kind === "spawnpoint") {
     button.textContent = "S";
+    return;
+  }
+  if (cell.kind === "teleport") {
+    button.textContent = teleportLabel || "T";
     return;
   }
   if (cell.kind !== "problem") return;
@@ -111,11 +115,12 @@ export function cellLabel(cell, row, column) {
   if (cell.kind === "problem") return `Row ${row}, column ${column}, problem ${problemTag(cell.problemNo, cell.type)}`;
   if (cell.kind === "obstacle") return `Row ${row}, column ${column}, obstacle`;
   if (cell.kind === "spawnpoint") return `Row ${row}, column ${column}, spawn point`;
+  if (cell.kind === "teleport") return `Row ${row}, column ${column}, teleport`;
   return `Row ${row}, column ${column}, empty`;
 }
 
 export function mapKindCounts(map) {
-  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0, testing: 0 };
+  const counts = { problem: 0, obstacle: 0, spawnpoint: 0, teleport: 0, empty: 0, math: 0, oi: 0, science: 0, puzzle: 0, testing: 0 };
   for (const cell of map?.cells || []) {
     if (Object.prototype.hasOwnProperty.call(counts, cell.kind)) counts[cell.kind] += 1;
     if (cell.kind === "problem" && Object.prototype.hasOwnProperty.call(counts, cell.type)) counts[cell.type] += 1;
@@ -136,6 +141,7 @@ export function renderMapCounts(container, map) {
     ...(mapMode(map) === "testing" ? [["testing", "Testing", counts.testing]] : []),
     ["obstacle", "Obstacles", counts.obstacle],
     ["spawnpoint", "Spawn points", counts.spawnpoint],
+    ["teleport", "Teleports", counts.teleport],
     ["empty", "Empty", counts.empty],
   ];
   container.replaceChildren();

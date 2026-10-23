@@ -28,13 +28,14 @@ async function run() {
     listEl.hidden = mine.length === 0;
 
     renderList(listEl, mine, (contest) => {
-      const map = data.maps.find((m) => m.id === contest.mapId);
+      const ids = contest.mapIds?.length ? contest.mapIds : [contest.mapId];
+      const names = ids.map((id) => data.maps.find((m) => m.id === id)?.name).filter(Boolean);
       const item = el("li");
       const button = el("button", "open-problem");
       button.type = "button";
       const name = el("span", "contest-name-label", contest.name);
       const detail = el("span", "problem-snippet",
-        `${map ? map.name : "Map removed"} · ${contest.startAt ? formatContestTime(contest.startAt) : "Schedule not set"}`);
+        `${names.length ? names.join(", ") : "Map removed"} · ${contest.startAt ? formatContestTime(contest.startAt) : "Schedule not set"}`);
       button.append(name, detail);
       button.addEventListener("click", () => {
         location.assign(`/play.html?contest=${encodeURIComponent(contest.id)}`);

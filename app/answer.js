@@ -8,6 +8,8 @@ import { problemScore } from "../shared/difficulty.js";
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
 const cellIndex = Number(params.get("cell"));
+const requestedMapId = params.get("map") || "";
+let openMapId = requestedMapId;
 
 const status = document.querySelector("#answer-status");
 const title = document.querySelector("#student-problem-tag");
@@ -45,7 +47,8 @@ async function loadProblem() {
     const data = await api.bootstrap();
     noteServerTime(data.serverNow);
     const contest = (data.contests || []).find((c) => c.id === contestId);
-    const map = contest && (data.maps || []).find((m) => m.id === contest.mapId);
+    openMapId = requestedMapId || contest?.mapId || "";
+    const map = contest && (data.maps || []).find((m) => m.id === openMapId);
     const mapCell = map?.cells?.[cellIndex];
     if (!contest || !map || mapCell?.kind !== "problem") {
       showStatus("That problem is not available.");
@@ -84,7 +87,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   try {
-    await api.solve(contestId, cellIndex, answerInput.value);
+    await api.solve(contestId, cellIndex, answerInput.value, openMapId);
     form.hidden = true;
     showStatus("Answer recorded. You can close this tab.");
   } catch (err) {

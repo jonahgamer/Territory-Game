@@ -40,9 +40,13 @@
 
       <form id="contest-form" class="problem-editor">
         <label>Name <input id="contest-name-input" type="text" maxlength="60" /></label>
-        <label>Map
-          <select id="contest-map-input"></select>
-        </label>
+        <div id="contest-maps">
+          <label>Add a map
+            <select id="contest-map-add"><option value="">Choose a map…</option></select>
+          </label>
+          <button type="button" id="contest-map-add-button">Add map</button>
+          <ul id="contest-map-list" class="contest-map-list"></ul>
+        </div>
         <p id="contest-map-edit-note" class="field-note"></p>
         <fieldset class="contest-schedule">
           <legend>Schedule</legend>
@@ -108,9 +112,17 @@
       <p id="contest-leaderboard-empty" class="field-note">No scores yet.</p>
       <ol id="contest-leaderboard" class="leaderboard" hidden></ol>
 
-      <div class="student-board">
-        <div class="grid-scroll"><div id="contest-grid" class="editor-grid"></div></div>
+      <h2>Teleport paths</h2>
+      <p class="field-note">Connect two teleport cells. A pair can stay on one map or join two maps. The link belongs to this contest, so the map itself is unchanged.</p>
+      <div class="problem-editor" id="teleport-builder">
+        <label>From <select id="teleport-from"><option value="">Choose a teleport…</option></select></label>
+        <label>To <select id="teleport-to"><option value="">Choose a teleport…</option></select></label>
+        <button type="button" class="add-problem" id="teleport-connect">Connect</button>
       </div>
+      <p id="teleport-empty" class="field-note">No teleport paths yet.</p>
+      <ul id="teleport-pairs" class="teleport-pairs" hidden></ul>
+
+      <div id="contest-boards"></div>
     </main>
   </div>
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
