@@ -36,7 +36,7 @@ Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the projec
 | `scripts/12-session.js` | Admin versus student, team membership. |
 | `scripts/13-contests.js` | Contest schedule, teams, spawn agreement, student play, countdown. |
 | `scripts/14-session-storage.js` | JWT in `localStorage` key `territory-game-session`. |
-| `scripts/15-bootstrap.js` | First load. Full app starts the router. `/ui2/` calls `openSplitPage()`. |
+| `scripts/15-bootstrap.js` | Old bundle first load. The live split pages call `page-*` actions instead of `bootstrap`. |
 | `login.html`, `login.js` | Sign-in page. |
 | `answer.html`, `answer.js` | One problem in a new tab: `?contest=&cell=`. |
 | `ui2/*.html` | Split admin pages. They load `/script.js` and `/style.css`. Contests is still a dead link. Tutorial is `/ui2/editusers.html#tutorial`. |

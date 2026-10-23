@@ -40,7 +40,26 @@ Every request needs `Authorization: Bearer <token>`.
 
 ### `GET ?action=bootstrap`
 
-Returns the signed-in user, maps, problems, and contests.
+The old single-page bundle still uses this. The split pages do not. Each of those pages calls one `page-*` action and receives only the records that page shows.
+
+| Action | Page | Returns |
+| --- | --- | --- |
+| `page-maps` | Map list | Every map, without the photo file |
+| `page-map&map=` | Map editor and difficulty view | That map, plus problem index, type, difficulty, and score |
+| `page-problems` | Problem list | Every problem, plus how many cells use each one |
+| `page-problem&type=&index=` | Problem editor | That problem, the other problem keys, and its cell count |
+| `page-problem-keys` | Batch add | Problem keys only |
+| `page-problem-text` | Export text | Prompts for the requested problems |
+| `page-contests` | Contest list | Contest summaries and map names, not cells |
+| `page-contest&id=` | One contest | That contest, its maps, and the scores of problems on those maps |
+| `page-play&contest=` | Contestant board | That contest, its maps, and those problems' prompts |
+| `page-student-contests` | Contestant list | The signed-in student's contests and map names |
+| `page-answer&contest=&map=&cell=` | Answer tab | That problem's prompt and the contest clock and energy |
+| `page-credits` | Credits | Version notes |
+
+`save-map`, `delete-map`, `save-problem`, `add-problems`, `delete-problems`, `move-problem`, `save-contest`, and `delete-contest` write one record, or the listed problems, and leave the rest of the collection in place. `delete-problems` and `move-problem` also update the map cells that use those problems. A stale `revision` is still a 409.
+
+`bootstrap` returns the signed-in user, maps, problems, and contests.
 
 Students receive only the contests they are on, the maps for those contests, and the prompts of problems placed on those maps. They receive each problem's prompt, type, difficulty, and `score`, and do not receive the answer, the solution, or the logic. Admins receive every map, problem, answer, optional `solution`, `score`, and optional `logic` script. `score` is the contest points for a correct answer, a whole number from 0 to 999. A missing `score` uses the difficulty default: easy 1, normal 2, hard 3, insane 4. Everyone receives `versions`, the Credits notes, as plain text. Difficulty is `easy`, `normal`, `hard`, or `insane`. The response includes `serverNow`, the server clock in milliseconds, and `revisions` with the current `maps`, `problems`, and `contests` revision numbers. Send a saved revision back with the next full-list save; a stale revision is rejected instead of overwriting newer work.
 

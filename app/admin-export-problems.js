@@ -1,7 +1,7 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
+import { api } from "../shared/api.js?v=page-data";
 import { problemTag, typeInfo } from "../shared/difficulty.js";
 
 const STORAGE_KEY = "territory-problem-export";
@@ -98,7 +98,7 @@ async function run() {
   const lead = document.querySelector("#export-lead");
   if (lead) lead.textContent = "Loading selected problems…";
   try {
-    const data = await loadBootstrap();
+    const data = await api.problemText(items);
     showExport({ count: items.length, text: textFor(data.problems, items) });
   } catch (err) {
     showEmpty(err.message || "Could not load the selected problems.");

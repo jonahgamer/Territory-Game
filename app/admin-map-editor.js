@@ -1,13 +1,13 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js";
-import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js";
+import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js?v=page-data";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -23,7 +23,7 @@ const deleteButton = document.querySelector("#delete-open-map");
 
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
-  maps: [], problems: [], revisions: { maps: 0, problems: 0 },
+  maps: [], problems: [], reserved: [], revisions: { maps: 0, problems: 0 },
   current: null, dirty: false,
   paintKind: "problem",
   placeType: "math",
@@ -36,11 +36,12 @@ const state = {
 // ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!mapId) throw new Error("No map selected.");
-  const data = await loadBootstrap();
-  state.maps = data.maps;
+  const data = await loadPage("page-map", { map: mapId });
+  state.current = data.map;
+  state.maps = [data.map];
   state.problems = data.problems;
+  state.reserved = data.reserved || [];
   state.revisions = data.revisions;
-  state.current = state.maps.find((m) => m.id === mapId) || null;
   if (!state.current) throw new Error("That map was not found.");
 
   nameInput.value = state.current.name;
@@ -271,6 +272,7 @@ function updateSaveButton() { if (saveButton) saveButton.disabled = !state.dirty
 function nextProblemNo(type) {
   const used = new Set();
   for (const p of state.problems) if (p.type === type) used.add(p.index);
+  for (const item of state.reserved) if (item.type === type) used.add(item.index);
   for (const m of state.maps) {
     for (const c of m.cells || []) {
       if (c?.kind === "problem" && c.type === type) used.add(c.problemNo);
@@ -439,7 +441,7 @@ function applyTool(index, mode) {
 async function save() {
   if (!state.dirty || isSaveConflictActive()) return false;
   try {
-    const data = await api.saveMaps(state.maps, state.revisions.maps);
+    const data = await api.saveMap(state.current, state.revisions.maps);
     state.revisions.maps = data.revision;
     state.dirty = false;
     updateSaveButton();
@@ -450,13 +452,19 @@ async function save() {
       openSaveConflict({
         collection: "maps",
         api,
-        getLocal: () => state.maps,
-        setLocal: (v) => { state.maps = v; },
+        loadRemote: async () => {
+          const latest = await loadPage("page-map", { map: mapId });
+          return { items: [latest.map], revision: latest.revisions.maps };
+        },
+        getLocal: () => [state.current],
+        setLocal: (v) => {
+          state.current = v.find((m) => m.id === mapId) || v[0] || null;
+          state.maps = state.current ? [state.current] : [];
+        },
         getRevision: () => state.revisions.maps,
         setRevision: (v) => { state.revisions.maps = v; },
-        focusKeys: () => new Set([state.current?.id].filter(Boolean)),
+        focusKeys: () => new Set([mapId]),
         refreshAfter: () => {
-          state.current = state.maps.find((m) => m.id === mapId) || null;
           if (!state.current) { location.assign("/admin/maps.html"); return; }
           state.dirty = false;
           updateSaveButton();
@@ -466,7 +474,7 @@ async function save() {
           renderGrid();
         },
         persist: async () => {
-          const d = await api.saveMaps(state.maps, state.revisions.maps);
+          const d = await api.saveMap(state.current, state.revisions.maps);
           state.revisions.maps = d.revision;
           state.dirty = false;
           updateSaveButton();
@@ -484,14 +492,10 @@ async function deleteMap() {
   if (!state.current) return;
   const name = state.current.name;
   if (!window.confirm(`Delete the map ${name}?`) || !window.confirm(`Delete ${name} now?`)) return;
-  const previous = state.maps;
-  state.maps = state.maps.filter((m) => m.id !== state.current.id);
   try {
-    const data = await api.saveMaps(state.maps, state.revisions.maps);
-    state.revisions.maps = data.revision;
+    await api.deleteMap(state.current.id, state.revisions.maps);
     location.assign("/admin/maps.html");
   } catch (err) {
-    state.maps = previous;
     showPageToast(err.message || "Could not delete the map.", "warn");
   }
 }

@@ -2,7 +2,7 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
+import { loadPage } from "../shared/data.js?v=page-data";
 import { problemDifficulty } from "../shared/difficulty.js";
 import { layoutMapGrid, mapMode, renderMapCounts } from "../shared/map-render.js";
 import { el } from "../shared/dom.js";
@@ -58,8 +58,8 @@ const SELF_WEIGHT = 2.0;
 async function run() {
   if (!mapId) throw new Error("No map selected.");
 
-  const data = await loadBootstrap();
-  const map = data.maps.find((m) => m.id === mapId);
+  const data = await loadPage("page-map", { map: mapId });
+  const map = data.map;
   if (!map) throw new Error("That map was not found.");
 
   const findProblem = (index, type) =>

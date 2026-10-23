@@ -420,9 +420,14 @@ export async function openSaveConflict(options) {
   modal.hidden = false;
 
   try {
-    const data = await options.api.bootstrap();
-    const remoteItems = clone(data?.[options.collection] || []);
-    const remoteRevision = data?.revisions?.[options.collection];
+    const remote = options.loadRemote
+      ? await options.loadRemote()
+      : await options.api.bootstrap().then((data) => ({
+        items: data?.[options.collection] || [],
+        revision: data?.revisions?.[options.collection],
+      }));
+    const remoteItems = clone(remote.items || []);
+    const remoteRevision = remote.revision;
     if (!Number.isInteger(remoteRevision)) throw new Error("The server did not return a revision.");
     const localItems = clone(options.getLocal());
     const records = buildRecords(options.collection, localItems, remoteItems);

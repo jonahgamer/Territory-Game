@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import { MIN_SIZE, MAX_SIZE } from "../shared/constants.js";
 import { mapMode, emptyCells } from "../shared/map-render.js";
@@ -13,7 +13,7 @@ let state = { maps: [], revisions: { maps: 0 }, newMode: "official" };
 
 async function run() {
   try {
-    const data = await loadBootstrap();
+    const data = await loadPage("page-maps");
     state.maps = data.maps;
     state.revisions = data.revisions;
     renderMode();
@@ -118,7 +118,7 @@ async function onCreateMap(event) {
   renderList_();
 
   try {
-    const data = await api.saveMaps(state.maps, state.revisions.maps);
+    const data = await api.saveMap(newMap, state.revisions.maps);
     state.revisions.maps = data.revision;
     showPageToast(`Map ${name} created.`, "ok");
     location.assign(`/admin/map-editor.html?map=${encodeURIComponent(newMap.id)}`);

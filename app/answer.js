@@ -1,5 +1,6 @@
 import { readStoredSession } from "../shared/session.js";
-import { api } from "../shared/api.js";
+import { api } from "../shared/api.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=page-data";
 import { noteServerTime } from "../shared/contest-time.js";
 import { createStatementView } from "../shared/statement.js";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
@@ -77,18 +78,10 @@ async function loadProblem() {
     return;
   }
   try {
-    const data = await api.bootstrap();
-    noteServerTime(data.serverNow);
-    contest = (data.contests || []).find((c) => c.id === contestId) || null;
-    openMapId = requestedMapId || contest?.mapId || "";
-    const map = contest && (data.maps || []).find((m) => m.id === openMapId);
-    const mapCell = map?.cells?.[cellIndex];
-    if (!contest || !map || mapCell?.kind !== "problem") {
-      showStatus("That problem is not available.");
-      form.hidden = true;
-      return;
-    }
-    const problem = (data.problems || []).find((p) => p.index === mapCell.problemNo && p.type === mapCell.type);
+    const data = await loadPage("page-answer", { contest: contestId, map: requestedMapId, cell: cellIndex });
+    contest = data.contest;
+    openMapId = data.mapId || requestedMapId || contest?.mapId || "";
+    const problem = data.problem;
     const difficulty = problem?.difficulty && DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
     const points = problemScore(problem);
     title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;

@@ -1,7 +1,7 @@
-import { requireContestant, getSession } from "../shared/session.js";
+import { requireContestant } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
+import { loadPage } from "../shared/data.js?v=page-data";
 import { formatContestTime } from "../shared/contest-time.js";
 import { el, renderList } from "../shared/dom.js";
 
@@ -15,21 +15,16 @@ async function run() {
   const errorEl = document.querySelector("#load-error");
   const listEl = document.querySelector("#student-contest-list");
   const emptyEl = document.querySelector("#student-empty");
-  const username = (getSession()?.user?.username || "").toLowerCase();
-
   try {
-    const data = await loadBootstrap();
-    const mine = data.contests.filter((c) =>
-      (c.teams || []).some((team) => (team.members || []).some((m) => m.toLowerCase() === username))
-    );
+    const data = await loadPage("page-student-contests");
+    const mine = data.contests || [];
     errorEl.hidden = true;
     emptyEl.hidden = mine.length > 0;
     emptyEl.textContent = "You are not on a team yet.";
     listEl.hidden = mine.length === 0;
 
     renderList(listEl, mine, (contest) => {
-      const ids = contest.mapIds?.length ? contest.mapIds : [contest.mapId];
-      const names = ids.map((id) => data.maps.find((m) => m.id === id)?.name).filter(Boolean);
+      const names = contest.mapNames || [];
       const item = el("li");
       const button = el("button", "open-problem");
       button.type = "button";

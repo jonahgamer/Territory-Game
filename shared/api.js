@@ -64,8 +64,31 @@ export async function login(username, password) {
   });
 }
 
+function authedGet(search) {
+  const session = getSession();
+  const headers = {};
+  if (session?.token) headers.Authorization = `Bearer ${session.token}`;
+  return request(`${API_BASE}?${search}`, { method: "GET", headers });
+}
+
 export const api = {
   bootstrap: () => apiCall("bootstrap"),
+  page: (action, params = {}) => {
+    const search = new URLSearchParams({ action });
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== "") search.set(key, String(value));
+    }
+    return authedGet(search);
+  },
+  saveMap: (map, revision) => apiCall("save-map", { map, revision }),
+  deleteMap: (mapId, revision) => apiCall("delete-map", { mapId, revision }),
+  saveProblem: (problem, revision) => apiCall("save-problem", { problem, revision }),
+  addProblems: (problems, revision) => apiCall("add-problems", { problems, revision }),
+  deleteProblems: (problems, revision) => apiCall("delete-problems", { problems, revision }),
+  moveProblem: (from, to, revision) => apiCall("move-problem", { from, to, revision }),
+  problemText: (items) => apiCall("page-problem-text", { items }),
+  saveContest: (contest, revision) => apiCall("save-contest", { contest, revision }),
+  deleteContest: (contestId, revision) => apiCall("delete-contest", { contestId, revision }),
   saveMaps: (maps, revision) => apiCall("save-maps", { maps, revision }),
   saveProblems: (problems, revision) => apiCall("save-problems", { problems, revision }),
   saveContests: (contests, revision) => apiCall("save-contests", { contests, revision }),

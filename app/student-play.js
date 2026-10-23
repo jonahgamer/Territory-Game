@@ -1,8 +1,8 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
@@ -74,10 +74,10 @@ const statement = createStatementView(document.querySelector("#student-problem-p
 // ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!contestId) throw new Error("No contest selected.");
-  const data = await loadBootstrap();
+  const data = await loadPage("page-play", { contest: contestId });
   state.maps = data.maps;
   state.problems = data.problems;
-  state.contest = data.contests.find((c) => c.id === contestId) || null;
+  state.contest = data.contest;
   if (!state.contest) throw new Error("Contest not found.");
   if (!teamForUser(state.contest)) throw new Error("You are not on a team in this contest.");
   bindEvents();

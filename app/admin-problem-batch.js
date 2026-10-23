@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, difficultyScore } from "../shared/difficulty.js";
@@ -12,7 +12,7 @@ import { typeInfo, difficultyScore } from "../shared/difficulty.js";
 const params = new URLSearchParams(location.search);
 const type = typeInfo(params.get("type")) ? params.get("type") : "math";
 
-const state = { problems: [], revisions: { problems: 0 }, rowCounter: 0 };
+const state = { problems: [], reserved: [], revisions: { problems: 0 }, rowCounter: 0 };
 
 const rowsEl = document.querySelector("#batch-rows");
 const titleEl = document.querySelector("#batch-title");
@@ -20,8 +20,9 @@ const errorEl = document.querySelector("#batch-error");
 const backEl = document.querySelector("#batch-back");
 
 async function run() {
-  const data = await loadBootstrap();
-  state.problems = data.problems;
+  const data = await loadPage("page-problem-keys");
+  state.problems = data.keys || [];
+  state.reserved = data.reserved || [];
   state.revisions = data.revisions;
   titleEl.textContent = `Batch add ${typeInfo(type).name} problems`;
   backEl.href = `/admin/problems.html?type=${encodeURIComponent(type)}`;
@@ -131,6 +132,7 @@ function maybeAppend() {
 function nextProblemNo(pType) {
   const used = new Set();
   for (const p of state.problems) if (p.type === pType) used.add(p.index);
+  for (const item of state.reserved) if (item.type === pType) used.add(item.index);
   for (let i = YEAR_INDEX_START; i <= YEAR_INDEX_END; i += 1) {
     if (!used.has(i)) return i;
   }
@@ -165,11 +167,8 @@ async function saveAll() {
 
   if (entries.length === 0) { showError("Add at least one problem."); return; }
 
-  for (const entry of entries) state.problems.push(entry);
-  state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-
   try {
-    const data = await api.saveProblems(state.problems, state.revisions.problems);
+    const data = await api.addProblems(entries, state.revisions.problems);
     state.revisions.problems = data.revision;
     showPageToast(`${entries.length} problem${entries.length === 1 ? "" : "s"} added.`, "ok");
     location.assign(`/admin/problems.html?type=${encodeURIComponent(type)}`);

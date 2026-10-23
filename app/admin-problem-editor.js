@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
@@ -33,8 +33,9 @@ const usageEl = document.querySelector("#problem-usage");
 
 // ── 状态 ─────────────────────────────────────────────────
 const state = {
-  problems: [],
-  maps: [],
+  keys: [],
+  reserved: [],
+  usage: { cells: 0, maps: 0 },
   revisions: { problems: 0, maps: 0 },
   draft: null,
   dirty: false,
@@ -48,12 +49,13 @@ form.appendChild(previewEl);
 // ── 函数 ─────────────────────────────────────────────────
 async function run() {
   if (!Number.isInteger(index) || !typeInfo(type)) throw new Error("Invalid problem link.");
-  const data = await loadBootstrap();
-  state.problems = data.problems;
-  state.maps = data.maps;
+  const data = await loadPage("page-problem", { type, index });
+  state.keys = data.keys || [];
+  state.reserved = data.reserved || [];
+  state.usage = data.usage || { cells: 0, maps: 0 };
   state.revisions = data.revisions;
 
-  const existing = state.problems.find((p) => p.index === index && p.type === type);
+  const existing = data.problem;
   state.draft = existing
     ? { ...existing, isNew: false }
     : { index, type, prompt: "", answer: "", solution: "", logic: "", difficulty: "normal", score: difficultyScore("normal"), isNew: true };
@@ -192,7 +194,7 @@ function commitIndex() {
   }
   if (next === state.draft.index) return;
   if (state.draft.isNew) {
-    if (state.problems.some((p) => p.index === next && p.type === state.draft.type)) {
+    if (state.keys.some((p) => p.index === next && p.type === state.draft.type)) {
       indexError.hidden = false;
       indexError.textContent = "That index already belongs to another problem.";
       indexInput.value = String(state.draft.index);
@@ -214,107 +216,75 @@ function commitIndex() {
 }
 
 function reindexProblem(oldIndex, newIndex) {
-  const moving = state.problems.find((p) => p.index === oldIndex && p.type === state.draft.type);
+  const typeName = state.draft.type;
+  const moving = state.keys.find((p) => p.index === oldIndex && p.type === typeName);
   if (!moving) return false;
-  const other = state.problems.find((p) => p.index === newIndex && p.type === moving.type);
-  if (other) {
-    if (!window.confirm(`Swap with ${problemTag(newIndex, other.type)}?`)) return false;
-    other.index = oldIndex;
-    moving.index = newIndex;
-    swapOnMaps(oldIndex, newIndex, moving.type);
-  } else {
-    moving.index = newIndex;
-    renameOnMaps(oldIndex, newIndex, moving.type);
-  }
-  state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-  persistProblems();
-  persistMaps();
+  const other = state.keys.find((p) => p.index === newIndex && p.type === typeName);
+  if (other && !window.confirm(`Swap with ${problemTag(newIndex, other.type)}?`)) return false;
+  moveProblem({ type: typeName, index: oldIndex }, { type: typeName, index: newIndex }).then((ok) => {
+    if (ok) return;
+    state.draft.index = oldIndex;
+    indexInput.value = String(oldIndex);
+    history.replaceState(null, "", `/admin/problem-editor.html?type=${encodeURIComponent(typeName)}&index=${oldIndex}${fromMap ? `&from=map&map=${encodeURIComponent(mapId)}` : ""}`);
+    render();
+  });
   return true;
-}
-
-function swapOnMaps(first, second, type) {
-  for (const map of state.maps) {
-    for (const cell of map.cells) {
-      if (cell.kind !== "problem" || cell.type !== type) continue;
-      if (cell.problemNo === first) cell.problemNo = second;
-      else if (cell.problemNo === second) cell.problemNo = first;
-    }
-  }
-}
-
-function renameOnMaps(oldIndex, newIndex, type) {
-  for (const map of state.maps) {
-    for (const cell of map.cells) {
-      if (cell.kind === "problem" && cell.type === type && cell.problemNo === oldIndex) cell.problemNo = newIndex;
-    }
-  }
 }
 
 function setType(nextType) {
   if (!typeInfo(nextType) || state.draft.type === nextType) return;
   const draft = state.draft;
   if (draft.isNew) {
-    if (state.problems.some((p) => p.index === draft.index && p.type === nextType)) {
+    if (state.keys.some((p) => p.index === draft.index && p.type === nextType)) {
       indexError.hidden = false;
       indexError.textContent = "That index already belongs to another problem of this type.";
       return;
     }
     draft.type = nextType;
   } else {
-    const problem = state.problems.find((p) => p.index === draft.index && p.type === draft.type);
+    const problem = state.keys.find((p) => p.index === draft.index && p.type === draft.type);
     if (!problem) return;
-    const other = state.problems.find((p) => p.index === problem.index && p.type === nextType);
-    if (other) {
-      if (!window.confirm(`Swap types with ${problemTag(other.index, other.type)}?`)) return;
-      const oldType = problem.type;
-      problem.type = nextType;
-      other.type = oldType;
-      swapTypesOnMaps(problem.index, oldType, nextType);
-    } else {
-      const oldType = problem.type;
-      problem.type = nextType;
-      renameTypeOnMaps(problem.index, oldType, nextType);
-    }
+    const other = state.keys.find((p) => p.index === problem.index && p.type === nextType);
+    if (other && !window.confirm(`Swap types with ${problemTag(other.index, other.type)}?`)) return;
+    const oldType = problem.type;
+    const keptIndex = problem.index;
+    moveProblem({ type: oldType, index: keptIndex }, { type: nextType, index: keptIndex }).then((ok) => {
+      if (ok) return;
+      draft.type = oldType;
+      history.replaceState(null, "", `/admin/problem-editor.html?type=${encodeURIComponent(oldType)}&index=${keptIndex}${fromMap ? `&from=map&map=${encodeURIComponent(mapId)}` : ""}`);
+      render();
+    });
     draft.type = nextType;
-    state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-    persistProblems();
-    persistMaps();
   }
   state.dirty = true;
   history.replaceState(null, "", `/admin/problem-editor.html?type=${encodeURIComponent(draft.type)}&index=${draft.index}${fromMap ? `&from=map&map=${encodeURIComponent(mapId)}` : ""}`);
   render();
 }
 
-function swapTypesOnMaps(index, first, second) {
-  for (const map of state.maps) {
-    for (const cell of map.cells) {
-      if (cell.kind !== "problem" || cell.problemNo !== index) continue;
-      if (cell.type === first) cell.type = second;
-      else if (cell.type === second) cell.type = first;
+async function moveProblem(from, to) {
+  try {
+    const data = await api.moveProblem(from, to, state.revisions.problems);
+    state.revisions.problems = data.revision;
+    const moving = state.keys.find((p) => p.type === from.type && p.index === from.index);
+    const other = state.keys.find((p) => p.type === to.type && p.index === to.index);
+    if (moving && other && other !== moving) {
+      moving.type = to.type;
+      moving.index = to.index;
+      other.type = from.type;
+      other.index = from.index;
+    } else if (moving) {
+      moving.type = to.type;
+      moving.index = to.index;
     }
+    return true;
+  } catch (err) {
+    showPageToast(err.message || "Could not move that problem.", "warn");
+    return false;
   }
 }
 
-function renameTypeOnMaps(index, oldType, newType) {
-  for (const map of state.maps) {
-    for (const cell of map.cells) {
-      if (cell.kind === "problem" && cell.problemNo === index && cell.type === oldType) cell.type = newType;
-    }
-  }
-}
-
-function problemUsage(index, type) {
-  let cells = 0;
-  const mapIds = new Set();
-  for (const map of state.maps) {
-    for (const c of map.cells || []) {
-      if (c.kind === "problem" && c.problemNo === index && c.type === type) {
-        cells += 1;
-        mapIds.add(map.id);
-      }
-    }
-  }
-  return { cells, maps: mapIds.size };
+function problemUsage() {
+  return state.usage || { cells: 0, maps: 0 };
 }
 
 function updateSaveState() {
@@ -386,75 +356,50 @@ async function save() {
   }
   saveError.hidden = true;
 
-  let problem = state.problems.find((p) => p.index === draft.index && p.type === draft.type);
-  if (!problem) {
-    problem = { index: draft.index, type: draft.type, prompt, answer, solution, logic, difficulty: draft.difficulty, score };
-    state.problems.push(problem);
-    state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-  } else {
-    problem.prompt = prompt;
-    problem.answer = answer;
-    problem.solution = solution;
-    problem.logic = logic;
-    problem.difficulty = draft.difficulty;
-    problem.score = score;
-  }
+  const problem = {
+    index: draft.index,
+    type: draft.type,
+    prompt,
+    answer,
+    solution,
+    logic,
+    difficulty: draft.difficulty,
+    score,
+  };
   draft.isNew = false;
   state.dirty = false;
   updateSaveState();
-
-  const ok = await persistProblems();
-  if (ok) showPageToast("Problem saved.", "ok");
-}
-
-async function persistProblems() {
-  try {
-    const data = await api.saveProblems(state.problems, state.revisions.problems);
-    state.revisions.problems = data.revision;
-    return true;
-  } catch (err) {
-    showPageToast(err.message || "Could not save problems.", "warn");
-    state.dirty = true;
-    updateSaveState();
-    return false;
+  if (!state.keys.some((p) => p.index === problem.index && p.type === problem.type)) {
+    state.keys.push({ index: problem.index, type: problem.type });
   }
-}
 
-async function persistMaps() {
   try {
-    const data = await api.saveMaps(state.maps, state.revisions.maps);
-    state.revisions.maps = data.revision;
-    return true;
+    const data = await api.saveProblem(problem, state.revisions.problems);
+    state.revisions.problems = data.revision;
+    showPageToast("Problem saved.", "ok");
   } catch (err) {
-    showPageToast(err.message || "Could not save maps.", "warn");
-    return false;
+    showPageToast(err.message || "Could not save the problem.", "warn");
+    state.dirty = true;
+    draft.isNew = !state.keys.some((p) => p.index === draft.index && p.type === draft.type);
+    updateSaveState();
   }
 }
 
 function deleteProblem() {
   const draft = state.draft;
   if (!draft) return;
-  if (draft.isNew && !state.problems.some((p) => p.index === draft.index && p.type === draft.type)) {
-    location.assign(fromMap && mapId
-      ? `/admin/map-editor.html?map=${encodeURIComponent(mapId)}`
-      : `/admin/problems.html?type=${encodeURIComponent(draft.type)}`);
+  const back = fromMap && mapId
+    ? `/admin/map-editor.html?map=${encodeURIComponent(mapId)}`
+    : `/admin/problems.html?type=${encodeURIComponent(draft.type)}`;
+  if (draft.isNew && !state.keys.some((p) => p.index === draft.index && p.type === draft.type)) {
+    location.assign(back);
     return;
   }
   const tag = problemTag(draft.index, draft.type);
   if (!window.confirm(`Delete ${tag}?`)) return;
-  state.problems = state.problems.filter((p) => !(p.index === draft.index && p.type === draft.type));
-  for (const map of state.maps) {
-    map.cells.forEach((cell, i) => {
-      if (cell.kind === "problem" && cell.problemNo === draft.index && cell.type === draft.type) {
-        map.cells[i] = { kind: "empty" };
-      }
-    });
-  }
-  persistProblems().then(() => persistMaps()).then(() => {
-    location.assign(fromMap && mapId
-      ? `/admin/map-editor.html?map=${encodeURIComponent(mapId)}`
-      : `/admin/problems.html?type=${encodeURIComponent(draft.type)}`);
-  });
+  api.deleteProblems([{ type: draft.type, index: draft.index }], state.revisions.problems).then(() => {
+    location.assign(back);
+  }).catch((err) => showPageToast(err.message || "Could not delete the problem.", "warn"));
 }
 
 async function duplicateProblem() {
@@ -466,20 +411,29 @@ async function duplicateProblem() {
   }
   const nextIndex = nextProblemNo(draft.type);
   if (nextIndex === null) { showPageToast("No free index.", "warn"); return; }
-  const copy = { ...state.problems.find((p) => p.index === draft.index && p.type === draft.type) };
-  copy.index = nextIndex;
-  state.problems.push(copy);
-  state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-  await persistProblems();
+  const copy = {
+    index: nextIndex,
+    type: draft.type,
+    prompt: draft.prompt,
+    answer: draft.answer,
+    solution: draft.solution,
+    logic: draft.logic,
+    difficulty: draft.difficulty,
+    score: draft.score,
+  };
+  try {
+    await api.saveProblem(copy, state.revisions.problems);
+  } catch (err) {
+    showPageToast(err.message || "Could not duplicate the problem.", "warn");
+    return;
+  }
   location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(copy.type)}&index=${nextIndex}`);
 }
 
 function nextProblemNo(pType) {
   const used = new Set();
-  for (const p of state.problems) if (p.type === pType) used.add(p.index);
-  for (const map of state.maps) for (const c of map.cells || []) {
-    if (c?.kind === "problem" && c.type === pType) used.add(c.problemNo);
-  }
+  for (const p of state.keys) if (p.type === pType) used.add(p.index);
+  for (const item of state.reserved) if (item.type === pType) used.add(item.index);
   for (let i = 26000; i <= 26999; i += 1) {
     if (!used.has(i)) return i;
   }

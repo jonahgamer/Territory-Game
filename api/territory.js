@@ -601,6 +601,51 @@ function isRandomSpawn(contest) {
   return contest?.spawnMode === 'random';
 }
 
+function contestStoredUpdate(contest, stored) {
+  const sameMap = stored && contestMapIds(stored).slice().sort().join('\0') === contest.mapIds.slice().sort().join('\0');
+  const update = {
+    name: contest.name,
+    mapId: contest.mapId,
+    mapIds: contest.mapIds,
+    teleports: contest.teleports,
+    startAt: contest.startAt,
+    durationMinutes: contest.durationMinutes,
+    spawnMinutes: contest.spawnMinutes,
+    readyMinutes: contest.readyMinutes,
+    mode: contest.mode === 'testing' ? 'testing' : 'competition',
+    spawnMode: contest.spawnMode === 'random' ? 'random' : 'choose',
+    energyRegen: contest.energyRegen,
+    energyRegenSeconds: contest.energyRegenSeconds,
+    energyAttemptCost: contest.energyAttemptCost,
+    energyAttemptMin: contest.energyAttemptMin,
+    energySolveBelow: contest.energySolveBelow,
+    energySolve: contest.energySolve,
+    updatedAt: new Date(),
+  };
+  const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
+  const sameSpawnMode = stored && isRandomSpawn(stored) === (contest.spawnMode === 'random');
+  if (!stored) {
+    update.teams = [];
+    update.contestantIds = [];
+    update.spawnChoices = [];
+    update.spawnVotes = [];
+    update.spawns = [];
+    update.claims = [];
+    update.spawnResolved = false;
+    update.resolvedTeams = [];
+    update.energy = [];
+  } else if (!sameMap || !sameMode || !sameSpawnMode) {
+    update.spawnChoices = [];
+    update.spawnVotes = [];
+    update.spawns = [];
+    update.claims = [];
+    update.spawnResolved = false;
+    update.resolvedTeams = [];
+    update.energy = [];
+  }
+  return update;
+}
+
 function contestWindow(contest) {
   if (!contest || !Number.isInteger(contest.startAt)) return null;
   if (contest.startAt < MIN_START_AT || contest.startAt > MAX_START_AT) return null;
@@ -950,50 +995,9 @@ async function handleSaveContests(req, res, db, user, body) {
       await col.deleteMany({ id: { $nin: keepIds } }, { session });
       for (const contest of parsed.items) {
         const stored = previous.get(contest.id);
-        const sameMap = stored && contestMapIds(stored).slice().sort().join("\0") === contest.mapIds.slice().sort().join("\0");
-        const update = {
-          name: contest.name,
-          mapId: contest.mapId,
-          mapIds: contest.mapIds,
-          teleports: contest.teleports,
-          startAt: contest.startAt,
-          durationMinutes: contest.durationMinutes,
-          spawnMinutes: contest.spawnMinutes,
-          readyMinutes: contest.readyMinutes,
-          mode: contest.mode === 'testing' ? 'testing' : 'competition',
-          spawnMode: contest.spawnMode === 'random' ? 'random' : 'choose',
-          energyRegen: contest.energyRegen,
-          energyRegenSeconds: contest.energyRegenSeconds,
-          energyAttemptCost: contest.energyAttemptCost,
-          energyAttemptMin: contest.energyAttemptMin,
-          energySolveBelow: contest.energySolveBelow,
-          energySolve: contest.energySolve,
-          updatedAt: new Date(),
-        };
-        const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
-        const sameSpawnMode = stored && isRandomSpawn(stored) === (contest.spawnMode === 'random');
-        if (!stored) {
-          update.teams = [];
-          update.contestantIds = [];
-          update.spawnChoices = [];
-          update.spawnVotes = [];
-          update.spawns = [];
-          update.claims = [];
-          update.spawnResolved = false;
-          update.resolvedTeams = [];
-          update.energy = [];
-        } else if (!sameMap || !sameMode || !sameSpawnMode) {
-          update.spawnChoices = [];
-          update.spawnVotes = [];
-          update.spawns = [];
-          update.claims = [];
-          update.spawnResolved = false;
-          update.resolvedTeams = [];
-          update.energy = [];
-        }
         await col.updateOne(
           { id: contest.id },
-          { $set: update },
+          { $set: contestStoredUpdate(contest, stored) },
           { upsert: true, session }
         );
       }
@@ -1888,6 +1892,653 @@ async function handlePublicCheck(req, res, db, body) {
   });
 }
 
+function withSchedule(contest, view) {
+  return {
+    ...view,
+    startAt: Number.isInteger(contest.startAt) ? contest.startAt : null,
+    durationMinutes: Number.isInteger(contest.durationMinutes) ? contest.durationMinutes : null,
+    spawnMinutes: Number.isInteger(contest.spawnMinutes) ? contest.spawnMinutes : null,
+    readyMinutes: Number.isInteger(contest.readyMinutes) ? contest.readyMinutes : null,
+  };
+}
+
+function pageUser(user) {
+  return { username: user.username, role: user.role, displayName: user.displayName, pfp: user.pfp || '' };
+}
+
+async function pageRevisions(db) {
+  const docs = await db.collection('meta').find({ _id: { $in: ['maps', 'problems', 'contests'] } }).toArray();
+  const revisions = { maps: 0, problems: 0, contests: 0 };
+  for (const doc of docs) {
+    if (doc && revisions[doc._id] !== undefined && Number.isInteger(doc.revision)) revisions[doc._id] = doc.revision;
+  }
+  return revisions;
+}
+
+function pageMap(map, withCells) {
+  const cells = Array.isArray(map?.cells) ? map.cells : [];
+  const view = {
+    id: map.id,
+    name: map.name,
+    cols: map.cols,
+    rows: map.rows,
+    mode: map.mode === 'testing' ? 'testing' : 'official',
+    spawnPoints: cells.filter((cell) => cell?.kind === 'spawnpoint').length,
+  };
+  if (!withCells) return view;
+  view.cells = cells;
+  view.backdrop = map.backdrop === 'photo' && typeof map.photo === 'string' && map.photo ? 'photo' : 'terrain';
+  view.photo = view.backdrop === 'photo' ? map.photo : '';
+  return view;
+}
+
+function pageProblem(problem, admin) {
+  const view = {
+    index: problem.index,
+    type: problem.type,
+    prompt: problem.prompt,
+    difficulty: DIFFICULTIES.includes(problem.difficulty) ? problem.difficulty : 'normal',
+    score: problemScore(problem),
+  };
+  if (admin) {
+    view.answer = problem.answer;
+    view.solution = typeof problem.solution === 'string' ? problem.solution : '';
+    view.logic = typeof problem.logic === 'string' ? problem.logic : '';
+  }
+  return view;
+}
+
+function problemStub(problem) {
+  return {
+    index: problem.index,
+    type: problem.type,
+    difficulty: DIFFICULTIES.includes(problem.difficulty) ? problem.difficulty : 'normal',
+    score: problemScore(problem),
+  };
+}
+
+function problemIdentity(type, index) {
+  return `${type}:${index}`;
+}
+
+async function mapCellIndex(db, session) {
+  const options = session ? { session } : {};
+  const maps = await db.collection('maps').find({}, { ...options, projection: { id: 1, cells: 1 } }).toArray();
+  const usage = {};
+  const reserved = [];
+  const seen = new Set();
+  for (const map of maps) {
+    const onMap = new Set();
+    for (const cell of map.cells || []) {
+      if (cell?.kind !== 'problem' || !PROBLEM_TYPES.includes(cell.type) || !Number.isInteger(cell.problemNo)) continue;
+      const key = problemIdentity(cell.type, cell.problemNo);
+      if (!usage[key]) usage[key] = { cells: 0, maps: 0 };
+      usage[key].cells += 1;
+      if (!onMap.has(key)) {
+        onMap.add(key);
+        usage[key].maps += 1;
+      }
+      if (!seen.has(key)) {
+        seen.add(key);
+        reserved.push({ type: cell.type, index: cell.problemNo });
+      }
+    }
+  }
+  return { usage, reserved };
+}
+
+async function clearProblemCells(db, keys, session) {
+  const maps = await db.collection('maps').find({}, { session }).toArray();
+  let changed = false;
+  for (const map of maps) {
+    let dirty = false;
+    const cells = (map.cells || []).map((cell) => {
+      if (cell?.kind === 'problem' && keys.has(problemIdentity(cell.type, cell.problemNo))) {
+        dirty = true;
+        return { kind: 'empty' };
+      }
+      return cell;
+    });
+    if (!dirty) continue;
+    changed = true;
+    await db.collection('maps').updateOne({ id: map.id }, { $set: { cells, updatedAt: new Date() } }, { session });
+  }
+  return changed;
+}
+
+function retargetCell(cell, from, to, swap) {
+  if (cell?.kind !== 'problem') return cell;
+  const key = problemIdentity(cell.type, cell.problemNo);
+  const fromKey = problemIdentity(from.type, from.index);
+  const toKey = problemIdentity(to.type, to.index);
+  if (key === fromKey) return { ...cell, type: to.type, problemNo: to.index };
+  if (swap && key === toKey) return { ...cell, type: from.type, problemNo: from.index };
+  return cell;
+}
+
+async function findStoredProblem(col, type, index, session) {
+  const options = session ? { session } : {};
+  return col.findOne({ $or: [{ id: problemIdentity(type, index) }, { type, index }] }, options);
+}
+
+function revisionError(res, err) {
+  if (err instanceof SaveConflictError) {
+    return res.status(409).json({ success: false, message: err.message, conflict: true });
+  }
+  throw err;
+}
+
+async function handlePageMaps(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const maps = await db.collection('maps').find({}, { projection: { photo: 0 } }).toArray();
+  const revisions = await pageRevisions(db);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    maps: maps.map((map) => pageMap(map, true)),
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageMap(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const mapId = String(req.query.map || req.query.id || '').trim();
+  if (!mapId) return res.status(400).json({ success: false, message: 'Missing map' });
+  const map = await db.collection('maps').findOne({ id: mapId });
+  if (!map) return res.status(404).json({ success: false, message: 'That map was not found.' });
+  const [problems, cellIndex, revisions] = await Promise.all([
+    db.collection('problems').find({}, { projection: { index: 1, type: 1, difficulty: 1, score: 1 } }).toArray(),
+    mapCellIndex(db),
+    pageRevisions(db),
+  ]);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    map: pageMap(map, true),
+    problems: problems.map(problemStub),
+    reserved: cellIndex.reserved,
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handleSaveMap(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const map = normalizeMap(body.map);
+  if (!map) return res.status(400).json({ success: false, message: 'That map is not valid.' });
+  if (map.mode !== 'testing' && map.cells.some((cell) => cell.kind === 'problem' && cell.type === 'testing')) {
+    return res.status(400).json({ success: false, message: 'Testing problems can only be placed on a testing map.' });
+  }
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'maps', session);
+      assertRevision(current, body.revision);
+      await db.collection('maps').updateOne(
+        { id: map.id },
+        { $set: { ...map, updatedAt: new Date() } },
+        { upsert: true, session }
+      );
+      revision = await bumpRevision(db, 'maps', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handleDeleteMap(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const mapId = String(body.mapId || '').trim();
+  if (!mapId) return res.status(400).json({ success: false, message: 'Missing map' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'maps', session);
+      assertRevision(current, body.revision);
+      await db.collection('maps').deleteOne({ id: mapId }, { session });
+      revision = await bumpRevision(db, 'maps', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handlePageProblems(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const [problems, index, revisions] = await Promise.all([
+    db.collection('problems').find({}).toArray(),
+    mapCellIndex(db),
+    pageRevisions(db),
+  ]);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    problems: problems.map((problem) => pageProblem(problem, true)),
+    usage: index.usage,
+    reserved: index.reserved,
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageProblem(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const type = String(req.query.type || '');
+  const index = Number(req.query.index);
+  if (!PROBLEM_TYPES.includes(type) || !Number.isInteger(index)) {
+    return res.status(400).json({ success: false, message: 'Invalid problem link.' });
+  }
+  const [problem, keys, cellIndex, revisions] = await Promise.all([
+    findStoredProblem(db.collection('problems'), type, index),
+    db.collection('problems').find({}, { projection: { index: 1, type: 1 } }).toArray(),
+    mapCellIndex(db),
+    pageRevisions(db),
+  ]);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    problem: problem ? pageProblem(problem, true) : null,
+    keys: keys.filter((item) => PROBLEM_TYPES.includes(item.type) && Number.isInteger(item.index)).map((item) => ({ type: item.type, index: item.index })),
+    reserved: cellIndex.reserved,
+    usage: cellIndex.usage[problemIdentity(type, index)] || { cells: 0, maps: 0 },
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageProblemKeys(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const [keys, cellIndex, revisions] = await Promise.all([
+    db.collection('problems').find({}, { projection: { index: 1, type: 1 } }).toArray(),
+    mapCellIndex(db),
+    pageRevisions(db),
+  ]);
+  return res.status(200).json({
+    success: true,
+    keys: keys.filter((item) => PROBLEM_TYPES.includes(item.type) && Number.isInteger(item.index)).map((item) => ({ type: item.type, index: item.index })),
+    reserved: cellIndex.reserved,
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageProblemText(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const items = Array.isArray(body.items) ? body.items.slice(0, 500) : [];
+  const wanted = items.filter((item) => PROBLEM_TYPES.includes(item?.type) && Number.isInteger(item?.index));
+  if (!wanted.length) return res.status(400).json({ success: false, message: 'No problems were requested.' });
+  const problems = await db.collection('problems').find({
+    $or: wanted.map((item) => ({ type: item.type, index: item.index })),
+  }, { projection: { index: 1, type: 1, prompt: 1 } }).toArray();
+  return res.status(200).json({
+    success: true,
+    problems: problems.map((problem) => ({ index: problem.index, type: problem.type, prompt: problem.prompt || '' })),
+    serverNow: Date.now(),
+  });
+}
+
+async function handleSaveProblem(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const problem = normalizeProblem(body.problem);
+  if (!problem) return res.status(400).json({ success: false, message: 'That problem is not valid.' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      const id = problemIdentity(problem.type, problem.index);
+      const existing = await findStoredProblem(db.collection('problems'), problem.type, problem.index, session);
+      if (existing) {
+        await db.collection('problems').updateOne({ _id: existing._id }, { $set: { ...problem, id, updatedAt: new Date() } }, { session });
+      } else {
+        await db.collection('problems').insertOne({ ...problem, id, updatedAt: new Date() }, { session });
+      }
+      revision = await bumpRevision(db, 'problems', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handleAddProblems(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const parsed = collectUnique(body.problems, normalizeProblem, (problem) => problemIdentity(problem.type, problem.index), 'Problems');
+  if (parsed.error) return res.status(400).json({ success: false, message: parsed.error });
+  if (!parsed.items.length) return res.status(400).json({ success: false, message: 'Add at least one problem.' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      for (const problem of parsed.items) {
+        const existing = await findStoredProblem(db.collection('problems'), problem.type, problem.index, session);
+        if (existing) throw new Error(`Problem ${problem.type} ${problem.index} already exists.`);
+      }
+      const now = new Date();
+      await db.collection('problems').insertMany(parsed.items.map((problem) => ({
+        ...problem,
+        id: problemIdentity(problem.type, problem.index),
+        updatedAt: now,
+      })), { session });
+      revision = await bumpRevision(db, 'problems', session);
+    });
+  } catch (err) {
+    if (err instanceof SaveConflictError) return revisionError(res, err);
+    return res.status(400).json({ success: false, message: err.message || 'Could not add problems.' });
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision, count: parsed.items.length });
+}
+
+async function handleDeleteProblems(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const items = (Array.isArray(body.problems) ? body.problems : [body]).filter((item) => PROBLEM_TYPES.includes(item?.type) && Number.isInteger(item?.index));
+  if (!items.length) return res.status(400).json({ success: false, message: 'Missing problem' });
+  const keys = new Set(items.map((item) => problemIdentity(item.type, item.index)));
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      await db.collection('problems').deleteMany({ $or: items.map((item) => ({ type: item.type, index: item.index })) }, { session });
+      const mapsChanged = await clearProblemCells(db, keys, session);
+      revision = await bumpRevision(db, 'problems', session);
+      if (mapsChanged) await bumpRevision(db, 'maps', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handleMoveProblem(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const from = body.from;
+  const to = body.to;
+  if (!PROBLEM_TYPES.includes(from?.type) || !Number.isInteger(from?.index) || !PROBLEM_TYPES.includes(to?.type) || !Number.isInteger(to?.index)) {
+    return res.status(400).json({ success: false, message: 'That problem move is not valid.' });
+  }
+  if (from.type === to.type && from.index === to.index) {
+    const revisions = await pageRevisions(db);
+    return res.status(200).json({ success: true, revision: revisions.problems });
+  }
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      const col = db.collection('problems');
+      const source = await findStoredProblem(col, from.type, from.index, session);
+      if (!source) throw new Error('That problem was not found.');
+      const dest = await findStoredProblem(col, to.type, to.index, session);
+      const fromId = problemIdentity(from.type, from.index);
+      const toId = problemIdentity(to.type, to.index);
+      if (dest && String(dest._id) !== String(source._id)) {
+        await col.updateOne({ _id: dest._id }, { $set: { id: `swap-${dest._id}` } }, { session });
+        await col.updateOne({ _id: source._id }, { $set: { id: toId, type: to.type, index: to.index, updatedAt: new Date() } }, { session });
+        await col.updateOne({ _id: dest._id }, { $set: { id: fromId, type: from.type, index: from.index, updatedAt: new Date() } }, { session });
+      } else {
+        await col.updateOne({ _id: source._id }, { $set: { id: toId, type: to.type, index: to.index, updatedAt: new Date() } }, { session });
+      }
+      const maps = await db.collection('maps').find({}, { session }).toArray();
+      let mapsChanged = false;
+      for (const map of maps) {
+        let dirty = false;
+        const cells = (map.cells || []).map((cell) => {
+          const next = retargetCell(cell, from, to, Boolean(dest));
+          if (next !== cell) dirty = true;
+          return next;
+        });
+        if (!dirty) continue;
+        mapsChanged = true;
+        await db.collection('maps').updateOne({ id: map.id }, { $set: { cells, updatedAt: new Date() } }, { session });
+      }
+      revision = await bumpRevision(db, 'problems', session);
+      if (mapsChanged) await bumpRevision(db, 'maps', session);
+    });
+  } catch (err) {
+    if (err instanceof SaveConflictError) return revisionError(res, err);
+    return res.status(400).json({ success: false, message: err.message || 'Could not move that problem.' });
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handlePageContests(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const [contests, maps, revisions] = await Promise.all([
+    db.collection('contests').find({}).toArray(),
+    db.collection('maps').find({}, { projection: { id: 1, name: 1, cols: 1, rows: 1, mode: 1, cells: 1 } }).toArray(),
+    pageRevisions(db),
+  ]);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    contests: contests.map((contest) => ({
+      id: contest.id,
+      name: contest.name,
+      mapId: contest.mapId,
+      mapIds: contestMapIds(contest),
+      startAt: Number.isInteger(contest.startAt) ? contest.startAt : null,
+      durationMinutes: Number.isInteger(contest.durationMinutes) ? contest.durationMinutes : null,
+      spawnMinutes: Number.isInteger(contest.spawnMinutes) ? contest.spawnMinutes : null,
+      readyMinutes: Number.isInteger(contest.readyMinutes) ? contest.readyMinutes : null,
+      mode: contest.mode === 'testing' ? 'testing' : 'competition',
+      spawnMode: contest.spawnMode === 'random' ? 'random' : 'choose',
+    })),
+    maps: maps.map((map) => pageMap(map, false)),
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handleSaveContest(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contest = normalizeContest(body.contest);
+  if (!contest) return res.status(400).json({ success: false, message: 'That contest is not valid.' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'contests', session);
+      assertRevision(current, body.revision);
+      const stored = await db.collection('contests').findOne({ id: contest.id }, { session });
+      await db.collection('contests').updateOne(
+        { id: contest.id },
+        { $set: contestStoredUpdate(contest, stored) },
+        { upsert: true, session }
+      );
+      revision = await bumpRevision(db, 'contests', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function handleDeleteContest(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contestId = String(body.contestId || '').trim();
+  if (!contestId) return res.status(400).json({ success: false, message: 'Missing contest' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'contests', session);
+      assertRevision(current, body.revision);
+      await db.collection('contests').deleteOne({ id: contestId }, { session });
+      revision = await bumpRevision(db, 'contests', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
+async function problemsOnMaps(db, maps) {
+  const wanted = [];
+  const seen = new Set();
+  for (const map of maps) {
+    for (const cell of map.cells || []) {
+      if (cell?.kind !== 'problem' || !PROBLEM_TYPES.includes(cell.type) || !Number.isInteger(cell.problemNo)) continue;
+      const key = problemIdentity(cell.type, cell.problemNo);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      wanted.push({ type: cell.type, index: cell.problemNo });
+    }
+  }
+  if (!wanted.length) return [];
+  return db.collection('problems').find({ $or: wanted }).toArray();
+}
+
+async function handlePageContest(req, res, db, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const contestId = String(req.query.id || req.query.contest || '').trim();
+  if (!contestId) return res.status(400).json({ success: false, message: 'Missing contest' });
+  const col = db.collection('contests');
+  let contest = await col.findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found.' });
+  const ids = contestMapIds(contest);
+  const [catalogDocs, boardDocs, revisions] = await Promise.all([
+    db.collection('maps').find({}, { projection: { id: 1, name: 1, cols: 1, rows: 1, mode: 1, cells: 1 } }).toArray(),
+    db.collection('maps').find({ id: { $in: ids } }).toArray(),
+    pageRevisions(db),
+  ]);
+  const idSet = new Set(ids);
+  contest = await maybeResolveSpawns(db, contest, catalogDocs.filter((map) => idSet.has(map.id)), Date.now());
+  const maps = boardDocs.filter((map) => new Set(contestMapIds(contest)).has(map.id));
+  const problems = await problemsOnMaps(db, maps);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    contest: {
+      ...withSchedule(contest, contestPayload(contest, maps, problems, user).contest),
+      contestantIds: Array.isArray(contest.contestantIds) ? contest.contestantIds : [],
+    },
+    maps: maps.map((map) => pageMap(map, true)),
+    catalog: catalogDocs.map((map) => pageMap(map, false)),
+    problems: problems.map(problemStub),
+    revisions,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePagePlay(req, res, db, user) {
+  const contestId = String(req.query.contest || req.query.id || '').trim();
+  if (!contestId) return res.status(400).json({ success: false, message: 'Missing contest' });
+  let contest = await db.collection('contests').findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found.' });
+  if (!isAdmin(user) && !teamForUser(contest, user.username)) {
+    return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
+  }
+  let maps = await loadContestMaps(db, contest);
+  contest = await maybeResolveSpawns(db, contest, maps, Date.now());
+  maps = await loadContestMaps(db, contest);
+  const storedProblems = await problemsOnMaps(db, maps);
+  const admin = isAdmin(user);
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    contest: withSchedule(contest, contestPayload(contest, maps, storedProblems, user).contest),
+    maps: maps.map((map) => pageMap(map, true)),
+    problems: storedProblems.map((problem) => pageProblem(problem, admin)),
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageStudentContests(req, res, db, user) {
+  const contests = await db.collection('contests').find({}).toArray();
+  const mine = isAdmin(user) ? contests : contests.filter((contest) => teamForUser(contest, user.username));
+  const mapIds = [...new Set(mine.flatMap((contest) => contestMapIds(contest)))];
+  const maps = mapIds.length
+    ? await db.collection('maps').find({ id: { $in: mapIds } }, { projection: { id: 1, name: 1 } }).toArray()
+    : [];
+  const names = new Map(maps.map((map) => [map.id, map.name]));
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    contests: mine.map((contest) => ({
+      id: contest.id,
+      name: contest.name,
+      mapId: contest.mapId,
+      mapIds: contestMapIds(contest),
+      mapNames: contestMapIds(contest).map((id) => names.get(id)).filter(Boolean),
+      startAt: Number.isInteger(contest.startAt) ? contest.startAt : null,
+      teams: cleanTeams(contest.teams).filter((team) => isAdmin(user) || team.members.some((member) => sameName(member, user.username))),
+    })),
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageAnswer(req, res, db, user) {
+  const contestId = String(req.query.contest || '').trim();
+  const cell = Number(req.query.cell);
+  if (!contestId || !Number.isInteger(cell) || cell < 0) {
+    return res.status(400).json({ success: false, message: 'This problem link is not valid.' });
+  }
+  const contest = await db.collection('contests').findOne({ id: contestId });
+  if (!contest) return res.status(404).json({ success: false, message: 'Contest not found.' });
+  if (!isAdmin(user) && !teamForUser(contest, user.username)) {
+    return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
+  }
+  const maps = await loadContestMaps(db, contest);
+  const requested = String(req.query.map || '');
+  const mapId = contestMapIds(contest).includes(requested) ? requested : primaryMapId(contest);
+  const map = maps.find((item) => item.id === mapId) || null;
+  const mapCell = map?.cells?.[cell];
+  if (!map || mapCell?.kind !== 'problem') {
+    return res.status(404).json({ success: false, message: 'That problem is not available.' });
+  }
+  const stored = await db.collection('problems').findOne({ type: mapCell.type, index: mapCell.problemNo });
+  const problem = stored ? pageProblem(stored, false) : {
+    index: mapCell.problemNo,
+    type: mapCell.type,
+    prompt: '',
+    difficulty: 'normal',
+    score: problemScore(null),
+  };
+  return res.status(200).json({
+    success: true,
+    contest: withSchedule(contest, contestPayload(contest, maps, stored ? [stored] : [], user).contest),
+    mapId,
+    problem,
+    serverNow: Date.now(),
+  });
+}
+
+async function handlePageCredits(req, res, db, user) {
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    versions: await listVersions(db),
+    serverNow: Date.now(),
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   applyCors(req, res);
@@ -1956,6 +2607,26 @@ export default async function handler(req, res) {
   try {
     switch (action) {
       case 'bootstrap':     return await handleBootstrap(req, res, db, user);
+      case 'page-maps':     return await handlePageMaps(req, res, db, user);
+      case 'page-map':      return await handlePageMap(req, res, db, user);
+      case 'save-map':      return await handleSaveMap(req, res, db, user, body);
+      case 'delete-map':    return await handleDeleteMap(req, res, db, user, body);
+      case 'page-problems': return await handlePageProblems(req, res, db, user);
+      case 'page-problem':  return await handlePageProblem(req, res, db, user);
+      case 'page-problem-keys': return await handlePageProblemKeys(req, res, db, user);
+      case 'page-problem-text': return await handlePageProblemText(req, res, db, user, body);
+      case 'save-problem':  return await handleSaveProblem(req, res, db, user, body);
+      case 'add-problems':  return await handleAddProblems(req, res, db, user, body);
+      case 'delete-problems': return await handleDeleteProblems(req, res, db, user, body);
+      case 'move-problem':  return await handleMoveProblem(req, res, db, user, body);
+      case 'page-contests': return await handlePageContests(req, res, db, user);
+      case 'page-contest':  return await handlePageContest(req, res, db, user);
+      case 'save-contest':  return await handleSaveContest(req, res, db, user, body);
+      case 'delete-contest': return await handleDeleteContest(req, res, db, user, body);
+      case 'page-play':     return await handlePagePlay(req, res, db, user);
+      case 'page-student-contests': return await handlePageStudentContests(req, res, db, user);
+      case 'page-answer':   return await handlePageAnswer(req, res, db, user);
+      case 'page-credits':  return await handlePageCredits(req, res, db, user);
       case 'save-maps':     return await handleSaveMaps(req, res, db, user, body);
       case 'save-problems': return await handleSaveProblems(req, res, db, user, body);
       case 'test-problem': return await handleTestProblem(req, res, db, user, body);

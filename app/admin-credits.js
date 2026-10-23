@@ -1,8 +1,8 @@
 import { requireSession, isAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import { formatContestTime } from "../shared/contest-time.js";
 
@@ -12,7 +12,7 @@ const state = { versions: [] };
 
 async function run() {
   try {
-    const data = await loadBootstrap();
+    const data = await loadPage("page-credits");
     state.versions = data.versions;
     render();
     const form = document.querySelector("#version-form");

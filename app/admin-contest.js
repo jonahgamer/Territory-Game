@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
@@ -28,12 +28,13 @@ const state = {
 
 async function run() {
   if (!contestId) throw new Error("No contest selected.");
-  const data = await loadBootstrap();
-  state.contests = data.contests;
-  state.maps = data.maps;
-  state.problems = data.problems;
+  const data = await loadPage("page-contest", { id: contestId });
+  state.current = data.contest;
+  state.contests = state.current ? [state.current] : [];
+  state.maps = data.maps || [];
+  state.catalog = data.catalog || [];
+  state.problems = data.problems || [];
   state.revisions = data.revisions;
-  state.current = state.contests.find((c) => c.id === contestId) || null;
   if (!state.current) throw new Error("Contest not found.");
   state.mapsForContest = contestMaps();
   try {
@@ -201,9 +202,21 @@ function setContestMaps(ids) {
   state.mapsForContest = contestMaps();
 }
 
-function addContestMap() {
+async function addContestMap() {
   const id = document.querySelector("#contest-map-add")?.value;
   if (!id || contestMapIds(state.current).includes(id)) return;
+  if (!state.maps.some((map) => map.id === id)) {
+    try {
+      const data = await loadPage("page-map", { map: id });
+      state.maps.push(data.map);
+      for (const problem of data.problems || []) {
+        if (!state.problems.some((item) => item.index === problem.index && item.type === problem.type)) state.problems.push(problem);
+      }
+    } catch (err) {
+      showPageToast(err.message || "Could not open that map.", "warn");
+      return;
+    }
+  }
   setContestMaps([...contestMapIds(state.current), id]);
   render();
   persistContests();
@@ -228,7 +241,7 @@ function fillMapSelect() {
   const chosen = new Set(contestMapIds(state.current));
   select.replaceChildren(el("option", null, "Choose a map…"));
   select.firstChild.value = "";
-  for (const m of state.maps) {
+  for (const m of state.catalog) {
     if (chosen.has(m.id)) continue;
     const mode = mapMode(m);
     if (mode !== wanted) continue;
@@ -767,9 +780,8 @@ async function syncContest() {
 
 async function deleteContest() {
   if (!window.confirm(`Delete the contest ${state.current.name}?`) || !window.confirm(`Delete ${state.current.name} now?`)) return;
-  state.contests = state.contests.filter((c) => c.id !== state.current.id);
   try {
-    await api.saveContests(state.contests, state.revisions.contests);
+    await api.deleteContest(state.current.id, state.revisions.contests);
     location.assign("/admin/contests.html");
   } catch (err) {
     showPageToast(err.message, "warn");
@@ -778,7 +790,7 @@ async function deleteContest() {
 
 async function persistContests() {
   try {
-    const data = await api.saveContests(state.contests, state.revisions.contests);
+    const data = await api.saveContest(state.current, state.revisions.contests);
     state.revisions.contests = data.revision;
   } catch (err) {
     showPageToast(err.message || "Could not save contest.", "warn");

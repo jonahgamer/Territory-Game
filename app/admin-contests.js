@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import { formatContestTime, readSchedule } from "../shared/contest-time.js";
 import { mapMode } from "../shared/map-render.js";
@@ -19,7 +19,7 @@ const state = {
 // ── 数据加载 ─────────────────────────────────────────────
 async function run() {
   try {
-    const data = await loadBootstrap();
+    const data = await loadPage("page-contests");
     state.contests = data.contests;
     state.maps = data.maps;
     state.revisions = data.revisions;
@@ -98,7 +98,7 @@ function updateSpawnNote(select, note) {
   if (!select || !note) return;
   const map = state.maps.find((m) => m.id === select.value);
   if (!map) { note.hidden = true; return; }
-  const count = (map.cells || []).filter((c) => c.kind === "spawnpoint").length;
+  const count = Number.isInteger(map.spawnPoints) ? map.spawnPoints : (map.cells || []).filter((c) => c.kind === "spawnpoint").length;
   note.hidden = false;
   note.textContent = count === 0
     ? `${map.name} has no spawn points yet. Place them on the map.`
@@ -172,7 +172,7 @@ async function createContest(event) {
   state.contests.unshift(newContest);
   
   try {
-    const data = await api.saveContests(state.contests, state.revisions.contests);
+    const data = await api.saveContest(newContest, state.revisions.contests);
     state.revisions.contests = data.revision;
     document.querySelector("#contest-name").value = "";
     showPageToast("Contest created.", "ok");

@@ -1,8 +1,8 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadBootstrap } from "../shared/data.js";
-import { api } from "../shared/api.js";
+import { loadPage } from "../shared/data.js?v=page-data";
+import { api } from "../shared/api.js?v=page-data";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
   PROBLEM_PAGE_SIZE, YEAR_INDEX_START, YEAR_INDEX_END,
@@ -21,7 +21,8 @@ const state = {
   page: 1,
   selectMode: false,
   selected: new Set(),
-  maps: [],
+  usage: {},
+  reserved: [],
 };
 
 // 防止 addProblem 被连续点击时并发请求
@@ -29,9 +30,10 @@ let addProblemBusy = false;
 
 // ── 数据加载 ─────────────────────────────────────────────
 async function refreshData() {
-  const data = await loadBootstrap();
+  const data = await loadPage("page-problems");
   state.problems = data.problems;
-  state.maps = data.maps;
+  state.usage = data.usage || {};
+  state.reserved = data.reserved || [];
   state.revisions = data.revisions;
 }
 
@@ -141,16 +143,18 @@ function bindEvents() {
     const chosen = selectedProblems();
     if (chosen.length === 0) return;
     if (!window.confirm(`Delete ${chosen.length} problem${chosen.length === 1 ? "" : "s"}? They will also be cleared from every map.`)) return;
-    const keys = new Set(chosen.map((p) => `${p.type}:${p.index}`));
-    state.problems = state.problems.filter((p) => !keys.has(`${p.type}:${p.index}`));
-    for (const map of state.maps) {
-      map.cells.forEach((cell, i) => {
-        if (cell.kind === "problem" && keys.has(`${cell.type}:${cell.problemNo}`)) map.cells[i] = { kind: "empty" };
-      });
+    const removed = chosen.map((p) => ({ type: p.type, index: p.index }));
+    try {
+      const data = await api.deleteProblems(removed, state.revisions.problems);
+      state.revisions.problems = data.revision;
+    } catch (err) {
+      showPageToast(err.message || "Could not delete problems.", "warn");
+      return;
     }
+    const keys = new Set(removed.map((p) => `${p.type}:${p.index}`));
+    state.problems = state.problems.filter((p) => !keys.has(`${p.type}:${p.index}`));
+    for (const key of keys) delete state.usage[key];
     state.selected.clear();
-    await persistProblems();
-    await persistMaps();
     render();
   });
 
@@ -210,9 +214,7 @@ async function addProblem(type) {
 function nextProblemNo(type) {
   const used = new Set();
   for (const p of state.problems) if (p.type === type) used.add(p.index);
-  for (const map of state.maps) for (const c of map.cells || []) {
-    if (c?.kind === "problem" && c.type === type) used.add(c.problemNo);
-  }
+  for (const item of state.reserved) if (item.type === type) used.add(item.index);
   for (let i = YEAR_INDEX_START; i <= YEAR_INDEX_END; i += 1) {
     if (!used.has(i)) return i;
   }
@@ -281,17 +283,7 @@ function exportSelectedText() {
 }
 
 function problemUsage(index, type) {
-  let cells = 0;
-  const mapIds = new Set();
-  for (const map of state.maps) {
-    for (const c of map.cells || []) {
-      if (c.kind === "problem" && c.problemNo === index && c.type === type) {
-        cells += 1;
-        mapIds.add(map.id);
-      }
-    }
-  }
-  return { cells, maps: mapIds.size };
+  return state.usage[`${type}:${index}`] || { cells: 0, maps: 0 };
 }
 
 // ── 渲染 ─────────────────────────────────────────────────
@@ -428,10 +420,13 @@ async function duplicateProblem(source) {
   const nextIndex = nextProblemNo(source.type);
   if (nextIndex === null) { showPageToast("No free index.", "warn"); return; }
   const copy = { ...source, index: nextIndex };
-  state.problems.push(copy);
-  state.problems.sort((a, b) => a.index - b.index || a.type.localeCompare(b.type));
-  const ok = await persistProblems();
-  if (!ok) return;
+  try {
+    const data = await api.saveProblem(copy, state.revisions.problems);
+    state.revisions.problems = data.revision;
+  } catch (err) {
+    showPageToast(err.message || "Could not duplicate the problem.", "warn");
+    return;
+  }
   location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(copy.type)}&index=${nextIndex}`);
 }
 
@@ -442,16 +437,15 @@ async function deleteProblem(problem) {
     ? `It is placed on ${usage.maps} map${usage.maps === 1 ? "" : "s"} in ${usage.cells} cells, which will be cleared.`
     : "It is not placed on any map.";
   if (!window.confirm(`Delete ${tag}?\n\n${where}`)) return;
-  state.problems = state.problems.filter((p) => !(p.index === problem.index && p.type === problem.type));
-  for (const map of state.maps) {
-    map.cells.forEach((cell, i) => {
-      if (cell.kind === "problem" && cell.problemNo === problem.index && cell.type === problem.type) {
-        map.cells[i] = { kind: "empty" };
-      }
-    });
+  try {
+    const data = await api.deleteProblems([{ type: problem.type, index: problem.index }], state.revisions.problems);
+    state.revisions.problems = data.revision;
+  } catch (err) {
+    showPageToast(err.message || "Could not delete the problem.", "warn");
+    return;
   }
-  await persistProblems();
-  await persistMaps();
+  state.problems = state.problems.filter((p) => !(p.index === problem.index && p.type === problem.type));
+  delete state.usage[`${problem.type}:${problem.index}`];
   render();
 }
 
@@ -537,17 +531,6 @@ async function persistProblems() {
     return true;
   } catch (err) {
     showPageToast(err.message || "Could not save problems.", "warn");
-    return false;
-  }
-}
-
-async function persistMaps() {
-  try {
-    const data = await api.saveMaps(state.maps, state.revisions.maps);
-    state.revisions.maps = data.revision;
-    return true;
-  } catch (err) {
-    showPageToast(err.message || "Could not save maps.", "warn");
     return false;
   }
 }
