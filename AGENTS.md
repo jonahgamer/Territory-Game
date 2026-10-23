@@ -44,6 +44,10 @@ Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the projec
 | `api/territory.js` | Every other action. |
 | `api/logic.js` | Sandboxed grader. |
 | `api/_db.js` | Mongo connection and CORS. |
+| `api/backup.js` | Admin backup tree, manual backup, and full restore. |
+| `api/cron.js` | Vercel Cron full backup endpoint; `CRON_SECRET` required. |
+| `lib/github-backup.js` | GitHub snapshot storage, EJSON round-trip, lock, and restore. |
+| `admin/*.html`, `app/*.js`, `shared/*.js` | Split admin pages and their ES modules. |
 | `tools/seed-map-64spawns.mjs` | Builds a 30×30 practice map. See `tools/README.md`. |
 
 ## Auth and roles

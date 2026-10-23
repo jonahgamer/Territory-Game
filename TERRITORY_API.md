@@ -22,6 +22,9 @@ The main app at `/index.html` uses hash routes, so every screen has its own URL 
 | `#/settings` | Account management (admin) |
 | `#/tutorial` | Logic tutorial (admin) |
 
+Admin pages also live at normal URLs, including `/admin/maps.html`, `/admin/problems.html`,
+`/admin/contests.html`, `/admin/accounts.html`, and `/admin/backups.html`.
+
 `<type>` is `math`, `oi`, `science`, or `puzzle`. When no hash is present an admin opens `#/maps` and a student opens `#/student`. A student who opens an admin URL is moved to the student view. The split pages under `/ui2/` keep their own normal URLs.
 
 `/login.html` signs a user in. `/answer.html?contest=<contestId>&cell=<cellIndex>` opens one problem in its own tab and submits the answer to the same contest.
@@ -163,6 +166,83 @@ Admin only. Adds a Credits note. `version` is at most 40 characters and `message
 ### `POST { "action": "delete-version", "id": "..." }`
 
 Admin only. Deletes one Credits note by its `id`. The response includes the remaining notes, newest first.
+
+## `/api/backup`
+
+Admin only. Every request needs `Authorization: Bearer <token>`. Responses are
+`Cache-Control: no-store`.
+
+### `GET ?action=tree`
+
+Returns the live database counts, the current backup head, and every snapshot
+in the backup repository:
+
+```json
+{
+  "success": true,
+  "configured": true,
+  "restoreConfigured": true,
+  "current": { "collections": { "users": 12 }, "totalCollections": 1, "totalDocs": 12 },
+  "state": { "head": "2026-10-18T18-00-00-000Z", "branch": "main" },
+  "backups": [
+    {
+      "id": "2026-10-18T18-00-00-000Z",
+      "kind": "scheduled",
+      "parent": "2026-10-17T18-00-00-000Z",
+      "branch": "main",
+      "collectionCount": 7,
+      "totalDocs": 120,
+      "restorable": true
+    }
+  ]
+}
+```
+
+`kind` is `scheduled`, `manual`, `pre-restore`, `after-restore`, `legacy`, or
+`incomplete`. A snapshot with `_started.json` but no `_manifest.json`, with a
+missing collection file, or with a count mismatch is not restorable. Directories
+with neither file (from the reference uploader's cron) are shown as legacy
+snapshots and remain restorable. `backupError` is present when the GitHub
+repository cannot be read.
+
+### `POST { "action": "backup-now" }`
+
+Creates a full snapshot on the current branch and moves the backup head to it.
+The response includes the new backup and a fresh `tree`. A second backup or
+restore cannot run at the same time: the server uses `database/_lock.json`.
+
+### `POST { "action": "restore", "backupId": "...", "confirm": "..." }`
+
+Requires `confirm` to equal the server environment variable `DSCONFIRM`
+exactly. If `DSCONFIRM` is missing, restore returns 503.
+
+The order is enforced on the server:
+
+1. Validate the selected snapshot completely. A snapshot without a `users`
+   collection, or with no usable admin/root account, is refused so a partial
+   backup cannot wipe every account or lock every admin out.
+2. Create a `pre-restore` snapshot of the current database and read it back
+   through the same restore parser. If either step fails, the restore is
+   aborted before the first write.
+3. Replace the live collections with the selected snapshot. Collections that
+   did not exist in the snapshot are dropped.
+4. Create an `after-restore` snapshot on a new logical branch whose parent is
+   the restored snapshot.
+5. Set the backup head to the new branch.
+
+The response includes `safetyBackup`, `afterRestoreBackup`, `branch`,
+`collectionsRestored`, `collectionsDropped`, and a fresh `tree`. If step 3
+fails after the safety snapshot was written, the response includes the safety
+backup id so it can be restored again.
+
+Snapshots use MongoDB Extended JSON. `ObjectId` and `Date` values are restored
+with their original types.
+
+### `GET /api/cron`
+
+Vercel Cron calls this with `Authorization: Bearer <CRON_SECRET>` once a day.
+The schedule `0 18 * * *` is 02:00 Asia/Hong_Kong. It performs the same full
+snapshot as `backup-now`, with `kind: "scheduled"` and `by: "cron"`.
 
 ## Team and territory rules
 

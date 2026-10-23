@@ -22,6 +22,7 @@ export function initNav(activePage) {
     { href: "/admin/tutorial.html", label: "Tutorial", key: "tutorial" },
     { href: "/admin/credits.html", label: "Credits", key: "credits" },
     { href: "/admin/accounts.html", label: "Accounts", key: "accounts" },
+    { href: "/admin/backups.html", label: "Backups", key: "backups" },
   ];
 
   const list = document.querySelector("#nav-list");

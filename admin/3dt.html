@@ -1,581 +1,2617 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>3D Terrain Generator · Territory Game</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #060910;
-      font-family: 'Share Tech Mono', monospace;
-      color: #d7f6ff;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Minecraft 风格 · 洞穴 · 地狱</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  canvas { display: block; }
 
-    #canvas-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    }
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; width: 20px; height: 20px;
+    margin: -10px 0 0 -10px; pointer-events: none; opacity: .85; z-index: 5;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: #fff; box-shadow: 0 0 2px #000;
+  }
+  #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
+  #crosshair::after  { top: 9px; left: 0; height: 2px; width: 20px; }
 
-    /* 悬浮控制面板 */
-    .controls-panel {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 300px;
-      z-index: 10;
-      background: rgba(8, 18, 32, 0.85);
-      border: 1px solid rgba(62, 224, 255, 0.3);
-      backdrop-filter: blur(8px);
-      padding: 16px;
-      box-shadow: 0 0 30px rgba(62, 224, 255, 0.1);
-      max-height: calc(100vh - 40px);
-      overflow-y: auto;
-    }
+  #health {
+    position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 3px; z-index: 10; pointer-events: none;
+    padding: 5px 12px; background: rgba(0, 0, 0, .32);
+    border-radius: 9px; backdrop-filter: blur(4px);
+    transition: opacity .2s;
+  }
+  #health.hidden { opacity: 0; }
+  .heart { position: relative; width: 21px; height: 21px; }
+  .heart i {
+    position: absolute; inset: 0;
+    font-size: 21px; line-height: 21px; text-align: center;
+  }
+  .heart .bg { color: rgba(55, 18, 18, .95); text-shadow: 1px 1px 0 rgba(0,0,0,.6); }
+  .heart .fill { color: #ff3b3b; filter: drop-shadow(0 0 3px rgba(255, 60, 60, .55)); }
 
-    .controls-panel h3 {
-      margin: 0 0 12px;
-      font-size: 14px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #3ee0ff;
-      border-bottom: 1px solid rgba(62, 224, 255, 0.2);
-      padding-bottom: 8px;
-    }
+  #damageFlash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 15;
+    background: radial-gradient(circle at 50% 50%, transparent 40%, rgba(200, 0, 0, .55));
+    opacity: 0; transition: opacity .35s ease-out;
+  }
+  #damageFlash.show { opacity: 1; transition: opacity .05s; }
 
-    .control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-      font-size: 12px;
-      color: #7f9eb0;
-    }
+  #mode {
+    position: fixed; top: 12px; right: 14px; z-index: 8;
+    padding: 5px 14px; border-radius: 8px;
+    font: 700 12px/1.4 system-ui, sans-serif; color: #fff;
+    letter-spacing: 2px; text-shadow: 1px 1px 0 rgba(0,0,0,.5);
+    background: rgba(60, 120, 200, .5);
+    border: 1px solid rgba(255, 255, 255, .22);
+    backdrop-filter: blur(4px);
+    transition: background .2s;
+  }
 
-    .control-row input[type="number"] {
-      width: 80px;
-      padding: 4px 8px;
-      border: 1px solid rgba(62, 224, 255, 0.3);
-      background: rgba(4, 12, 22, 0.85);
-      color: #d7f6ff;
-      font-family: 'Share Tech Mono', monospace;
-      text-align: right;
-    }
+  #hotbar {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; padding: 6px; z-index: 10;
+    background: rgba(0, 0, 0, .38); border-radius: 10px;
+    backdrop-filter: blur(4px);
+  }
+  .slot {
+    width: 54px; height: 54px; position: relative; border-radius: 7px;
+    background: rgba(255, 255, 255, .07);
+    border: 2px solid rgba(255, 255, 255, .22);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .08s ease, border-color .08s ease;
+    cursor: pointer;
+  }
+  .slot.active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, .35), 0 0 18px rgba(255, 255, 255, .35);
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, .16);
+  }
+  .icon {
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  .slot .icon { width: 38px; height: 38px; }
+  .slot .num {
+    position: absolute; top: 1px; left: 4px; font: 11px/1.2 monospace;
+    color: #fff; text-shadow: 1px 1px 0 #000; opacity: .85;
+  }
+  .slot .count {
+    position: absolute; right: 4px; bottom: 1px;
+    font: 700 12px/1.1 monospace;
+    color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    pointer-events: none;
+  }
 
-    .control-row input[type="color"] {
-      width: 36px;
-      height: 24px;
-      padding: 0;
-      border: 1px solid rgba(62, 224, 255, 0.3);
-      background: transparent;
-      cursor: pointer;
-    }
+  #inventory {
+    position: fixed; inset: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(3px);
+  }
+  #inventory.hidden { display: none; }
+  .inv-panel {
+    background: rgba(28, 33, 44, .96);
+    border: 2px solid rgba(255, 255, 255, .18);
+    border-radius: 14px;
+    padding: 18px 22px 14px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
+    max-width: 520px;
+  }
+  .inv-title {
+    color: #fff; font-size: 16px; font-weight: 700;
+    letter-spacing: 4px; margin-bottom: 4px; text-align: center;
+  }
+  .inv-sub {
+    color: rgba(255,255,255,.45); font-size: 11px; text-align: center;
+    margin-bottom: 14px;
+  }
+  .inv-grid {
+    display: grid; grid-template-columns: repeat(7, 56px); gap: 8px;
+    max-height: 340px; overflow-y: auto; padding: 2px;
+  }
+  .inv-grid::-webkit-scrollbar { width: 6px; }
+  .inv-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 3px; }
+  .inv-cell {
+    width: 56px; height: 56px; position: relative;
+    background: rgba(255, 255, 255, .06);
+    border: 2px solid rgba(255, 255, 255, .14);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform .08s, border-color .08s, background .08s;
+  }
+  .inv-cell:hover {
+    border-color: rgba(255, 255, 255, .65);
+    background: rgba(255, 255, 255, .15);
+    transform: translateY(-2px);
+  }
+  .inv-cell.empty { opacity: .25; cursor: default; }
+  .inv-cell.empty:hover { transform: none; border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+  .inv-cell .icon { width: 44px; height: 44px; }
+  .inv-cell .icount {
+    position: absolute; right: 3px; bottom: 1px;
+    font: 700 12px/1 monospace; color: #fff;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  }
+  .inv-hint {
+    color: rgba(255, 255, 255, .5);
+    font-size: 11px; text-align: center;
+    margin-top: 14px; line-height: 1.8;
+  }
 
-    .btn {
-      width: 100%;
-      padding: 8px;
-      background: rgba(62, 224, 255, 0.12);
-      border: 1px solid #3ee0ff;
-      color: #3ee0ff;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 13px;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-top: 10px;
-    }
-    .btn:hover { background: rgba(62, 224, 255, 0.25); }
+  #toast {
+    position: fixed; left: 50%; top: 22%; transform: translate(-50%, -10px);
+    z-index: 60; pointer-events: none; opacity: 0;
+    padding: 10px 22px; border-radius: 9px;
+    background: rgba(20, 25, 34, .92);
+    border: 1px solid rgba(255, 255, 255, .22);
+    color: #fff; font-size: 14px; letter-spacing: 1px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    transition: opacity .22s, transform .22s;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-    .hint-box {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      z-index: 10;
-      background: rgba(8, 18, 32, 0.7);
-      padding: 12px 16px;
-      border: 1px solid rgba(62, 224, 255, 0.2);
-      font-size: 13px;
-      line-height: 1.6;
-      pointer-events: none;
-    }
+  #overlay {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: #fff; text-align: center;
+    background: radial-gradient(circle at 50% 40%, rgba(20,40,60,.7), rgba(0,0,0,.9));
+    backdrop-filter: blur(3px);
+  }
+  #overlay h1 {
+    font-size: 34px; letter-spacing: 4px; font-weight: 800;
+    text-shadow: 0 4px 0 #2d4f1e, 0 0 30px rgba(120,255,120,.35);
+  }
+  #overlay .btn {
+    margin-top: 4px; padding: 12px 34px; border-radius: 8px;
+    background: #6fae43; border-bottom: 4px solid #4b7a2b;
+    font-weight: 700; font-size: 17px; letter-spacing: 2px;
+    cursor: pointer;
+    transition: transform .1s, filter .1s;
+  }
+  #overlay .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  #overlay .btn:active { transform: translateY(1px); }
 
-    .key {
-      display: inline-block;
-      padding: 2px 6px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 4px;
-      margin: 0 2px;
-      font-weight: bold;
-    }
+  .settings {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 16px 20px; border-radius: 12px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.14);
+    margin: 6px 0;
+  }
+  .set-row {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; color: rgba(255,255,255,.85);
+  }
+  .set-row span { min-width: 88px; text-align: left; }
+  .set-row input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 230px; height: 5px; border-radius: 3px;
+    background: rgba(255,255,255,.22); outline: none; cursor: pointer;
+  }
+  .set-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: #6fae43; border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.4); cursor: pointer;
+  }
+  .set-row input[type=range]::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #6fae43; border: 2px solid #fff; cursor: pointer;
+  }
+  .set-row b {
+    min-width: 58px; text-align: right;
+    font-family: monospace; color: #9fe060;
+  }
+  .warn {
+    font-size: 11px; color: #ffcc66; opacity: .8;
+    margin-top: 4px;
+  }
 
-    /* 隐藏滚动条 */
-    .controls-panel::-webkit-scrollbar { width: 6px; }
-    .controls-panel::-webkit-scrollbar-thumb { background: rgba(62, 224, 255, 0.3); }
-  </style>
-  <!-- 使用 Import Map 引入 Three.js -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-      }
-    }
-  </script>
+  #overlay .tips { font-size: 13px; line-height: 2; opacity: .85; }
+  #overlay .seed { font: 12px/1.6 monospace; opacity: .55; }
+  #overlay kbd {
+    display: inline-block; min-width: 20px; padding: 1px 6px; margin: 0 2px;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+    border-radius: 4px; font: 12px/1.5 monospace;
+  }
+  #hud {
+    position: fixed; top: 12px; left: 14px; z-index: 6;
+    font: 12px/1.7 monospace; color: #fff; opacity: .65;
+    text-shadow: 1px 1px 0 #000; pointer-events: none;
+  }
+</style>
 </head>
 <body>
 
-  <div id="canvas-container"></div>
+<div id="crosshair"></div>
+<div id="hud"></div>
+<div id="mode">创造模式</div>
+<div id="health" class="hidden"></div>
+<div id="damageFlash"></div>
+<div id="toast"></div>
+<div id="hotbar"></div>
 
-  <div class="hint-box">
-    <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 平面移动</div>
-    <div><span class="key">Space</span> 上升 / <span class="key">Shift</span> 下降</div>
-    <div><span class="key">鼠标左键拖拽</span> 旋转视角</div>
-  </div>
-
-  <div class="controls-panel">
-    <h3>3D 参数设置</h3>
-    <div class="control-row">
-      <span>随机种子</span>
-      <input type="number" id="input-seed" value="12345" />
-    </div>
-    <div class="control-row">
-      <span>地形起伏高度</span>
-      <input type="number" id="input-height" value="30" min="5" max="100" />
-    </div>
-    <div class="control-row">
-      <span>移动速度</span>
-      <input type="number" id="input-speed" value="1.5" step="0.5" min="0.1" max="10" />
-    </div>
-    <button id="btn-random-seed" class="btn">随机生成新世界</button>
-    
-    <h3 style="margin-top:20px;">颜色映射</h3>
-    <div class="control-row">
-      <span>平原浅色 (临水)</span>
-      <input type="color" id="color-plain-light" value="#a3e635" />
-    </div>
-    <div class="control-row">
-      <span>平原深色 (临山)</span>
-      <input type="color" id="color-plain-dark" value="#166534" />
-    </div>
-    <div class="control-row">
-      <span>河流浅色 (岸边)</span>
-      <input type="color" id="color-river-light" value="#7dd3fc" />
-    </div>
-    <div class="control-row">
-      <span>河流深色 (中心)</span>
-      <input type="color" id="color-river-dark" value="#1e3a8a" />
-    </div>
-    <div class="control-row">
-      <span>高山鲜红 (山脚)</span>
-      <input type="color" id="color-mountain-bright" value="#f87171" />
-    </div>
-    <div class="control-row">
-      <span>高山暗红 (山顶)</span>
-      <input type="color" id="color-mountain-dark" value="#7f1d1d" />
+<div id="inventory" class="hidden">
+  <div class="inv-panel">
+    <div class="inv-title">背 包</div>
+    <div class="inv-sub" id="invSub">—</div>
+    <div class="inv-grid" id="invGrid"></div>
+    <div class="inv-hint">
+      点击物品 → 放入快捷栏空位 / 替换当前选中槽<br>
+      按 <kbd>E</kbd> 或点击背景关闭
     </div>
   </div>
+</div>
 
-  <script type="module">
-    import * as THREE from 'three';
+<div id="overlay">
+  <h1>方 块 世 界</h1>
 
-    // ==================================================================
-    // 配置与状态
-    // ==================================================================
-    const CONFIG = {
-      gridSize: 150,        // 网格分辨率 (150x150 顶点)
-      planeSize: 300,       // 平面物理尺寸
-      heightScale: 30,      // 高度缩放
-      speed: 1.5,           // 移动速度
-      seed: 12345,
-      colors: {
-        plainLight: '#a3e635',
-        plainDark: '#166534',
-        riverLight: '#7dd3fc',
-        riverDark: '#1e3a8a',
-        mountainBright: '#f87171',
-        mountainDark: '#7f1d1d'
-      }
-    };
+  <div class="settings">
+    <div class="set-row">
+      <span>渲染距离</span>
+      <input type="range" id="rdSlider" min="2" max="32" step="1" value="4">
+      <b id="rdVal">4</b>
+    </div>
+    <div class="set-row">
+      <span>飞行速度</span>
+      <input type="range" id="fsSlider" min="1" max="5" step="0.1" value="1.9">
+      <b id="fsVal">1.9×</b>
+    </div>
+    <div class="warn">提示：渲染距离越大，内存与 GPU 占用越高。32 需要较高配置。</div>
+  </div>
 
-    // ==================================================================
-    // 噪声生成器
-    // ==================================================================
-    function mulberry32(a) {
-      return function() {
-        var t = a += 0x6D2B79F5;
-        t = Math.imul(t ^ t >>> 15, t | 1);
-        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-      }
+  <div class="btn" id="startBtn">点击开始游戏</div>
+
+  <div class="tips">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Ctrl</kbd> 加速　<kbd>Space</kbd> 跳跃<br>
+    <kbd>双击 Space</kbd> 起飞/降落（创造）　飞行 <kbd>Space</kbd> 升 <kbd>Shift</kbd> 降<br>
+    <kbd>左键</kbd> 破坏　<kbd>右键</kbd> 放置　<kbd>打火石</kbd> 点燃黑曜石框架<br>
+    <kbd>1</kbd>~<kbd>9</kbd>/<kbd>滚轮</kbd> 切换　<kbd>E</kbd> 背包　<kbd>M</kbd> 循环模式<br>
+    <kbd>Esc</kbd> 释放鼠标
+  </div>
+  <div class="seed" id="seedInfo"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   1. 常量
+   ============================================================ */
+const CH = 16;
+const WH = 128;
+const MAX_RENDER_DIST = 32;
+
+let RENDER_DIST = 4;
+let FLY_SPEED_MULT = 1.9;
+
+const BLOCK = {
+  AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, WOOD: 4,
+  LEAVES: 5, SAND: 6, BRICK: 7, GLASS: 8, LAMP: 9,
+  WATER: 10, LAVA: 11, PLANKS: 12, SNOW: 13, BED: 14,
+  BEDROCK: 15,
+  OBSIDIAN: 16,
+  NETHER_PORTAL: 17,
+  NETHERRACK: 18,
+};
+
+const ITEM_FLINT_STEEL = 100;   // 非方块物品
+
+const DEF = {
+  [BLOCK.GRASS]:   { name: '草方块', color: 0x6fae43, stack: 64 },
+  [BLOCK.DIRT]:    { name: '泥土',   color: 0x8b5a2b, stack: 64 },
+  [BLOCK.STONE]:   { name: '石头',   color: 0x8c8c8c, stack: 64 },
+  [BLOCK.WOOD]:    { name: '木头',   color: 0x9a6b3f, stack: 64 },
+  [BLOCK.LEAVES]:  { name: '树叶',   color: 0x3f8a37, stack: 64 },
+  [BLOCK.SAND]:    { name: '沙子',   color: 0xe3d59a, stack: 64 },
+  [BLOCK.BRICK]:   { name: '砖块',   color: 0xb3503f, stack: 64 },
+  [BLOCK.GLASS]:   { name: '玻璃',   color: 0x9fd8e8, stack: 64 },
+  [BLOCK.LAMP]:    { name: '荧石',   color: 0xffe066, stack: 64 },
+  [BLOCK.WATER]:   { name: '水',     color: 0x3a72d8, stack: 64 },
+  [BLOCK.LAVA]:    { name: '岩浆',   color: 0xff5a1f, stack: 64 },
+  [BLOCK.PLANKS]:  { name: '木板',   color: 0xb8894f, stack: 64 },
+  [BLOCK.SNOW]:    { name: '雪块',   color: 0xf0f6ff, stack: 64 },
+  [BLOCK.BED]:     { name: '床',     color: 0xc0392b, stack: 1  },
+  [BLOCK.BEDROCK]: { name: '基岩',   color: 0x4a4a4a, stack: 64 },
+  [BLOCK.OBSIDIAN]:{ name: '黑曜石', color: 0x1e1830, stack: 64 },
+  [BLOCK.NETHER_PORTAL]: { name: '传送门', color: 0x9b30ff, stack: 64 },
+  [BLOCK.NETHERRACK]: { name: '下界岩', color: 0x7a2b2b, stack: 64 },
+  [ITEM_FLINT_STEEL]: { name: '打火石', color: 0xffaa00, stack: 1 },
+};
+
+const ALL_ITEMS = Object.keys(DEF).map(Number).filter(t =>
+  t !== BLOCK.NETHER_PORTAL   // 传送门方块不可在背包中获得
+);
+
+/* ============================================================
+   2. 噪声
+   ============================================================ */
+const SEED = (Math.random() * 1e9) | 0;
+
+function hash2(x, y) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(SEED, 1442695041);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+function hash3(x, y, z) {
+  let h = Math.imul(x | 0, 374761393)
+        ^ Math.imul(y | 0, 668265263)
+        ^ Math.imul(z | 0, 2147483647)
+        ^ Math.imul(SEED, 1442695041);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+const smoothstep = t => t * t * (3 - 2 * t);
+
+function valueNoise(x, y) {
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  const u = smoothstep(x - x0), v = smoothstep(y - y0);
+  const a = hash2(x0,     y0);
+  const b = hash2(x0 + 1, y0);
+  const c = hash2(x0,     y0 + 1);
+  const d = hash2(x0 + 1, y0 + 1);
+  return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+}
+
+function fbm(x, y, octaves = 4, lac = 2, gain = 0.5) {
+  let sum = 0, amp = 1, freq = 1, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum  += amp * valueNoise(x * freq, y * freq);
+    norm += amp;
+    amp  *= gain;
+    freq *= lac;
+  }
+  return sum / norm;
+}
+
+function valueNoise3(x, y, z) {
+  const x0 = Math.floor(x), y0 = Math.floor(y), z0 = Math.floor(z);
+  const u = smoothstep(x - x0), v = smoothstep(y - y0), w = smoothstep(z - z0);
+  const c000 = hash3(x0,     y0,     z0);
+  const c100 = hash3(x0 + 1, y0,     z0);
+  const c010 = hash3(x0,     y0 + 1, z0);
+  const c110 = hash3(x0 + 1, y0 + 1, z0);
+  const c001 = hash3(x0,     y0,     z0 + 1);
+  const c101 = hash3(x0 + 1, y0,     z0 + 1);
+  const c011 = hash3(x0,     y0 + 1, z0 + 1);
+  const c111 = hash3(x0 + 1, y0 + 1, z0 + 1);
+  const x00 = c000 + (c100 - c000) * u;
+  const x10 = c010 + (c110 - c010) * u;
+  const x01 = c001 + (c101 - c001) * u;
+  const x11 = c011 + (c111 - c011) * u;
+  const y0v = x00 + (x10 - x00) * v;
+  const y1v = x01 + (x11 - x01) * v;
+  return y0v + (y1v - y0v) * w;
+}
+
+function fbm3(x, y, z, octaves = 3, lac = 2, gain = 0.5) {
+  let sum = 0, amp = 1, freq = 1, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum  += amp * valueNoise3(x * freq, y * freq, z * freq);
+    norm += amp;
+    amp  *= gain;
+    freq *= lac;
+  }
+  return sum / norm;
+}
+
+/* ============================================================
+   3. 群系
+   ============================================================ */
+function temperatureAt(x, z) { return fbm(x * 0.006 + 1000, z * 0.006 - 2000, 3); }
+function humidityAt(x, z)    { return fbm(x * 0.007 - 3000, z * 0.007 + 4000, 3); }
+
+const BIOME = { PLAINS: 0, FOREST: 1, DESERT: 2, SNOW: 3, MOUNTAIN: 4 };
+const BIOME_NAME = ['平原', '森林', '沙漠', '雪原', '山地'];
+
+function biomeAt(x, z) {
+  const t = temperatureAt(x, z);
+  const h = humidityAt(x, z);
+  const m = fbm(x * 0.005 + 500, z * 0.005 - 500, 3);
+  if (m > 0.62) return BIOME.MOUNTAIN;
+  if (t < 0.36) return BIOME.SNOW;
+  if (t > 0.62 && h < 0.44) return BIOME.DESERT;
+  if (h > 0.56) return BIOME.FOREST;
+  return BIOME.PLAINS;
+}
+
+/* ============================================================
+   4. 地形基础高度
+   ============================================================ */
+const baseHeightCache = new Map();
+function baseHeightAt(x, z) {
+  const key = x + ',' + z;
+  let v = baseHeightCache.get(key);
+  if (v !== undefined) return v;
+
+  const wx = fbm(x * 0.01 + 91.7, z * 0.01 + 13.3, 2) - 0.5;
+  const wz = fbm(x * 0.01 - 47.1, z * 0.01 + 71.9, 2) - 0.5;
+
+  const n = fbm((x + wx * 40) * 0.018, (z + wz * 40) * 0.018, 4);
+  let h = 16 + Math.pow(n, 1.35) * 52;
+
+  const m = fbm(x * 0.005 + 500, z * 0.005 - 500, 3);
+  if (m > 0.58) {
+    const t = Math.min(1, (m - 0.58) / 0.42);
+    h += t * t * 80;
+  }
+
+  const t = temperatureAt(x, z);
+  if (t > 0.62) h = h * 0.85 + 3;
+  else if (t < 0.36) h += 3;
+
+  h = Math.max(3, Math.min(WH - 10, h));
+
+  if (baseHeightCache.size > 300000) baseHeightCache.clear();
+  baseHeightCache.set(key, h);
+  return h;
+}
+
+const macroHeightCache = new Map();
+function macroHeightAt(x, z) {
+  const key = x + ',' + z;
+  let v = macroHeightCache.get(key);
+  if (v !== undefined) return v;
+  const n = fbm(x * 0.0012 + 91.7, z * 0.0012 + 13.3, 2);
+  v = 16 + n * 40;
+  if (macroHeightCache.size > 100000) macroHeightCache.clear();
+  macroHeightCache.set(key, v);
+  return v;
+}
+
+/* ============================================================
+   5. 池子
+   ============================================================ */
+const LAKE_T = 0.62;
+const LAVA_T = 0.82;
+
+function lakeMaskAt(x, z) { return fbm(x * 0.025 + 200, z * 0.025 - 300, 3); }
+function lavaMaskAt(x, z) { return fbm(x * 0.028 - 500, z * 0.028 + 800, 3); }
+
+const shoreCache = new Map();
+function shoreMinHeightAt(x, z) {
+  const key = x + ',' + z;
+  let v = shoreCache.get(key);
+  if (v !== undefined) return v;
+
+  let minH = Infinity;
+  const R = 8;
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    const sx = Math.round(x + Math.cos(a) * R);
+    const sz = Math.round(z + Math.sin(a) * R);
+    const h = baseHeightAt(sx, sz);
+    if (h < minH) minH = h;
+  }
+  v = Math.floor(minH);
+  if (shoreCache.size > 200000) shoreCache.clear();
+  shoreCache.set(key, v);
+  return v;
+}
+
+function waterLevelAt(x, z) {
+  const macro = Math.round(macroHeightAt(x, z) - 2);
+  const shore = shoreMinHeightAt(x, z);
+  return Math.max(2, Math.min(macro, shore - 1));
+}
+function lavaLevelAt(x, z) {
+  const macro = Math.round(macroHeightAt(x, z) - 5);
+  const shore = shoreMinHeightAt(x, z);
+  return Math.max(2, Math.min(macro, shore - 1));
+}
+
+const poolInfoCache = new Map();
+
+function computePoolInfo(x, z) {
+  const lm = lakeMaskAt(x, z);
+  const vm = lavaMaskAt(x, z);
+  const lakeS = (lm - LAKE_T) / (1 - LAKE_T);
+  const lavaS = (vm - LAVA_T) / (1 - LAVA_T);
+
+  let kind = 0, strength = 0;
+  if (lakeS > 0 && lavaS > 0) {
+    if (lakeS >= lavaS) { kind = 1; strength = Math.min(1, lakeS); }
+    else                { kind = 2; strength = Math.min(1, lavaS); }
+  } else if (lakeS > 0) { kind = 1; strength = Math.min(1, lakeS); }
+  else if (lavaS > 0)   { kind = 2; strength = Math.min(1, lavaS); }
+
+  return { kind, strength };
+}
+
+function poolInfo(x, z) {
+  const key = x + ',' + z;
+  let v = poolInfoCache.get(key);
+  if (v === undefined) {
+    v = computePoolInfo(x, z);
+    if (poolInfoCache.size > 100000) poolInfoCache.clear();
+    poolInfoCache.set(key, v);
+  }
+  return v;
+}
+
+function poolKindAt(x, z) { return poolInfo(x, z).kind; }
+
+function poolKindStable(x, z) {
+  const k = poolKindAt(x, z);
+  if (k === 0) return 0;
+  const R = 2;
+  for (let dz = -R; dz <= R; dz++) {
+    for (let dx = -R; dx <= R; dx++) {
+      if (dx === 0 && dz === 0) continue;
+      const nk = poolKindAt(x + dx, z + dz);
+      if (nk !== 0 && nk !== k) return 0;
     }
+  }
+  return k;
+}
 
-    class Noise {
-      constructor(seed) {
-        this.perm = new Uint8Array(512);
-        let rand = mulberry32(seed);
-        let p = Array.from({ length: 256 }, (_, i) => i);
-        for (let i = 255; i > 0; i--) {
-          let j = Math.floor(rand() * (i + 1));
-          [p[i], p[j]] = [p[j], p[i]];
-        }
-        for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
-      }
-      fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-      lerp(t, a, b) { return a + t * (b - a); }
-      grad(hash, x, y) {
-        let h = hash & 7;
-        let u = h < 4 ? x : y;
-        let v = h < 4 ? y : x;
-        return ((h & 1) ? -u : u) + ((h & 2) ? -2.0 * v : 2.0 * v);
-      }
-      perlin(x, y) {
-        let X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        let u = this.fade(x), v = this.fade(y);
-        let A = this.perm[X] + Y, AA = this.perm[A], AB = this.perm[A + 1];
-        let B = this.perm[X + 1] + Y, BA = this.perm[B], BB = this.perm[B + 1];
-        return this.lerp(v, this.lerp(u, this.grad(this.perm[AA], x, y), this.grad(this.perm[BA], x - 1, y)),
-          this.lerp(u, this.grad(this.perm[AB], x, y - 1), this.grad(this.perm[BB], x - 1, y - 1)));
-      }
-      fbm(x, y, octaves, lacunarity, gain) {
-        let amp = 1.0, freq = 1.0, sum = 0.0;
-        for (let i = 0; i < octaves; i++) {
-          sum += amp * this.perlin(x * freq, y * freq);
-          freq *= lacunarity;
-          amp *= gain;
-        }
-        return (sum + 1) / 2; // 0~1
-      }
-    }
+/* ============================================================
+   6. 地形最终高度
+   ============================================================ */
+function heightAt(x, z) {
+  let h = baseHeightAt(x, z);
 
-    let terrainNoise, riverNoise, detailNoise;
+  const stable = poolKindStable(x, z);
+  if (stable !== 0) {
+    const info = poolInfo(x, z);
+    const lvl = (stable === 1) ? waterLevelAt(x, z) : lavaLevelAt(x, z);
+    const basin = lvl - 1 - info.strength * 5;
+    if (basin < h) h = basin;
+  }
 
-    function initNoise(seed) {
-      terrainNoise = new Noise(seed);
-      riverNoise = new Noise(seed + 1);
-      detailNoise = new Noise(seed + 2);
-    }
+  return Math.max(2, Math.min(WH - 10, Math.round(h)));
+}
 
-    function getTerrainData(x, y) {
-      const scale = 0.02;
-      let base = terrainNoise.fbm(x * scale, y * scale, 3, 2.0, 0.5);
-      let detail = detailNoise.fbm(x * 0.08, y * 0.08, 2, 2.0, 0.5);
-      let h = base * 0.8 + detail * 0.2;
-      h = Math.pow(h, 1.3);
-      
-      let r1 = riverNoise.fbm(x * 0.015, y * 0.015, 2, 2.0, 0.5);
-      let r2 = riverNoise.fbm(x * 0.015 + 100, y * 0.015 + 100, 2, 2.0, 0.5);
-      let riverVal = Math.abs(r1 - r2);
-      
-      return { h, riverVal };
-    }
+/* ============================================================
+   7. 洞穴 3D 噪声
+   ============================================================ */
+function isCave(wx, y, wz) {
+  if (y < 5) return false;
+  const n = fbm3(wx * 0.045, y * 0.07, wz * 0.045, 3);
+  if (Math.abs(n - 0.5) < 0.045) {
+    const mask = fbm(wx * 0.01 + 5000, wz * 0.01 - 5000, 2);
+    return mask > 0.35;
+  }
+  return false;
+}
 
-    // ==================================================================
-    // 颜色插值工具
-    // ==================================================================
-    const colorCache = { plainLight: new THREE.Color(), /* ... */ };
-    function updateColors() {
-      colorCache.plainLight.set(CONFIG.colors.plainLight);
-      colorCache.plainDark.set(CONFIG.colors.plainDark);
-      colorCache.riverLight.set(CONFIG.colors.riverLight);
-      colorCache.riverDark.set(CONFIG.colors.riverDark);
-      colorCache.mountainBright.set(CONFIG.colors.mountainBright);
-      colorCache.mountainDark.set(CONFIG.colors.mountainDark);
-    }
-    updateColors();
+function isNetherCave(wx, y, wz) {
+  const n = fbm3(wx * 0.05, y * 0.07, wz * 0.05, 3);
+  return n > 0.58;
+}
 
-    function getVertexColor(h, riverVal, targetColor) {
-      const tempColor = new THREE.Color();
-      
-      if (h > 0.6) {
-        // 高山：山脚鲜红，山顶暗红
-        const t = Math.min(1, (h - 0.6) / 0.4);
-        targetColor.copy(colorCache.mountainBright).lerp(colorCache.mountainDark, t);
-      } else if (riverVal < 0.04) {
-        // 河流：岸边浅蓝，中心深蓝
-        const t = Math.min(1, 1 - riverVal / 0.04);
-        targetColor.copy(colorCache.riverLight).lerp(colorCache.riverDark, t);
+/* ============================================================
+   8. 维度 & Chunk
+   ============================================================ */
+let currentDim = 'overworld';
+const savedChunks = { overworld: new Map(), nether: new Map() };
+let chunks = savedChunks.overworld;
+
+class Chunk {
+  constructor(cx, cz, dim) {
+    this.cx = cx; this.cz = cz;
+    this.dim = dim;
+    this.blocks = new Uint8Array(CH * WH * CH);
+    this.meshes = [];
+    this.dirty = true;
+  }
+  idx(lx, ly, lz) { return (ly * CH + lz) * CH + lx; }
+}
+
+const chunkKey = (cx, cz) => cx + ',' + cz;
+
+function ensureChunk(cx, cz) {
+  const k = chunkKey(cx, cz);
+  let c = chunks.get(k);
+  if (!c) {
+    c = new Chunk(cx, cz, currentDim);
+    chunks.set(k, c);
+    generateChunk(c);
+  }
+  return c;
+}
+
+let _ccx = NaN, _ccz = NaN, _cchunk = null;
+
+function getBlock(x, y, z) {
+  if (y < 0 || y >= WH) return 0;
+  const cx = x >> 4, cz = z >> 4;
+  if (cx !== _ccx || cz !== _ccz) {
+    _ccx = cx; _ccz = cz;
+    _cchunk = chunks.get(chunkKey(cx, cz)) || null;
+  }
+  if (!_cchunk) return 0;
+  return _cchunk.blocks[_cchunk.idx(x - cx * 16, y, z - cz * 16)];
+}
+
+function markNeighborDirty(cx, cz) {
+  const n = chunks.get(chunkKey(cx, cz));
+  if (n) n.dirty = true;
+}
+
+function setBlock(x, y, z, t) {
+  if (y < 0 || y >= WH) return false;
+  const cx = x >> 4, cz = z >> 4;
+  const c = chunks.get(chunkKey(cx, cz));
+  if (!c) return false;
+
+  const lx = x - cx * 16, lz = z - cz * 16;
+  const i = c.idx(lx, y, lz);
+  if (c.blocks[i] === t) return false;
+
+  c.blocks[i] = t;
+  c.dirty = true;
+
+  if (lx === 0)      markNeighborDirty(cx - 1, cz);
+  if (lx === CH - 1) markNeighborDirty(cx + 1, cz);
+  if (lz === 0)      markNeighborDirty(cx, cz - 1);
+  if (lz === CH - 1) markNeighborDirty(cx, cz + 1);
+  return true;
+}
+
+function isSolid(x, y, z) {
+  const t = getBlock(x, y, z);
+  return t !== 0 && t !== BLOCK.WATER && t !== BLOCK.LAVA && t !== BLOCK.NETHER_PORTAL;
+}
+
+function isOpaque(t) {
+  return t !== 0 && t !== BLOCK.WATER && t !== BLOCK.LAVA
+      && t !== BLOCK.GLASS && t !== BLOCK.NETHER_PORTAL;
+}
+
+/* ============================================================
+   9. 基岩
+   ============================================================ */
+function isBedrockAt(wx, y, wz) {
+  if (y < 0 || y > 4) return false;
+  const chance = 1 - y * 0.2;
+  return hash2(wx * 37 + 13, wz * 53 + 7) < chance;
+}
+
+/* ============================================================
+   10. 地形生成
+   ============================================================ */
+function generateChunk(c) {
+  if (c.dim === 'nether') generateNetherChunk(c);
+  else generateOverworldChunk(c);
+}
+
+function generateOverworldChunk(c) {
+  const bx = c.cx * CH, bz = c.cz * CH;
+
+  for (let lz = 0; lz < CH; lz++) {
+    for (let lx = 0; lx < CH; lx++) {
+      const wx = bx + lx, wz = bz + lz;
+      const h = heightAt(wx, wz);
+      const biome = biomeAt(wx, wz);
+
+      let topBlock, subBlock;
+      if (biome === BIOME.SNOW) {
+        topBlock = BLOCK.SNOW; subBlock = BLOCK.DIRT;
+      } else if (biome === BIOME.DESERT) {
+        topBlock = BLOCK.SAND; subBlock = BLOCK.SAND;
+      } else if (biome === BIOME.MOUNTAIN) {
+        topBlock = (h > 78) ? BLOCK.SNOW : BLOCK.STONE;
+        subBlock = BLOCK.STONE;
       } else {
-        // 平原：靠水浅绿，靠山深绿
-        const t_mountain = Math.max(0, Math.min(1, (h - 0.4) / 0.2));
-        targetColor.copy(colorCache.plainLight).lerp(colorCache.plainDark, t_mountain);
-        
-        const t_river = Math.max(0, Math.min(1, (0.1 - riverVal) / 0.06));
-        if (t_river > 0) {
-          targetColor.lerp(colorCache.plainLight, t_river);
-        }
-      }
-      return targetColor;
-    }
-
-    // ==================================================================
-    // Three.js 初始化
-    // ==================================================================
-    const container = document.getElementById('canvas-container');
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x060910);
-    scene.fog = new THREE.FogExp2(0x060910, 0.005);
-
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 30, 80);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    container.appendChild(renderer.domElement);
-
-    // 光照
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(50, 100, 50);
-    dirLight.castShadow = true;
-    dirLight.shadow.camera.left = -100;
-    dirLight.shadow.camera.right = 100;
-    dirLight.shadow.camera.top = 100;
-    dirLight.shadow.camera.bottom = -100;
-    scene.add(dirLight);
-
-    // ==================================================================
-    // 地形网格构建
-    // ==================================================================
-    let geometry, mesh;
-    const gridSize = CONFIG.gridSize;
-    const planeSize = CONFIG.planeSize;
-    const step = planeSize / gridSize;
-
-    function createGeometry() {
-      geometry = new THREE.PlaneGeometry(planeSize, planeSize, gridSize, gridSize);
-      geometry.rotateX(-Math.PI / 2); // 使其平铺在 XZ 平面
-
-      // 添加颜色属性
-      const count = geometry.attributes.position.count;
-      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-
-      const material = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        flatShading: true, // 低多边形风格
-        roughness: 0.8,
-        metalness: 0.1
-      });
-
-      mesh = new THREE.Mesh(geometry, material);
-      mesh.receiveShadow = true;
-      mesh.castShadow = true;
-      scene.add(mesh);
-    }
-    createGeometry();
-
-    // ==================================================================
-    // 核心：动态更新地形
-    // ==================================================================
-    const _color = new THREE.Color();
-    const posAttr = geometry.attributes.position;
-    const colorAttr = geometry.attributes.color;
-
-    function updateTerrain() {
-      const offsetX = Math.floor(camera.position.x / step);
-      const offsetZ = Math.floor(camera.position.z / step);
-
-      for (let i = 0; i < posAttr.count; i++) {
-        // 顶点的局部坐标
-        const lx = posAttr.getX(i);
-        const lz = posAttr.getZ(i);
-
-        // 转换为世界坐标，使其与相机绑定
-        const wx = lx + camera.position.x;
-        const wz = lz + camera.position.z;
-
-        const { h, riverVal } = getTerrainData(wx, wz);
-        
-        // 计算高度 (Y轴)
-        let y = h * CONFIG.heightScale;
-        if (riverVal < 0.04) {
-          y = 0.5; // 水面拉平
-        }
-        
-        // 如果是边界墙，强制拔高（可选，让地形边缘像一堵墙）
-        // const isBorder = Math.abs(lx) > planeSize/2 - 2 || Math.abs(lz) > planeSize/2 - 2;
-        // if (isBorder) y += 5;
-
-        posAttr.setY(i, y);
-
-        // 计算颜色
-        getVertexColor(h, riverVal, _color);
-        colorAttr.setXYZ(i, _color.r, _color.g, _color.b);
+        topBlock = BLOCK.GRASS; subBlock = BLOCK.DIRT;
       }
 
-      posAttr.needsUpdate = true;
-      colorAttr.needsUpdate = true;
-      geometry.computeVertexNormals();
+      for (let y = 0; y <= h; y++) {
+        let t;
+        if (y === h) t = topBlock;
+        else if (y >= h - 3) t = subBlock;
+        else t = BLOCK.STONE;
+        c.blocks[c.idx(lx, y, lz)] = t;
+      }
+
+      // 洞穴：挖空地表下、基岩上方的岩石
+      for (let y = 5; y < h - 2; y++) {
+        if (isCave(wx, y, wz)) {
+          c.blocks[c.idx(lx, y, lz)] = BLOCK.AIR;
+        }
+      }
+
+      // 池子（覆盖洞穴，让水面完整）
+      const kind = poolKindStable(wx, wz);
+      if (kind === 1) {
+        const wl = waterLevelAt(wx, wz);
+        if (h < wl) {
+          c.blocks[c.idx(lx, h, lz)] = BLOCK.SAND;
+          for (let y = h + 1; y <= wl && y < WH; y++) {
+            c.blocks[c.idx(lx, y, lz)] = BLOCK.WATER;
+          }
+        }
+      } else if (kind === 2) {
+        const vl = lavaLevelAt(wx, wz);
+        if (h < vl) {
+          c.blocks[c.idx(lx, h, lz)] = BLOCK.STONE;
+          for (let y = h + 1; y <= vl && y < WH; y++) {
+            c.blocks[c.idx(lx, y, lz)] = BLOCK.LAVA;
+          }
+        }
+      }
     }
+  }
 
-    // ==================================================================
-    // 键盘与鼠标控制
-    // ==================================================================
-    const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
-    
-    document.addEventListener('keydown', (e) => {
-      const k = e.key.toLowerCase();
-      if (k === 'w' || k === 'arrowup') keys.w = true;
-      if (k === 's' || k === 'arrowdown') keys.s = true;
-      if (k === 'a' || k === 'arrowleft') keys.a = true;
-      if (k === 'd' || k === 'arrowright') keys.d = true;
-      if (e.code === 'Space') keys.space = true;
-      if (e.key === 'Shift') keys.shift = true;
+  // 植被
+  for (let lz = 3; lz < CH - 3; lz++) {
+    for (let lx = 3; lx < CH - 3; lx++) {
+      const wx = bx + lx, wz = bz + lz;
+      if (poolKindStable(wx, wz) !== 0) continue;
+
+      const biome = biomeAt(wx, wz);
+      const h = heightAt(wx, wz);
+      const topBlock = c.blocks[c.idx(lx, h, lz)];
+      if (c.blocks[c.idx(lx, h + 1, lz)] !== 0) continue;
+
+      let treeChance = 0;
+      let isTreeGround = false;
+
+      if (biome === BIOME.FOREST) {
+        treeChance = 0.09; isTreeGround = (topBlock === BLOCK.GRASS);
+      } else if (biome === BIOME.PLAINS) {
+        treeChance = 0.012; isTreeGround = (topBlock === BLOCK.GRASS);
+      } else if (biome === BIOME.SNOW) {
+        treeChance = 0.02; isTreeGround = (topBlock === BLOCK.SNOW);
+      } else if (biome === BIOME.DESERT) {
+        treeChance = 0.006; isTreeGround = (topBlock === BLOCK.SAND);
+      }
+
+      if (!isTreeGround) continue;
+      if (hash2(wx * 131 + 7, wz * 197 + 11) > treeChance) continue;
+
+      if (biome === BIOME.DESERT) {
+        const height = 2 + Math.floor(hash2(lx * 7, lz * 13) * 3);
+        for (let i = 1; i <= height; i++) {
+          if (h + i < WH) c.blocks[c.idx(lx, h + i, lz)] = BLOCK.WOOD;
+        }
+      } else {
+        placeTree(c, lx, h, lz, biome === BIOME.SNOW);
+      }
+    }
+  }
+
+  // 基岩
+  for (let lz = 0; lz < CH; lz++) {
+    for (let lx = 0; lx < CH; lx++) {
+      const wx = bx + lx, wz = bz + lz;
+      for (let y = 0; y <= 4; y++) {
+        if (isBedrockAt(wx, y, wz)) {
+          c.blocks[c.idx(lx, y, lz)] = BLOCK.BEDROCK;
+        }
+      }
+    }
+  }
+}
+
+function generateNetherChunk(c) {
+  const bx = c.cx * CH, bz = c.cz * CH;
+
+  for (let lz = 0; lz < CH; lz++) {
+    for (let lx = 0; lx < CH; lx++) {
+      const wx = bx + lx, wz = bz + lz;
+      const base = 45 + fbm(wx * 0.015 + 800, wz * 0.015 - 800, 3) * 40;
+
+      for (let y = 0; y < WH; y++) {
+        let t = BLOCK.AIR;
+
+        if (y <= 3 || y >= 124) {
+          t = BLOCK.BEDROCK;
+        } else if (y < base) {
+          t = isNetherCave(wx, y, wz) ? BLOCK.AIR : BLOCK.NETHERRACK;
+        }
+
+        // 低洼处填岩浆湖
+        if (t === BLOCK.AIR && y > 3 && y < 18) {
+          t = BLOCK.LAVA;
+        }
+
+        c.blocks[c.idx(lx, y, lz)] = t;
+      }
+    }
+  }
+}
+
+function placeTree(c, lx, h, lz, snowy) {
+  const trunk = 5 + Math.floor(hash2(lx * 17, lz * 23) * 3);
+  for (let i = 1; i <= trunk; i++) {
+    if (h + i < WH) c.blocks[c.idx(lx, h + i, lz)] = BLOCK.WOOD;
+  }
+  const top = h + trunk;
+  const leafBlock = snowy ? BLOCK.SNOW : BLOCK.LEAVES;
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 2; dz++) {
+      for (let dy = 0; dy <= 2; dy++) {
+        if (Math.abs(dx) + Math.abs(dz) + dy > 3) continue;
+        if (dx === 0 && dz === 0 && dy < 2) continue;
+        const tx = lx + dx, ty = top + dy, tz = lz + dz;
+        if (tx < 0 || tx >= CH || tz < 0 || tz >= CH || ty >= WH) continue;
+        const i = c.idx(tx, ty, tz);
+        if (c.blocks[i] === 0) c.blocks[i] = leafBlock;
+      }
+    }
+  }
+}
+
+/* ============================================================
+   11. 渲染基础
+   ============================================================ */
+const scene = new THREE.Scene();
+const SKY_OVERWORLD = 0x9fd8ff;
+const SKY_NETHER = 0x3a0a0a;
+scene.background = new THREE.Color(SKY_OVERWORLD);
+scene.fog = new THREE.Fog(SKY_OVERWORLD, 40, 72);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 2000);
+camera.rotation.order = 'YXZ';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a6b3a, 1.4));
+const sun = new THREE.DirectionalLight(0xfff3d0, 2.6);
+sun.position.set(60, 200, 40);
+scene.add(sun);
+
+function updateFog() {
+  const far = Math.max(48, RENDER_DIST * CH * 0.9);
+  scene.fog.near = far * 0.6;
+  scene.fog.far  = far;
+  camera.far = far + 60;
+  camera.updateProjectionMatrix();
+}
+updateFog();
+
+function applyDimEnvironment() {
+  if (currentDim === 'nether') {
+    scene.background.setHex(SKY_NETHER);
+    scene.fog.color.setHex(SKY_NETHER);
+  } else {
+    scene.background.setHex(SKY_OVERWORLD);
+    scene.fog.color.setHex(SKY_OVERWORLD);
+  }
+}
+
+/* ============================================================
+   12. 纹理绘制
+   ============================================================ */
+function makeTexCanvas(size, draw) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  draw(ctx, size);
+  return cv;
+}
+
+function makeTex(size, draw) {
+  const cv = makeTexCanvas(size, draw);
+  const t = new THREE.CanvasTexture(cv);
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+
+function scatter(ctx, S, n, colors) {
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = colors[(Math.random() * colors.length) | 0];
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 1, 1);
+  }
+}
+
+function drawGrassTop(ctx, S) {
+  ctx.fillStyle = '#6fae43';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.5, ['#5f9a39', '#7cbd4c', '#68a53e', '#86c95a', '#4f8a2f', '#74b447']);
+  for (let i = 0; i < S * 0.8; i++) {
+    ctx.fillStyle = 'rgba(40,80,25,0.35)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 2, 1);
+  }
+}
+
+function drawGrassSide(ctx, S) {
+  ctx.fillStyle = '#8b5a2b';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.35, ['#7a4d24', '#9c6533', '#82512a', '#6b421f', '#a5713b']);
+
+  const gh = Math.floor(S * 0.32);
+  const edge = [];
+  for (let x = 0; x < S; x++) {
+    const h = Math.max(1, gh + ((Math.random() * 5) | 0) - 2);
+    edge.push(h);
+    ctx.fillStyle = '#6fae43';
+    ctx.fillRect(x, 0, 1, h);
+  }
+  for (let i = 0; i < S * 7; i++) {
+    const x = (Math.random() * S) | 0;
+    const y = (Math.random() * (gh + 2)) | 0;
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.13)' : 'rgba(255,255,255,0.13)';
+    ctx.fillRect(x, y, 1, 1);
+  }
+  ctx.fillStyle = 'rgba(45,30,12,0.28)';
+  for (let x = 0; x < S; x++) ctx.fillRect(x, edge[x], 1, 1);
+}
+
+function drawDirt(ctx, S) {
+  ctx.fillStyle = '#8b5a2b';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.45, ['#7a4d24', '#9c6533', '#6b421f', '#a5713b', '#835230']);
+  for (let i = 0; i < S * 1.6; i++) {
+    ctx.fillStyle = 'rgba(80,60,40,0.5)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 2, 1);
+  }
+}
+
+function drawStone(ctx, S) {
+  ctx.fillStyle = '#8c8c8c';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.5, ['#7a7a7a', '#9a9a9a', '#6e6e6e', '#a6a6a6', '#848484']);
+  ctx.strokeStyle = 'rgba(58,58,58,0.45)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 7; i++) {
+    ctx.beginPath();
+    let x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.moveTo(x, y);
+    for (let k = 0; k < 3; k++) {
+      x += ((Math.random() * 12) | 0) - 6;
+      y += ((Math.random() * 12) | 0) - 6;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawBedrock(ctx, S) {
+  ctx.fillStyle = '#4a4a4a';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.6, ['#3a3a3a', '#5a5a5a', '#2a2a2a', '#6a6a6a', '#4a4a4a']);
+  for (let i = 0; i < 22; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    const w = 4 + Math.random() * 12, h = 4 + Math.random() * 12;
+    ctx.fillStyle = 'rgba(28,28,28,0.55)';
+    ctx.fillRect(x, y, w, h);
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.fillStyle = 'rgba(130,130,130,0.35)';
+    ctx.fillRect(x, y, 2, 2);
+  }
+}
+
+function drawObsidian(ctx, S) {
+  ctx.fillStyle = '#1e1830';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.4, ['#151022', '#2a1f40', '#1e1830', '#332a52', '#0e0918']);
+  for (let i = 0; i < 16; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.fillStyle = 'rgba(120, 80, 200, 0.18)';
+    ctx.fillRect(x, y, 3, 2);
+  }
+  for (let i = 0; i < 8; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.fillStyle = 'rgba(180, 150, 255, 0.10)';
+    ctx.fillRect(x, y, 2, 1);
+  }
+}
+
+function drawNetherPortal(ctx, S) {
+  ctx.fillStyle = 'rgba(150, 60, 220, 0.9)';
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 40; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    const r = 2 + Math.random() * 5;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(220, 170, 255, 0.75)');
+    g.addColorStop(1, 'rgba(90, 20, 160, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  for (let i = 0; i < 10; i++) {
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 2, 2);
+  }
+}
+
+function drawNetherrack(ctx, S) {
+  ctx.fillStyle = '#7a2b2b';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.55, ['#6a2222', '#8a3535', '#5a1a1a', '#a04040', '#702828']);
+  for (let i = 0; i < S * 0.9; i++) {
+    ctx.fillStyle = 'rgba(40,10,10,0.5)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 2, 1);
+  }
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = 'rgba(200, 80, 60, 0.25)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 3, 2);
+  }
+}
+
+function drawWoodSide(ctx, S) {
+  ctx.fillStyle = '#9a6b3f';
+  ctx.fillRect(0, 0, S, S);
+  for (let x = 0; x < S; x++) {
+    const r = Math.random();
+    if (r < 0.32) ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    else if (r < 0.58) ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    else continue;
+    ctx.fillRect(x, 0, 1, S);
+  }
+  scatter(ctx, S, S * S * 0.12, ['#8a5d35', '#ab7a4a', '#7d5230']);
+}
+
+function drawWoodTop(ctx, S) {
+  ctx.fillStyle = '#b98a55';
+  ctx.fillRect(0, 0, S, S);
+  const cx = S / 2, cy = S / 2;
+  for (let r = 2; r < S * 0.78; r += 3) {
+    ctx.strokeStyle = (r % 6 === 2) ? 'rgba(88,54,24,0.6)' : 'rgba(120,80,40,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(88,54,24,0.85)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fill();
+  scatter(ctx, S, S * S * 0.06, ['rgba(255,255,255,0.12)', 'rgba(0,0,0,0.10)']);
+}
+
+function drawLeaves(ctx, S) {
+  ctx.fillStyle = '#3f8a37';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.65, ['#357a2f', '#4a9a40', '#2c6a27', '#58ab4c', '#3d8435']);
+  for (let i = 0; i < S * 1.3; i++) {
+    ctx.fillStyle = 'rgba(14,38,14,0.45)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 2, 2);
+  }
+  for (let i = 0; i < S * 0.5; i++) {
+    ctx.fillStyle = 'rgba(140,220,120,0.22)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 1, 1);
+  }
+}
+
+function drawSand(ctx, S) {
+  ctx.fillStyle = '#e3d59a';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.55, ['#d8c98a', '#eee0a8', '#cdbd7d', '#f2e7b8', '#e8da9f']);
+  for (let i = 0; i < S * 0.6; i++) {
+    ctx.fillStyle = 'rgba(160,140,90,0.4)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 1, 1);
+  }
+}
+
+function drawBrick(ctx, S) {
+  ctx.fillStyle = '#8f3f31';
+  ctx.fillRect(0, 0, S, S);
+  const rows = 8, cols = 4;
+  const bh = S / rows, bw = S / cols;
+  for (let r = 0; r < rows; r++) {
+    const off = (r % 2) * bw / 2;
+    for (let c = -1; c <= cols; c++) {
+      const x = c * bw + off + 1;
+      const y = r * bh + 1;
+      ctx.fillStyle = '#c96a55';
+      ctx.fillRect(x, y, bw - 2, bh - 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x, y, bw - 2, 1);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(x, y + bh - 3, bw - 2, 1);
+    }
+  }
+  scatter(ctx, S, S * S * 0.15, ['rgba(0,0,0,0.10)', 'rgba(255,255,255,0.10)']);
+}
+
+function drawGlass(ctx, S) {
+  ctx.clearRect(0, 0, S, S);
+  ctx.fillStyle = 'rgba(200,235,255,0.95)';
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = 'rgba(225,245,255,0.45)';
+  ctx.fillRect(3, 3, S - 6, S - 6);
+  ctx.strokeStyle = 'rgba(150,205,235,0.95)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, S - 2, S - 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(8, S - 12);
+  ctx.lineTo(S - 12, 8);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(8, S - 22);
+  ctx.lineTo(S - 22, 8);
+  ctx.stroke();
+}
+
+function drawLamp(ctx, S) {
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.4, ['#ffe680', '#ffc93a', '#fff3b0', '#ffd23a', '#ffdf66']);
+  for (let i = 0; i < 14; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    const r = 2 + Math.random() * 4;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(1, 'rgba(255,255,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.strokeStyle = 'rgba(160,120,20,0.65)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, S - 2, S - 2);
+}
+
+function drawWater(ctx, S) {
+  ctx.fillStyle = '#3a72d8';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.3, ['#4a82e8', '#2f62c8', '#5a92f0', '#3568d0', '#4478e0']);
+  ctx.strokeStyle = 'rgba(190,225,255,0.28)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = (Math.random() * S) | 0;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x <= S; x += 4) {
+      ctx.lineTo(x, y + Math.sin(x * 0.4 + i) * 2.5);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawLava(ctx, S) {
+  ctx.fillStyle = '#e8461a';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.45, ['#ff6a2a', '#d13a12', '#ff8a3a', '#c02e08', '#f5561f']);
+  for (let i = 0; i < 22; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    const r = 1 + Math.random() * 3.5;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,245,160,0.95)');
+    g.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.strokeStyle = 'rgba(90,20,0,0.35)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    let x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.moveTo(x, y);
+    for (let k = 0; k < 3; k++) {
+      x += ((Math.random() * 14) | 0) - 7;
+      y += ((Math.random() * 14) | 0) - 7;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawPlanks(ctx, S) {
+  const rows = 4;
+  const rh = S / rows;
+  for (let r = 0; r < rows; r++) {
+    ctx.fillStyle = (r % 2 === 0) ? '#b8894f' : '#a87a45';
+    ctx.fillRect(0, r * rh, S, rh);
+    for (let i = 0; i < S * 0.18; i++) {
+      ctx.fillStyle = 'rgba(80,50,20,0.25)';
+      const x = (Math.random() * S) | 0;
+      const y = r * rh + 2 + ((Math.random() * (rh - 4)) | 0);
+      ctx.fillRect(x, y, 3 + ((Math.random() * 6) | 0), 1);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, r * rh + 1, S, 1);
+    ctx.fillStyle = 'rgba(70,45,18,0.55)';
+    ctx.fillRect(0, r * rh, S, 1);
+  }
+  ctx.fillStyle = 'rgba(70,45,18,0.45)';
+  ctx.fillRect(S * 0.5, 0, 1, S);
+  scatter(ctx, S, S * S * 0.1, ['rgba(0,0,0,0.08)', 'rgba(255,255,255,0.06)']);
+}
+
+function drawSnow(ctx, S) {
+  ctx.fillStyle = '#f0f6ff';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.4, ['#e6eef8', '#f8fcff', '#dfe9f5', '#ffffff', '#e9f2fc']);
+  for (let i = 0; i < S * 0.5; i++) {
+    ctx.fillStyle = 'rgba(180,205,235,0.35)';
+    ctx.fillRect((Math.random() * S) | 0, (Math.random() * S) | 0, 1, 1);
+  }
+  for (let i = 0; i < 6; i++) {
+    const x = (Math.random() * S) | 0, y = (Math.random() * S) | 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillRect(x, y, 2, 2);
+  }
+}
+
+function drawBed(ctx, S) {
+  ctx.fillStyle = '#c0392b';
+  ctx.fillRect(0, 0, S, S);
+  scatter(ctx, S, S * S * 0.25, ['#a93226', '#d14a38', '#b8352a']);
+
+  const ph = Math.floor(S * 0.34);
+  ctx.fillStyle = '#f2f2f2';
+  ctx.fillRect(2, 2, S - 4, ph);
+  for (let i = 0; i < S * 0.25; i++) {
+    ctx.fillStyle = 'rgba(200,200,200,0.55)';
+    ctx.fillRect((Math.random() * S) | 0, 2 + ((Math.random() * (ph - 4)) | 0), 1, 1);
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(2, ph - 1, S - 4, 2);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  for (let y = ph + 4; y < S; y += 6) ctx.fillRect(0, y, S, 1);
+
+  ctx.strokeStyle = 'rgba(90,45,20,0.8)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(1, 1, S - 2, S - 2);
+}
+
+/* ============================================================
+   13. 方块材质
+   ============================================================ */
+const blockMaterials = {};
+
+function buildBlockMaterials() {
+  const T = {
+    grassTop:  makeTex(64, drawGrassTop),
+    grassSide: makeTex(64, drawGrassSide),
+    dirt:      makeTex(64, drawDirt),
+    stone:     makeTex(64, drawStone),
+    bedrock:   makeTex(64, drawBedrock),
+    obsidian:  makeTex(64, drawObsidian),
+    portal:    makeTex(64, drawNetherPortal),
+    netherrack: makeTex(64, drawNetherrack),
+    woodSide:  makeTex(64, drawWoodSide),
+    woodTop:   makeTex(64, drawWoodTop),
+    leaves:    makeTex(64, drawLeaves),
+    sand:      makeTex(64, drawSand),
+    brick:     makeTex(64, drawBrick),
+    glass:     makeTex(64, drawGlass),
+    lamp:      makeTex(64, drawLamp),
+    water:     makeTex(64, drawWater),
+    lava:      makeTex(64, drawLava),
+    planks:    makeTex(64, drawPlanks),
+    snow:      makeTex(64, drawSnow),
+    bed:       makeTex(64, drawBed),
+  };
+
+  const lam = (t, extra = {}) => new THREE.MeshLambertMaterial({ map: t, ...extra });
+
+  const grassSide = lam(T.grassSide);
+  const grassTop  = lam(T.grassTop);
+  const dirt      = lam(T.dirt);
+
+  blockMaterials[BLOCK.GRASS] = [grassSide, grassSide, grassTop, dirt, grassSide, grassSide];
+  blockMaterials[BLOCK.DIRT]  = dirt;
+  blockMaterials[BLOCK.STONE] = lam(T.stone);
+  blockMaterials[BLOCK.BEDROCK] = lam(T.bedrock);
+  blockMaterials[BLOCK.OBSIDIAN] = lam(T.obsidian);
+  blockMaterials[BLOCK.NETHERRACK] = lam(T.netherrack);
+  blockMaterials[BLOCK.NETHER_PORTAL] = new THREE.MeshBasicMaterial({
+    map: T.portal, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide
+  });
+
+  const wSide = lam(T.woodSide);
+  const wTop  = lam(T.woodTop);
+  blockMaterials[BLOCK.WOOD]   = [wSide, wSide, wTop, wTop, wSide, wSide];
+  blockMaterials[BLOCK.LEAVES] = lam(T.leaves);
+  blockMaterials[BLOCK.SAND]   = lam(T.sand);
+  blockMaterials[BLOCK.BRICK]  = lam(T.brick);
+  blockMaterials[BLOCK.GLASS]  = new THREE.MeshLambertMaterial({
+    map: T.glass, transparent: true, opacity: 0.9, depthWrite: true
+  });
+  blockMaterials[BLOCK.LAMP]   = lam(T.lamp);
+  blockMaterials[BLOCK.WATER]  = new THREE.MeshLambertMaterial({
+    map: T.water, transparent: true, opacity: 0.8, depthWrite: true
+  });
+  blockMaterials[BLOCK.LAVA]   = new THREE.MeshBasicMaterial({ map: T.lava });
+  blockMaterials[BLOCK.PLANKS] = lam(T.planks);
+  blockMaterials[BLOCK.SNOW]   = lam(T.snow);
+  blockMaterials[BLOCK.BED]    = lam(T.bed);
+}
+
+/* ============================================================
+   14. 物品图标
+   ============================================================ */
+const ICON_SPEC = {
+  [BLOCK.GRASS]:   { top: drawGrassTop, side: drawGrassSide },
+  [BLOCK.DIRT]:    { top: drawDirt,     side: drawDirt },
+  [BLOCK.STONE]:   { top: drawStone,    side: drawStone },
+  [BLOCK.BEDROCK]: { top: drawBedrock,  side: drawBedrock },
+  [BLOCK.OBSIDIAN]:{ top: drawObsidian, side: drawObsidian },
+  [BLOCK.NETHERRACK]: { top: drawNetherrack, side: drawNetherrack },
+  [BLOCK.WOOD]:    { top: drawWoodTop,  side: drawWoodSide },
+  [BLOCK.LEAVES]:  { top: drawLeaves,   side: drawLeaves },
+  [BLOCK.SAND]:    { top: drawSand,     side: drawSand },
+  [BLOCK.BRICK]:   { top: drawBrick,    side: drawBrick },
+  [BLOCK.GLASS]:   { top: drawGlass,    side: drawGlass },
+  [BLOCK.LAMP]:    { top: drawLamp,     side: drawLamp },
+  [BLOCK.WATER]:   { top: drawWater,    side: drawWater },
+  [BLOCK.LAVA]:    { top: drawLava,     side: drawLava },
+  [BLOCK.PLANKS]:  { top: drawPlanks,   side: drawPlanks },
+  [BLOCK.SNOW]:    { top: drawSnow,     side: drawSnow },
+  [BLOCK.BED]:     { top: drawBed,      side: drawBed },
+};
+
+function makeIcon(type) {
+  if (type === ITEM_FLINT_STEEL) return makeFlintIcon();
+
+  const S = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const spec = ICON_SPEC[type];
+  const topTex  = makeTexCanvas(64, spec.top);
+  const sideTex = makeTexCanvas(64, spec.side);
+
+  const cx = S / 2, cy = S / 2;
+  const HW = 50, HH = 29;
+
+  const topA = [cx,      cy - 2 * HH];
+  const topB = [cx + HW, cy - HH];
+  const topC = [cx,      cy];
+  const topD = [cx - HW, cy - HH];
+
+  const botC = [cx,      cy + 2 * HH];
+  const botL = [cx - HW, cy + HH];
+  const botR = [cx + HW, cy + HH];
+
+  function face(tex, p1, p2, p3, p4, tint) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.lineTo(p4[0], p4[1]);
+    ctx.closePath();
+    ctx.clip();
+
+    const ax = (p2[0] - p1[0]) / 64;
+    const ay = (p2[1] - p1[1]) / 64;
+    const bx = (p4[0] - p1[0]) / 64;
+    const by = (p4[1] - p1[1]) / 64;
+    ctx.setTransform(ax, ay, bx, by, p1[0], p1[1]);
+    ctx.drawImage(tex, 0, 0, 64, 64);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    if (tint) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, S, S);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+  }
+
+  face(topTex, topA, topB, topC, topD, 'rgba(255,255,255,0.16)');
+  face(sideTex, topD, topC, botC, botL, 'rgba(0,0,0,0.24)');
+  face(sideTex, topC, topB, botR, botC, 'rgba(0,0,0,0.42)');
+
+  ctx.beginPath();
+  ctx.moveTo(topA[0], topA[1]);
+  ctx.lineTo(topB[0], topB[1]);
+  ctx.lineTo(botR[0], botR[1]);
+  ctx.lineTo(botC[0], botC[1]);
+  ctx.lineTo(botL[0], botL[1]);
+  ctx.lineTo(topD[0], topD[1]);
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(topC[0], topC[1]); ctx.lineTo(topA[0], topA[1]);
+  ctx.moveTo(topC[0], topC[1]); ctx.lineTo(botC[0], botC[1]);
+  ctx.moveTo(topC[0], topC[1]); ctx.lineTo(topB[0], topB[1]);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  return cv.toDataURL();
+}
+
+function makeFlintIcon() {
+  const S = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+
+  // 石片（深灰多边形）
+  ctx.fillStyle = '#6b6b6b';
+  ctx.beginPath();
+  ctx.moveTo(22, 96);
+  ctx.lineTo(34, 62);
+  ctx.lineTo(72, 56);
+  ctx.lineTo(96, 78);
+  ctx.lineTo(88, 104);
+  ctx.lineTo(50, 110);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#3a3a3a';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // 石片高光
+  ctx.fillStyle = 'rgba(180,180,180,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(40, 70);
+  ctx.lineTo(66, 64);
+  ctx.lineTo(72, 80);
+  ctx.lineTo(48, 88);
+  ctx.closePath();
+  ctx.fill();
+
+  // 铁片（银灰梯形）
+  ctx.fillStyle = '#b8c2cc';
+  ctx.beginPath();
+  ctx.moveTo(58, 22);
+  ctx.lineTo(88, 16);
+  ctx.lineTo(102, 50);
+  ctx.lineTo(78, 60);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#6a7480';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // 铁片高光
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(66, 28);
+  ctx.lineTo(84, 24);
+  ctx.lineTo(90, 40);
+  ctx.lineTo(74, 44);
+  ctx.closePath();
+  ctx.fill();
+
+  // 火花（橙黄放射）
+  const cx = 92, cy = 68;
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4 + Math.random() * 0.3;
+    const len = 10 + Math.random() * 10;
+    ctx.strokeStyle = i % 2 === 0 ? '#ffdd33' : '#ff8800';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+    ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14);
+  g.addColorStop(0, 'rgba(255,255,220,0.95)');
+  g.addColorStop(1, 'rgba(255,140,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - 14, cy - 14, 28, 28);
+
+  return cv.toDataURL();
+}
+
+const iconURLs = {};
+function buildIcons() {
+  for (const t of ALL_ITEMS) iconURLs[t] = makeIcon(t);
+}
+
+/* ============================================================
+   15. Chunk 网格
+   ============================================================ */
+const solidGeo  = new THREE.BoxGeometry(1, 1, 1);
+const liquidGeo = new THREE.BoxGeometry(1, 0.875, 1);
+const dummy = new THREE.Object3D();
+
+function disposeChunkMeshes(c) {
+  for (const m of c.meshes) {
+    scene.remove(m);
+    m.dispose();
+  }
+  c.meshes.length = 0;
+}
+
+function isVisible(wx, y, wz, t) {
+  const liquid = (t === BLOCK.WATER || t === BLOCK.LAVA);
+  const nbs = [
+    getBlock(wx + 1, y, wz), getBlock(wx - 1, y, wz),
+    getBlock(wx, y + 1, wz), getBlock(wx, y - 1, wz),
+    getBlock(wx, y, wz + 1), getBlock(wx, y, wz - 1),
+  ];
+  for (const n of nbs) {
+    if (n === 0) return true;
+    if (n === t) continue;
+    if (liquid && (n === BLOCK.WATER || n === BLOCK.LAVA)) continue;
+    if (!isOpaque(n)) return true;
+  }
+  return false;
+}
+
+function rebuildChunk(c) {
+  disposeChunkMeshes(c);
+
+  const bx = c.cx * CH, bz = c.cz * CH;
+  const groups = new Map();
+
+  for (let ly = 0; ly < WH; ly++) {
+    for (let lz = 0; lz < CH; lz++) {
+      for (let lx = 0; lx < CH; lx++) {
+        const t = c.blocks[c.idx(lx, ly, lz)];
+        if (t === 0) continue;
+        const wx = bx + lx, wz = bz + lz;
+        if (!isVisible(wx, ly, wz, t)) continue;
+        let arr = groups.get(t);
+        if (!arr) { arr = []; groups.set(t, arr); }
+        arr.push([wx, ly, wz]);
+      }
+    }
+  }
+
+  for (const [t, list] of groups) {
+    const liquid = (t === BLOCK.WATER || t === BLOCK.LAVA);
+    const geo = liquid ? liquidGeo : solidGeo;
+    const mat = blockMaterials[t];
+    if (!mat) continue;
+
+    const m = new THREE.InstancedMesh(geo, mat, list.length);
+    const yOff = liquid ? 0.4375 : 0.5;
+
+    for (let i = 0; i < list.length; i++) {
+      const [x, y, z] = list[i];
+      dummy.position.set(x + 0.5, y + yOff, z + 0.5);
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.frustumCulled = false;
+    scene.add(m);
+    c.meshes.push(m);
+  }
+
+  c.dirty = false;
+}
+
+/* ============================================================
+   16. 维度切换
+   ============================================================ */
+function switchDimension(dim) {
+  if (dim === currentDim) return;
+
+  for (const c of chunks.values()) disposeChunkMeshes(c);
+  savedChunks[currentDim] = chunks;
+  currentDim = dim;
+  chunks = savedChunks[dim] || new Map();
+  savedChunks[dim] = chunks;
+
+  _ccx = _ccz = NaN;
+  _cchunk = null;
+
+  for (const c of chunks.values()) c.dirty = true;
+
+  applyDimEnvironment();
+  updateFog();
+}
+
+/* ============================================================
+   17. Chunk 调度
+   ============================================================ */
+function updateChunks(px, pz) {
+  if (poolInfoCache.size > 100000) poolInfoCache.clear();
+  if (shoreCache.size > 200000) shoreCache.clear();
+
+  const pcx = Math.floor(px / CH);
+  const pcz = Math.floor(pz / CH);
+  const dataR = RENDER_DIST + 1;
+
+  const maxCreate = Math.max(2, Math.min(8, Math.ceil(RENDER_DIST / 3)));
+  const maxBuild  = Math.max(2, Math.min(12, Math.ceil(RENDER_DIST / 2)));
+
+  let created = 0;
+  for (let dz = -dataR; dz <= dataR && created < maxCreate; dz++) {
+    for (let dx = -dataR; dx <= dataR && created < maxCreate; dx++) {
+      const cx = pcx + dx, cz = pcz + dz;
+      if (!chunks.has(chunkKey(cx, cz))) {
+        ensureChunk(cx, cz);
+        created++;
+      }
+    }
+  }
+
+  for (const [k, c] of chunks) {
+    if (Math.abs(c.cx - pcx) > dataR + 1 || Math.abs(c.cz - pcz) > dataR + 1) {
+      disposeChunkMeshes(c);
+      chunks.delete(k);
+    }
+  }
+
+  const pending = [];
+  for (const c of chunks.values()) {
+    if (!c.dirty) continue;
+    const d = Math.abs(c.cx - pcx) + Math.abs(c.cz - pcz);
+    if (d > RENDER_DIST + 0.5) continue;
+    pending.push([d, c]);
+  }
+  pending.sort((a, b) => a[0] - b[0]);
+  for (let i = 0; i < Math.min(maxBuild, pending.length); i++) {
+    rebuildChunk(pending[i][1]);
+  }
+}
+
+/* ============================================================
+   18. 玩家 & 物理
+   ============================================================ */
+const player = {
+  pos: new THREE.Vector3(0.5, 60, 0.5),
+  vel: new THREE.Vector3(),
+  onGround: false,
+};
+
+const P_WIDTH = 0.6, P_HEIGHT = 1.8, EYE = 1.62;
+const SPEED = 5.4, GRAVITY = 30.0, JUMP_VEL = 9.3;
+const SPRINT_MULT = 1.65;
+
+let yaw = 0, pitch = 0;
+let flying = false;
+let lastSpaceTime = -1000;
+
+const MAX_HP = 20;
+let mode = 'creative';
+let hp = MAX_HP;
+
+let spawnPoint = null;
+
+let fallStartY = null;
+let wasGrounded = true;
+
+/* 传送门状态 */
+let portalCooldown = 0;
+let portalTimer = 0;
+let savedOverworldPos = null;
+
+function collides() {
+  const p = player.pos, e = 1e-4, hw = P_WIDTH / 2;
+  const x0 = Math.floor(p.x - hw + e), x1 = Math.floor(p.x + hw - e);
+  const y0 = Math.floor(p.y + e),      y1 = Math.floor(p.y + P_HEIGHT - e);
+  const z0 = Math.floor(p.z - hw + e), z1 = Math.floor(p.z + hw - e);
+  for (let x = x0; x <= x1; x++)
+    for (let y = y0; y <= y1; y++)
+      for (let z = z0; z <= z1; z++)
+        if (isSolid(x, y, z)) return true;
+  return false;
+}
+
+function moveAxis(axis, amount) {
+  if (amount === 0) return;
+  const steps = Math.max(1, Math.ceil(Math.abs(amount) / 0.15));
+  const step = amount / steps;
+  for (let i = 0; i < steps; i++) {
+    player.pos[axis] += step;
+    if (collides()) {
+      player.pos[axis] -= step;
+      if (axis === 'y') {
+        if (step < 0) player.onGround = true;
+        player.vel.y = 0;
+      } else {
+        player.vel[axis] = 0;
+      }
+      return;
+    }
+  }
+}
+
+function isOnGround() {
+  const p = player.pos, hw = P_WIDTH / 2, e = 1e-4;
+  const y = Math.floor(p.y - 0.06);
+  if (y < 0) return false;
+  const x0 = Math.floor(p.x - hw + e), x1 = Math.floor(p.x + hw - e);
+  const z0 = Math.floor(p.z - hw + e), z1 = Math.floor(p.z + hw - e);
+  for (let x = x0; x <= x1; x++)
+    for (let z = z0; z <= z1; z++)
+      if (isSolid(x, y, z)) return true;
+  return false;
+}
+
+function respawn() {
+  if (currentDim === 'nether') switchDimension('overworld');
+
+  if (spawnPoint) {
+    const t = getBlock(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+    if (t === BLOCK.BED) {
+      player.pos.set(spawnPoint.x + 0.5, spawnPoint.y + 1.05, spawnPoint.z + 0.5);
+      player.vel.set(0, 0, 0);
+      fallStartY = null;
+      wasGrounded = true;
+      return;
+    }
+    spawnPoint = null;
+  }
+
+  ensureChunk(0, 0);
+  let y = WH - 1;
+  while (y > 0 && getBlock(0, y, 0) === 0) y--;
+  player.pos.set(0.5, y + 1.05, 0.5);
+  player.vel.set(0, 0, 0);
+  fallStartY = null;
+  wasGrounded = true;
+}
+
+/* ============================================================
+   19. 传送门检测
+   ============================================================ */
+function tryCreatePortal(px, py, pz) {
+  for (const axis of [0, 1]) {
+    const dx = axis === 0 ? 1 : 0;
+    const dz = axis === 0 ? 0 : 1;
+
+    // 向下找内部底边
+    let by = py;
+    while (by > 1 && getBlock(px, by - 1, pz) === BLOCK.AIR) by--;
+    if (getBlock(px, by - 1, pz) !== BLOCK.OBSIDIAN) continue;
+
+    // 向左找左边界
+    let bx = px, bz = pz;
+    let leftCount = 0;
+    while (getBlock(bx - dx, by, bz - dz) === BLOCK.AIR && leftCount < 22) {
+      bx -= dx; bz -= dz; leftCount++;
+    }
+    if (getBlock(bx - dx, by, bz - dz) !== BLOCK.OBSIDIAN) continue;
+
+    // 向右找右边界和宽度
+    let ex = bx, ez = bz, w = 0;
+    while (getBlock(ex, by, ez) === BLOCK.AIR && w < 22) {
+      ex += dx; ez += dz; w++;
+    }
+    if (getBlock(ex, by, ez) !== BLOCK.OBSIDIAN || w < 2) continue;
+
+    // 向上找顶部
+    let ty = by, h = 0;
+    while (getBlock(bx, ty, bz) === BLOCK.AIR && h < 22) { ty++; h++; }
+    if (getBlock(bx, ty, bz) !== BLOCK.OBSIDIAN || h < 2) continue;
+
+    // 验证框架
+    let ok = true;
+    for (let j = 0; j < h && ok; j++) {
+      if (getBlock(bx - dx, by + j, bz - dz) !== BLOCK.OBSIDIAN) ok = false;
+      if (getBlock(ex, by + j, ez) !== BLOCK.OBSIDIAN) ok = false;
+    }
+    for (let i = 0; i < w && ok; i++) {
+      if (getBlock(bx + dx * i, by - 1, bz + dz * i) !== BLOCK.OBSIDIAN) ok = false;
+      if (getBlock(bx + dx * i, ty, bz + dz * i) !== BLOCK.OBSIDIAN) ok = false;
+    }
+    if (ok) {
+      if (getBlock(bx - dx, by - 1, bz - dz) !== BLOCK.OBSIDIAN) ok = false;
+      if (getBlock(ex, by - 1, ez) !== BLOCK.OBSIDIAN) ok = false;
+      if (getBlock(bx - dx, ty, bz - dz) !== BLOCK.OBSIDIAN) ok = false;
+      if (getBlock(ex, ty, ez) !== BLOCK.OBSIDIAN) ok = false;
+    }
+    if (!ok) continue;
+
+    // 内部必须全空气
+    let allAir = true;
+    for (let i = 0; i < w && allAir; i++) {
+      for (let j = 0; j < h; j++) {
+        if (getBlock(bx + dx * i, by + j, bz + dz * i) !== BLOCK.AIR) {
+          allAir = false; break;
+        }
+      }
+    }
+    if (!allAir) continue;
+
+    // 填充传送门方块
+    for (let i = 0; i < w; i++) {
+      for (let j = 0; j < h; j++) {
+        setBlock(bx + dx * i, by + j, bz + dz * i, BLOCK.NETHER_PORTAL);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+function inPortal() {
+  const p = player.pos;
+  const x0 = Math.floor(p.x - 0.3), x1 = Math.floor(p.x + 0.3);
+  const y0 = Math.floor(p.y),      y1 = Math.floor(p.y + P_HEIGHT);
+  const z0 = Math.floor(p.z - 0.3), z1 = Math.floor(p.z + 0.3);
+  for (let x = x0; x <= x1; x++)
+    for (let y = y0; y <= y1; y++)
+      for (let z = z0; z <= z1; z++)
+        if (getBlock(x, y, z) === BLOCK.NETHER_PORTAL) return true;
+  return false;
+}
+
+function teleport() {
+  if (currentDim === 'overworld') {
+    savedOverworldPos = player.pos.clone();
+    switchDimension('nether');
+
+    // 在地狱寻找落点
+    const sx = Math.floor(player.pos.x);
+    const sz = Math.floor(player.pos.z);
+    ensureChunk(Math.floor(sx / 16), Math.floor(sz / 16));
+    let y = 100;
+    while (y > 5 && !isSolid(sx, y, sz)) y--;
+    player.pos.set(sx + 0.5, y + 1.05, sz + 0.5);
+    player.vel.set(0, 0, 0);
+    fallStartY = null;
+    wasGrounded = true;
+    showToast('进入地狱');
+  } else {
+    switchDimension('overworld');
+    if (savedOverworldPos) {
+      player.pos.copy(savedOverworldPos);
+      player.vel.set(0, 0, 0);
+      fallStartY = null;
+      wasGrounded = true;
+    } else {
+      respawn();
+    }
+    showToast('回到主世界');
+  }
+  portalTimer = 0;
+}
+
+/* ============================================================
+   20. Toast / 生命值 UI
+   ============================================================ */
+const toastEl = document.getElementById('toast');
+let toastTimer = 0;
+
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+const healthEl = document.getElementById('health');
+const modeEl = document.getElementById('mode');
+const flashEl = document.getElementById('damageFlash');
+
+function renderHealth() {
+  if (mode !== 'survival') {
+    healthEl.classList.add('hidden');
+    return;
+  }
+  healthEl.classList.remove('hidden');
+
+  let html = '';
+  for (let i = 0; i < 10; i++) {
+    const heartVal = hp - i * 2;
+    let frac = 0;
+    if (heartVal >= 2) frac = 1;
+    else if (heartVal === 1) frac = 0.5;
+
+    const clip = (1 - frac) * 100;
+    html += `<div class="heart">
+      <i class="fa-solid fa-heart bg"></i>
+      <i class="fa-solid fa-heart fill" style="clip-path:inset(0 ${clip}% 0 0)"></i>
+    </div>`;
+  }
+  healthEl.innerHTML = html;
+}
+
+function renderMode() {
+  if (mode === 'creative') {
+    modeEl.textContent = '创造模式';
+    modeEl.style.background = 'rgba(60, 120, 200, .5)';
+  } else if (mode === 'survival') {
+    modeEl.textContent = '生存模式';
+    modeEl.style.background = 'rgba(180, 50, 50, .5)';
+  } else {
+    modeEl.textContent = '旁观者模式';
+    modeEl.style.background = 'rgba(140, 60, 200, .5)';
+  }
+}
+
+function flashDamage() {
+  flashEl.classList.add('show');
+  setTimeout(() => flashEl.classList.remove('show'), 60);
+}
+
+function damage(amount) {
+  if (mode !== 'survival' || flying) return;
+  amount = Math.max(1, Math.round(amount));
+  hp = Math.max(0, hp - amount);
+  renderHealth();
+  flashDamage();
+
+  if (hp <= 0) {
+    hp = MAX_HP;
+    renderHealth();
+    respawn();
+    showToast('你死了，已重生');
+  }
+}
+
+/* ============================================================
+   21. 物品栏 & 背包
+   ============================================================ */
+let hotbar = Array(9).fill(null);
+const inventory = new Map();
+let selected = 0;
+let invOpen = false;
+
+const hotbarEl = document.getElementById('hotbar');
+const invEl = document.getElementById('inventory');
+const invGrid = document.getElementById('invGrid');
+const invSub = document.getElementById('invSub');
+const slotEls = [];
+
+function buildHotbarDOM() {
+  hotbarEl.innerHTML = '';
+  slotEls.length = 0;
+  for (let i = 0; i < 9; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.innerHTML = `<div class="icon"></div><span class="num">${i + 1}</span><span class="count"></span>`;
+    slot.addEventListener('click', () => {
+      selected = i;
+      updateHotbarVisual();
     });
+    hotbarEl.appendChild(slot);
+    slotEls.push(slot);
+  }
+}
 
-    document.addEventListener('keyup', (e) => {
-      const k = e.key.toLowerCase();
-      if (k === 'w' || k === 'arrowup') keys.w = false;
-      if (k === 's' || k === 'arrowdown') keys.s = false;
-      if (k === 'a' || k === 'arrowleft') keys.a = false;
-      if (k === 'd' || k === 'arrowright') keys.d = false;
-      if (e.code === 'Space') keys.space = false;
-      if (e.key === 'Shift') keys.shift = false;
-    });
+function countText(count) {
+  if (count === undefined || count === null || count < 0) return '∞';
+  return String(count);
+}
 
-    // 鼠标拖拽旋转视角
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-    let yaw = 0; // 左右旋转
-    let pitch = 0; // 上下旋转
+function updateHotbarVisual() {
+  for (let i = 0; i < 9; i++) {
+    const el = slotEls[i];
+    const slot = hotbar[i];
+    el.classList.toggle('active', i === selected);
+    const icon = el.querySelector('.icon');
+    const countEl = el.querySelector('.count');
 
-    container.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
+    if (slot && slot.type) {
+      icon.style.backgroundImage = `url(${iconURLs[slot.type]})`;
+      el.title = DEF[slot.type].name;
+      countEl.textContent = countText(slot.count);
+    } else {
+      icon.style.backgroundImage = '';
+      el.title = '空';
+      countEl.textContent = '';
+    }
+  }
+}
 
-    window.addEventListener('mouseup', () => { isDragging = false; });
+function addToHotbarFromInventory(type) {
+  let idx = hotbar.findIndex(s => s === null);
+  if (idx < 0) idx = selected;
 
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
-      
-      yaw -= deltaX * 0.005;
-      pitch -= deltaY * 0.005;
-      
-      // 限制上下视角，防止翻转
-      pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
-      
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
+  const stackMax = DEF[type].stack || 64;
 
-    // ==================================================================
-    // UI 绑定
-    // ==================================================================
-    document.getElementById('input-seed').addEventListener('change', (e) => {
-      CONFIG.seed = parseInt(e.target.value) || 12345;
-      initNoise(CONFIG.seed);
-      updateTerrain();
-    });
+  if (mode === 'creative') {
+    hotbar[idx] = { type, count: -1 };
+    updateHotbarVisual();
+    return;
+  }
 
-    document.getElementById('btn-random-seed').addEventListener('click', () => {
-      const newSeed = Math.floor(Math.random() * 999999) + 1;
-      document.getElementById('input-seed').value = newSeed;
-      CONFIG.seed = newSeed;
-      initNoise(CONFIG.seed);
-      updateTerrain();
-    });
+  const have = inventory.get(type) || 0;
+  if (have <= 0) {
+    showToast('背包里没有 ' + DEF[type].name);
+    return;
+  }
+  const existing = hotbar[idx];
+  let take;
 
-    document.getElementById('input-height').addEventListener('change', (e) => {
-      CONFIG.heightScale = parseInt(e.target.value) || 30;
-      updateTerrain();
-    });
+  if (existing && existing.type === type) {
+    const space = stackMax - existing.count;
+    take = Math.min(space, have);
+    if (take <= 0) { showToast('这一格已经满了'); return; }
+    existing.count += take;
+  } else {
+    take = Math.min(stackMax, have);
+    hotbar[idx] = { type, count: take };
+  }
 
-    document.getElementById('input-speed').addEventListener('change', (e) => {
-      CONFIG.speed = parseFloat(e.target.value) || 1.5;
-    });
+  inventory.set(type, have - take);
+  if (inventory.get(type) <= 0) inventory.delete(type);
 
-    const colorMaps = [
-      { id: 'color-plain-light', key: 'plainLight' },
-      { id: 'color-plain-dark', key: 'plainDark' },
-      { id: 'color-river-light', key: 'riverLight' },
-      { id: 'color-river-dark', key: 'riverDark' },
-      { id: 'color-mountain-bright', key: 'mountainBright' },
-      { id: 'color-mountain-dark', key: 'mountainDark' }
+  updateHotbarVisual();
+  if (invOpen) buildInventoryDOM();
+}
+
+function buildInventoryDOM() {
+  invGrid.innerHTML = '';
+
+  if (mode === 'creative') {
+    invSub.textContent = '创造模式 · 物品无限';
+    for (const t of ALL_ITEMS) {
+      const cell = document.createElement('div');
+      cell.className = 'inv-cell';
+      cell.title = DEF[t].name;
+      cell.innerHTML = `<div class="icon" style="background-image:url(${iconURLs[t]})"></div>
+                        <span class="icount">∞</span>`;
+      cell.addEventListener('click', () => addToHotbarFromInventory(t));
+      invGrid.appendChild(cell);
+    }
+    return;
+  }
+
+  invSub.textContent = `生存模式 · 背包共 ${inventory.size} 种物品`;
+  if (inventory.size === 0) {
+    const cell = document.createElement('div');
+    cell.className = 'inv-cell empty';
+    cell.style.gridColumn = 'span 7';
+    cell.style.width = '100%';
+    cell.textContent = '空';
+    cell.style.color = 'rgba(255,255,255,.4)';
+    cell.style.fontSize = '13px';
+    invGrid.appendChild(cell);
+    return;
+  }
+
+  for (const [t, count] of inventory) {
+    if (count <= 0) continue;
+    const cell = document.createElement('div');
+    cell.className = 'inv-cell';
+    cell.title = `${DEF[t].name} × ${count}`;
+    cell.innerHTML = `<div class="icon" style="background-image:url(${iconURLs[t]})"></div>
+                      <span class="icount">${count}</span>`;
+    cell.addEventListener('click', () => addToHotbarFromInventory(t));
+    invGrid.appendChild(cell);
+  }
+}
+
+function selectSlot(i) {
+  selected = ((i % 9) + 9) % 9;
+  updateHotbarVisual();
+}
+
+/* ============================================================
+   22. 模式切换
+   ============================================================ */
+const MODE_CYCLE = ['creative', 'survival', 'spectator'];
+
+function resetHotbarForMode() {
+  if (mode === 'creative') {
+    hotbar = [
+      { type: BLOCK.GRASS,    count: -1 },
+      { type: BLOCK.STONE,    count: -1 },
+      { type: BLOCK.WOOD,     count: -1 },
+      { type: BLOCK.PLANKS,   count: -1 },
+      { type: BLOCK.GLASS,    count: -1 },
+      { type: BLOCK.LAMP,     count: -1 },
+      { type: BLOCK.OBSIDIAN, count: -1 },
+      { type: ITEM_FLINT_STEEL, count: -1 },
+      { type: BLOCK.BED,      count: -1 },
     ];
+  } else {
+    hotbar = Array(9).fill(null);
+    inventory.clear();
+  }
+  selected = 0;
+  updateHotbarVisual();
+}
 
-    colorMaps.forEach(({ id, key }) => {
-      document.getElementById(id).addEventListener('input', (e) => {
-        CONFIG.colors[key] = e.target.value;
-        updateColors();
-        updateTerrain();
-      });
-    });
+function cycleMode() {
+  const i = MODE_CYCLE.indexOf(mode);
+  const next = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];
+  mode = next;
 
-    // ==================================================================
-    // 动画循环
-    // ==================================================================
-    const clock = new THREE.Clock();
+  if (mode === 'creative') {
+    hp = MAX_HP;
+    flying = false;
+  } else if (mode === 'survival') {
+    hp = MAX_HP;
+    flying = false;
+  } else {
+    // 旁观者
+    flying = false;
+    hp = MAX_HP;
+  }
 
-    function animate() {
-      requestAnimationFrame(animate);
+  resetHotbarForMode();
+  renderMode();
+  renderHealth();
+  if (invOpen) buildInventoryDOM();
 
-      const delta = clock.getDelta();
+  showToast(`切换到${mode === 'creative' ? '创造' : mode === 'survival' ? '生存' : '旁观者'}模式`);
+}
 
-      // 1. 处理键盘移动
-      let moved = false;
-      const speed = CONFIG.speed * delta * 20;
-      
-      // 计算水平移动方向（基于当前视角）
-      const forwardX = Math.sin(yaw);
-      const forwardZ = Math.cos(yaw);
-      const rightX = Math.cos(yaw);
-      const rightZ = -Math.sin(yaw);
+/* ============================================================
+   23. 射线检测
+   ============================================================ */
+function raycastVoxel(origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
 
-      if (keys.w) { camera.position.x -= forwardX * speed; camera.position.z -= forwardZ * speed; moved = true; }
-      if (keys.s) { camera.position.x += forwardX * speed; camera.position.z += forwardZ * speed; moved = true; }
-      if (keys.a) { camera.position.x -= rightX * speed; camera.position.z -= rightZ * speed; moved = true; }
-      if (keys.d) { camera.position.x += rightX * speed; camera.position.z += rightZ * speed; moved = true; }
-      
-      // 垂直移动
-      if (keys.space) { camera.position.y += speed * 1.5; }
-      if (keys.shift) { camera.position.y -= speed * 1.5; }
+  const stepX = Math.sign(dir.x), stepY = Math.sign(dir.y), stepZ = Math.sign(dir.z);
+  const tDeltaX = stepX !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDeltaY = stepY !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDeltaZ = stepZ !== 0 ? Math.abs(1 / dir.z) : Infinity;
 
-      // 防止相机穿地
-      const groundH = getTerrainData(camera.position.x, camera.position.z).h * CONFIG.heightScale;
-      if (camera.position.y < groundH + 2) {
-        camera.position.y = groundH + 2;
+  let tMaxX = stepX > 0 ? (x + 1 - origin.x) / dir.x : stepX < 0 ? (x - origin.x) / dir.x : Infinity;
+  let tMaxY = stepY > 0 ? (y + 1 - origin.y) / dir.y : stepY < 0 ? (y - origin.y) / dir.y : Infinity;
+  let tMaxZ = stepZ > 0 ? (z + 1 - origin.z) / dir.z : stepZ < 0 ? (z - origin.z) / dir.z : Infinity;
+
+  let nx = 0, ny = 0, nz = 0, t = 0;
+
+  while (t <= maxDist) {
+    if (getBlock(x, y, z) !== 0) return { x, y, z, nx, ny, nz };
+
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      x += stepX; t = tMaxX; tMaxX += tDeltaX; nx = -stepX; ny = 0; nz = 0;
+    } else if (tMaxY < tMaxZ) {
+      y += stepY; t = tMaxY; tMaxY += tDeltaY; nx = 0; ny = -stepY; nz = 0;
+    } else {
+      z += stepZ; t = tMaxZ; tMaxZ += tDeltaZ; nx = 0; ny = 0; nz = -stepZ;
+    }
+  }
+  return null;
+}
+
+function lookDir() {
+  return new THREE.Vector3(
+    -Math.sin(yaw) * Math.cos(pitch),
+     Math.sin(pitch),
+    -Math.cos(yaw) * Math.cos(pitch)
+  );
+}
+
+/* ============================================================
+   24. 破坏 / 放置 / 交互
+   ============================================================ */
+function playerIntersectsBlock(x, y, z) {
+  const p = player.pos, hw = P_WIDTH / 2;
+  return (x + 1 > p.x - hw && x < p.x + hw &&
+          y + 1 > p.y      && y < p.y + P_HEIGHT &&
+          z + 1 > p.z - hw && z < p.z + hw);
+}
+
+function breakBlock() {
+  if (mode === 'spectator') return;
+
+  const hit = raycastVoxel(camera.position, lookDir(), 6);
+  if (!hit) return;
+
+  const t = getBlock(hit.x, hit.y, hit.z);
+  if (t === BLOCK.AIR) return;
+  if (t === BLOCK.BEDROCK) return;
+
+  if (t === BLOCK.BED && spawnPoint &&
+      spawnPoint.x === hit.x && spawnPoint.y === hit.y && spawnPoint.z === hit.z) {
+    spawnPoint = null;
+    showToast('重生点已失效');
+  }
+
+  setBlock(hit.x, hit.y, hit.z, BLOCK.AIR);
+
+  if (mode === 'survival' && t !== BLOCK.NETHER_PORTAL) {
+    const cur = inventory.get(t) || 0;
+    inventory.set(t, cur + 1);
+    if (invOpen) buildInventoryDOM();
+  }
+}
+
+function placeBlock() {
+  if (mode === 'spectator') return;
+
+  const slot = hotbar[selected];
+  if (!slot || !slot.type) return;
+
+  const hit = raycastVoxel(camera.position, lookDir(), 6);
+  if (!hit) return;
+
+  // 打火石：点燃黑曜石框架
+  if (slot.type === ITEM_FLINT_STEEL) {
+    // 尝试六个方向的相邻空气
+    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    for (const [ox, oy, oz] of dirs) {
+      const ax = hit.x + ox, ay = hit.y + oy, az = hit.z + oz;
+      if (ay < 0 || ay >= WH) continue;
+      if (getBlock(ax, ay, az) !== BLOCK.AIR) continue;
+      if (tryCreatePortal(ax, ay, az)) {
+        showToast('传送门已点燃');
+        return;
       }
+    }
+    // 尝试点击位置本身（若为空气——通常不会）
+    showToast('需要 2×3 以上的黑曜石框架');
+    return;
+  }
 
-      // 2. 更新相机旋转
-      camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  // 床：绑定重生点
+  const target = getBlock(hit.x, hit.y, hit.z);
+  if (target === BLOCK.BED) {
+    spawnPoint = { x: hit.x, y: hit.y, z: hit.z };
+    showToast('重生点已绑定');
+    return;
+  }
 
-      // 3. 如果移动了，实时更新地形顶点（无限地形效果）
-      if (moved) {
-        updateTerrain();
-      }
+  const x = hit.x + hit.nx;
+  const y = hit.y + hit.ny;
+  const z = hit.z + hit.nz;
 
-      renderer.render(scene, camera);
+  if (y < 0 || y >= WH) return;
+  if (getBlock(x, y, z) !== 0) return;
+  if (playerIntersectsBlock(x, y, z)) return;
+
+  setBlock(x, y, z, slot.type);
+
+  if (mode === 'survival' && slot.count > 0) {
+    slot.count--;
+    if (slot.count <= 0) hotbar[selected] = null;
+    updateHotbarVisual();
+  }
+}
+
+/* ============================================================
+   25. 指针锁定 & 背包
+   ============================================================ */
+const overlay = document.getElementById('overlay');
+const canvas  = renderer.domElement;
+let locked = false;
+
+function syncOverlay() {
+  overlay.style.display = (locked || invOpen) ? 'none' : 'flex';
+}
+
+function toggleInventory() {
+  invOpen = !invOpen;
+  invEl.classList.toggle('hidden', !invOpen);
+
+  if (invOpen) {
+    document.exitPointerLock();
+    for (const k in keys) keys[k] = false;
+    overlay.style.display = 'none';
+    buildInventoryDOM();
+  } else {
+    overlay.style.display = 'none';
+    if (!locked) {
+      const p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
+  }
+}
+
+invEl.addEventListener('click', (e) => {
+  if (e.target === invEl) toggleInventory();
+});
+
+function requestLock() {
+  const p = canvas.requestPointerLock();
+  if (p && typeof p.catch === 'function') p.catch(() => {});
+}
+
+document.getElementById('startBtn').addEventListener('click', requestLock);
+
+canvas.addEventListener('mousedown', (e) => {
+  if (!locked && !invOpen) { requestLock(); return; }
+  if (!locked) return;
+  if (e.button === 0) breakBlock();
+  else if (e.button === 2) placeBlock();
+});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  syncOverlay();
+});
+
+document.addEventListener('pointerlockerror', () => {
+  syncOverlay();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  const sens = 0.0022;
+  yaw   -= e.movementX * sens;
+  pitch -= e.movementY * sens;
+  const lim = Math.PI / 2 - 0.02;
+  pitch = Math.max(-lim, Math.min(lim, pitch));
+});
+
+/* ============================================================
+   26. 设置面板
+   ============================================================ */
+const rdSlider = document.getElementById('rdSlider');
+const rdVal = document.getElementById('rdVal');
+const fsSlider = document.getElementById('fsSlider');
+const fsVal = document.getElementById('fsVal');
+
+rdSlider.addEventListener('input', () => {
+  RENDER_DIST = parseInt(rdSlider.value, 10);
+  rdVal.textContent = RENDER_DIST;
+  updateFog();
+});
+
+fsSlider.addEventListener('input', () => {
+  FLY_SPEED_MULT = parseFloat(fsSlider.value);
+  fsVal.textContent = FLY_SPEED_MULT.toFixed(1) + '×';
+});
+
+/* ============================================================
+   27. 输入
+   ============================================================ */
+const keys = Object.create(null);
+
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE') {
+    e.preventDefault();
+    toggleInventory();
+    return;
+  }
+  if (e.code === 'Escape' && invOpen) {
+    toggleInventory();
+    return;
+  }
+  if (invOpen) return;
+
+  if (e.code === 'KeyM') {
+    e.preventDefault();
+    cycleMode();
+    return;
+  }
+
+  if (e.code === 'Space' && !e.repeat) {
+    const now = performance.now();
+    if (now - lastSpaceTime < 320 && mode === 'creative') {
+      flying = !flying;
+      player.vel.y = 0;
+      showToast(flying ? '飞行模式：开' : '飞行模式：关');
+      if (flying) fallStartY = null;
+    }
+    lastSpaceTime = now;
+  }
+
+  keys[e.code] = true;
+  if (e.code === 'Space') e.preventDefault();
+
+  if ((e.ctrlKey || e.metaKey) &&
+      ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+    e.preventDefault();
+  }
+
+  if (e.code.startsWith('Digit')) {
+    const n = parseInt(e.code.slice(5), 10);
+    if (n >= 1 && n <= 9) selectSlot(n - 1);
+  }
+});
+
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+addEventListener('wheel', (e) => {
+  if (!locked) return;
+  selectSlot(selected + (e.deltaY > 0 ? 1 : -1));
+}, { passive: true });
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ============================================================
+   28. 主循环
+   ============================================================ */
+const hudEl = document.getElementById('hud');
+
+function updatePlayer(dt) {
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  if (invOpen) {
+    player.vel.x = 0;
+    player.vel.z = 0;
+    if (mode !== 'spectator' && !flying) {
+      player.vel.y -= GRAVITY * dt;
+      moveAxis('y', player.vel.y * dt);
+    }
+    camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+    return;
+  }
+
+  const fwd   = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const right = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+  const wish  = new THREE.Vector3();
+
+  if (keys['KeyW']) wish.add(fwd);
+  if (keys['KeyS']) wish.sub(fwd);
+  if (keys['KeyD']) wish.add(right);
+  if (keys['KeyA']) wish.sub(right);
+
+  const sprinting = !!(keys['ControlLeft'] || keys['ControlRight']);
+
+  if (mode === 'spectator') {
+    // 旁观者：自由飞行 + 穿墙
+    const speed = SPEED * FLY_SPEED_MULT * (sprinting ? SPRINT_MULT : 1);
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
+    player.vel.x = wish.x;
+    player.vel.z = wish.z;
+    player.vel.y = 0;
+    if (keys['Space']) player.vel.y = speed;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) player.vel.y = -speed;
+
+    player.pos.x += player.vel.x * dt;
+    player.pos.y += player.vel.y * dt;
+    player.pos.z += player.vel.z * dt;
+
+    if (player.pos.y < -30) {
+      respawn();
+      return;
     }
 
-    // 窗口调整
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    fallStartY = null;
+    wasGrounded = false;
+  } else if (flying) {
+    const flySpeed = SPEED * FLY_SPEED_MULT * (sprinting ? SPRINT_MULT : 1);
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(flySpeed);
+    player.vel.x = wish.x;
+    player.vel.z = wish.z;
+    player.vel.y = 0;
+    if (keys['Space']) player.vel.y = flySpeed;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) player.vel.y = -flySpeed;
 
-    // 启动
-    initNoise(CONFIG.seed);
-    updateTerrain();
-    animate();
+    moveAxis('x', player.vel.x * dt);
+    moveAxis('z', player.vel.z * dt);
+    moveAxis('y', player.vel.y * dt);
 
-  </script>
+    fallStartY = null;
+    wasGrounded = false;
+  } else {
+    const speed = sprinting ? SPEED * SPRINT_MULT : SPEED;
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
+    player.vel.x = wish.x;
+    player.vel.z = wish.z;
+
+    player.onGround = isOnGround();
+    if (player.onGround) {
+      if (player.vel.y < 0) player.vel.y = 0;
+      if (keys['Space']) player.vel.y = JUMP_VEL;
+    }
+    player.vel.y -= GRAVITY * dt;
+    if (player.vel.y < -70) player.vel.y = -70;
+
+    moveAxis('x', player.vel.x * dt);
+    moveAxis('z', player.vel.z * dt);
+    moveAxis('y', player.vel.y * dt);
+
+    const grounded = isOnGround();
+
+    if (mode === 'survival') {
+      if (!grounded && wasGrounded) fallStartY = player.pos.y;
+      if (!grounded && (fallStartY === null || player.pos.y > fallStartY)) {
+        fallStartY = player.pos.y;
+      }
+      if (grounded && !wasGrounded && fallStartY !== null) {
+        const dist = fallStartY - player.pos.y;
+        if (dist > 3.5) {
+          const dmg = Math.floor(dist - 3.5);
+          if (dmg > 0) damage(dmg);
+        }
+        fallStartY = null;
+      }
+    } else {
+      fallStartY = null;
+    }
+    wasGrounded = grounded;
+  }
+
+  if (player.pos.y < -20) {
+    hp = MAX_HP;
+    renderHealth();
+    respawn();
+    return;
+  }
+
+  /* ---- 传送门检测 ---- */
+  const now = performance.now();
+  if (now > portalCooldown) {
+    if (inPortal()) {
+      portalTimer += dt;
+      if (portalTimer > 1.0) {
+        portalTimer = 0;
+        portalCooldown = now + 3000;
+        teleport();
+        camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+        return;
+      }
+    } else {
+      portalTimer = 0;
+    }
+  }
+
+  camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+}
+
+let lastTime = performance.now();
+let frames = 0, fpsTime = 0, fps = 0;
+
+function animate(now) {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  updatePlayer(dt);
+  updateChunks(player.pos.x, player.pos.z);
+
+  renderer.render(scene, camera);
+
+  frames++; fpsTime += dt;
+  if (fpsTime >= 0.5) {
+    fps = Math.round(frames / fpsTime);
+    frames = 0; fpsTime = 0;
+
+    const slot = hotbar[selected];
+    const itemName = (slot && slot.type) ? DEF[slot.type].name : '空';
+    const biome = currentDim === 'nether'
+      ? '地狱'
+      : BIOME_NAME[biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z))];
+    const sp = spawnPoint ? `(${spawnPoint.x},${spawnPoint.z})` : '(0,0)';
+
+    hudEl.textContent =
+      `FPS ${fps}  |  X ${player.pos.x.toFixed(1)}  Y ${player.pos.y.toFixed(1)}  Z ${player.pos.z.toFixed(1)}` +
+      `  |  ${currentDim === 'nether' ? '🔥 地狱' : biome}  |  ${flying || mode === 'spectator' ? '✈' : '·'}  |  ${itemName}` +
+      `  |  HP ${mode === 'survival' ? hp : '∞'}  |  床 ${sp}` +
+      `  |  Chunks ${chunks.size} / R${RENDER_DIST}`;
+  }
+}
+
+/* ============================================================
+   29. 启动
+   ============================================================ */
+document.getElementById('seedInfo').textContent =
+  '世界种子：' + SEED + '　高度上限：' + WH + '　最大渲染距离：' + MAX_RENDER_DIST;
+
+buildBlockMaterials();
+buildIcons();
+buildHotbarDOM();
+buildInventoryDOM();
+renderMode();
+renderHealth();
+
+resetHotbarForMode();
+
+{
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++)
+      ensureChunk(dx, dz);
+}
+
+respawn();
+camera.position.set(player.pos.x, player.pos.y + EYE, player.pos.z);
+syncOverlay();
+requestAnimationFrame(animate);
+</script>
 </body>
 </html>

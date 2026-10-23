@@ -10,7 +10,12 @@
 
   "regions": ["hkg1"],
 
-
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 18 * * *"
+    }
+  ],
 
   "redirects": [
     { "source": "/admin",        "destination": "/admin/maps.html", "permanent": false },

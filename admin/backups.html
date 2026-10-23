@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backups · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/admin/backups.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/maps.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+
+    <main>
+      <p id="load-error" class="form-error" hidden></p>
+      <p class="eyebrow">Admin</p>
+      <h1>Backups</h1>
+      <p class="lead">
+        The full database is copied to the private GitHub backup repository every day at
+        <strong>02:00 Hong Kong time</strong>. The live database is always the top node.
+        Restoring creates a safety snapshot first, then starts a new branch from the restored node.
+      </p>
+
+      <div id="backup-config" class="backup-config" hidden></div>
+
+      <div class="backup-toolbar">
+        <button id="backup-refresh" class="back-button" type="button">
+          <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+        </button>
+        <button id="backup-now" class="save-changes" type="button">
+          <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Back up now
+        </button>
+        <span id="backup-status" class="field-note" role="status" aria-live="polite"></span>
+      </div>
+
+      <section id="backup-current" class="backup-current" aria-live="polite"></section>
+
+      <section class="backup-history">
+        <div class="backup-section-head">
+          <h2>Backup tree</h2>
+          <p id="backup-head-note" class="field-note"></p>
+        </div>
+        <p id="backup-empty" class="field-note" hidden>No complete backups yet. Use “Back up now” or wait for the 02:00 cron.</p>
+        <div id="backup-tree" class="backup-tree"></div>
+      </section>
+
+      <section id="restore-panel" class="backup-restore" hidden>
+        <div class="backup-section-head">
+          <h2>Restore selected backup</h2>
+          <button id="restore-cancel" class="back-button" type="button">Cancel</button>
+        </div>
+        <p id="restore-target" class="backup-restore-target"></p>
+        <p class="backup-warning">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          The server will first create a safety snapshot of the current database and verify it.
+          Only then will it replace the live database. Restoring an old backup can remove or change
+          your own admin account, so you may be signed out afterwards.
+        </p>
+        <p class="field-note">
+          After a successful restore, an after-restore snapshot is written and a new branch starts
+          from the selected node. The old branch remains in the tree.
+        </p>
+
+        <label class="backup-confirm-label" for="restore-confirm">
+          Confirmation code
+        </label>
+        <input id="restore-confirm" class="backup-confirm-input" type="password"
+          autocomplete="off" spellcheck="false" placeholder="Value of DSCONFIRM" />
+        <p class="field-note">Enter the exact value of the server environment variable <code>DSCONFIRM</code>.</p>
+
+        <label class="backup-check">
+          <input id="restore-understand" type="checkbox" />
+          I understand that the live database will be replaced by this backup.
+        </label>
+
+        <button id="restore-button" class="delete-map" type="button" disabled>
+          <i class="fa-solid fa-database" aria-hidden="true"></i> Restore live database
+        </button>
+        <p id="restore-error" class="form-error" hidden></p>
+      </section>
+
+      <pre id="backup-log" class="backup-log" hidden></pre>
+    </main>
+  </div>
+
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+  <script type="module" src="/app/admin-backups.js"></script>
+</body>
+</html>
