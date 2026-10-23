@@ -13,6 +13,8 @@ import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fil
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
 import { drawTeleportLinks } from "../shared/teleport-link.js";
+import { watchContestPatch } from "../shared/contest-sync.js";
+import { mergeEnergyLedger } from "../shared/energy.js";
 
 
 
@@ -44,6 +46,12 @@ async function run() {
   bindEvents();
   render();
   startClock();
+  watchContestPatch(contestId, (patch) => {
+    if (!Array.isArray(patch.energy)) return;
+    state.current.energy = mergeEnergyLedger(state.current.energy, patch.energy);
+    noteServerTime(patch.serverNow);
+    paintClock();
+  });
 }
 
 function bindEvents() {
@@ -737,7 +745,7 @@ function paintClock() {
 function startClock() {
   if (state.clock) return;
   state.clock = setInterval(() => {
-    if (!document.querySelector("#contest-view") && !document.querySelector("#contest-grid")) {
+    if (!document.querySelector("#contest-boards")) {
       clearInterval(state.clock); state.clock = null; return;
     }
     paintClock();

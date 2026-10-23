@@ -14,6 +14,7 @@ import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks } from "../shared/teleport-link.js";
+import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -82,6 +83,10 @@ async function run() {
   bindEvents();
   render();
   startClock();
+  watchContestPatch(contestId, (patch) => {
+    applyPlayState({ contest: patch, serverNow: patch.serverNow });
+    render();
+  });
 }
 function bindBackToTop() {
   const resetAndScroll = () => {
@@ -997,6 +1002,7 @@ async function submitAnswer(event) {
   try {
     const data = await api.solve(contest.id, cell, document.querySelector("#student-answer").value, map.id);
     applyPlayState(data);
+    publishContestPatch(contest.id, data.contest, data.serverNow);
     document.querySelector("#student-answer").value = "";
     document.querySelector("#student-answer-form").hidden = true;
     const success = document.querySelector("#student-answer-success");
@@ -1084,7 +1090,10 @@ async function submitAnswer(event) {
 
   } catch (err) {
     contest.claims = prevClaims;
-    if (err.data?.contest) applyPlayState(err.data);
+    if (err.data?.contest) {
+      applyPlayState(err.data);
+      publishContestPatch(contest.id, err.data.contest, err.data.serverNow);
+    }
     failure = err.message;
   }
   submit.dataset.busy = "";

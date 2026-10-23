@@ -15,6 +15,8 @@
     <p id="answer-status" class="form-error" hidden></p>
     <h1 id="student-problem-tag"></h1>
     <div id="student-problem-prompt"></div>
+    <p id="answer-energy" class="energy-readout" hidden></p>
+    <div id="answer-energy-track" class="energy-track" hidden><div id="answer-energy-fill" class="energy-fill"></div></div>
     <form id="student-answer-form">
       <label>Answer <input id="student-answer" type="text" maxlength="5000" /></label>
       <button type="submit">Submit</button>
@@ -23,6 +25,6 @@
   </main>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/answer.js"></script>
+  <script type="module" src="/app/answer.js?v=energy-fix"></script>
 </body>
 </html>

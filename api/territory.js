@@ -27,7 +27,7 @@ import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
 import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 import { runProblemLogic } from './logic.js';
-import { cleanEnergyLedger, energyAfterAttempt, energyNow, readEnergySettings } from '../shared/energy.js';
+import { cleanEnergyLedger, energyAfterAttempt, energyState, readEnergySettings } from '../shared/energy.js';
 import { problemScore } from '../shared/difficulty.js';
 import { MAX_PROBLEM_SCORE } from '../shared/constants.js';
 import {
@@ -527,10 +527,10 @@ function energyFields(contest, onlyTeamId, now) {
   };
 }
 
-function teamEnergyValue(contest, teamId, now) {
+function teamEnergySnapshot(contest, teamId, now) {
   const timing = contestWindow(contest);
   const stored = cleanEnergyLedger(contest?.energy).find((entry) => entry.teamId === teamId) || null;
-  return energyNow({
+  return energyState({
     settings: readEnergySettings(contest),
     liveAt: timing?.liveAt,
     endAt: timing?.endAt,
@@ -539,14 +539,62 @@ function teamEnergyValue(contest, teamId, now) {
   });
 }
 
-function nextTeamEnergy(contest, teamId, now, difficulty, correct) {
+function energyWriteFilter(contestId, teamId, previous) {
+  if (previous) {
+    return {
+      id: contestId,
+      energy: { $elemMatch: { teamId, value: previous.value, at: previous.at } },
+    };
+  }
+  return {
+    id: contestId,
+    energy: { $not: { $elemMatch: { teamId } } },
+  };
+}
+
+async function saveTeamEnergy(col, contest, teamId, now, difficulty, correct, force = false) {
   const settings = readEnergySettings(contest);
-  const current = teamEnergyValue(contest, teamId, now);
-  if (current < settings.attemptMin) return { blocked: true, current, settings };
-  const next = energyAfterAttempt(current, settings, difficulty, correct);
-  const energy = cleanEnergyLedger(contest?.energy).filter((entry) => entry.teamId !== teamId);
-  energy.push({ teamId, value: next, at: now });
-  return { blocked: false, current, next, energy, settings };
+  const snapshot = teamEnergySnapshot(contest, teamId, now);
+  if (snapshot.value < settings.attemptMin) {
+    return { blocked: true, current: snapshot.value, settings, contest };
+  }
+  const next = energyAfterAttempt(snapshot.value, settings, difficulty, correct);
+  const previous = cleanEnergyLedger(contest?.energy).find((entry) => entry.teamId === teamId) || null;
+  const entry = { teamId, value: next, at: snapshot.at };
+  const result = await col.updateOne(
+    force ? { id: contest.id } : energyWriteFilter(contest.id, teamId, previous),
+    [{
+      $set: {
+        energy: {
+          $concatArrays: [
+            {
+              $filter: {
+                input: { $ifNull: ['$energy', []] },
+                as: 'entry',
+                cond: { $ne: ['$$entry.teamId', teamId] },
+              },
+            },
+            [entry],
+          ],
+        },
+        updatedAt: '$$NOW',
+      },
+    }]
+  );
+  if (result.matchedCount !== 1) return { retry: true };
+  const updated = await col.findOne({ id: contest.id });
+  return { blocked: false, current: snapshot.value, next, settings, contest: updated };
+}
+
+async function spendTeamEnergy(col, contestId, teamId, now, difficulty, correct) {
+  let contest = await col.findOne({ id: contestId });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (!contest) return { missing: true };
+    const saved = await saveTeamEnergy(col, contest, teamId, now, difficulty, correct, attempt === 4);
+    if (!saved.retry) return saved;
+    contest = await col.findOne({ id: contestId });
+  }
+  return { conflict: true, contest };
 }
 
 function isRandomSpawn(contest) {
@@ -1332,11 +1380,12 @@ async function handleSolve(req, res, db, user, body) {
   const mapCell = map.cells[cell];
   const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
   const difficulty = problemDifficulty(problem);
-  const gate = nextTeamEnergy(contest, team.id, now, difficulty, false);
-  if (gate.blocked) {
+  const settings = readEnergySettings(contest);
+  const preview = teamEnergySnapshot(contest, team.id, now);
+  if (preview.value < settings.attemptMin) {
     return res.status(400).json({
       success: false,
-      message: `The team has ${gate.current} energy. An attempt needs at least ${gate.settings.attemptMin}.`,
+      message: `The team has ${preview.value} energy. An attempt needs at least ${settings.attemptMin}.`,
       serverNow: now,
       contest: contestPayload(contest, maps, problems, user).contest,
     });
@@ -1344,6 +1393,7 @@ async function handleSolve(req, res, db, user, body) {
 
   const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
   let correct = false;
+  let wrongMessage = '';
   if (logic) {
     const judged = runProblemLogic(logic, problem.answer, body.answer);
     if (judged.systemError) {
@@ -1354,50 +1404,50 @@ async function handleSolve(req, res, db, user, body) {
       });
     }
     correct = judged.correct === true;
-    if (!correct) {
-      const spent = nextTeamEnergy(contest, team.id, now, difficulty, false);
-      await col.updateOne({ id: contestId }, { $set: { energy: spent.energy, updatedAt: new Date() } });
-      const missed = await col.findOne({ id: contestId });
-      return res.status(400).json({
-        success: false,
-        message: judged.comment || 'That answer is not right.',
-        serverNow: now,
-        contest: contestPayload(missed, maps, problems, user).contest,
-      });
-    }
+    if (!correct) wrongMessage = judged.comment || 'That answer is not right.';
   } else if (!problem || !answersMatch(problem.answer, body.answer)) {
-    const message = problem && String(problem.answer || '').trim()
+    wrongMessage = problem && String(problem.answer || '').trim()
       ? 'That answer is not right.'
       : 'This problem has no answer yet.';
-    const spent = nextTeamEnergy(contest, team.id, now, difficulty, false);
-    await col.updateOne({ id: contestId }, { $set: { energy: spent.energy, updatedAt: new Date() } });
-    const missed = await col.findOne({ id: contestId });
-    return res.status(400).json({
-      success: false,
-      message,
-      serverNow: now,
-      contest: contestPayload(missed, maps, problems, user).contest,
-    });
   } else {
     correct = true;
   }
 
-  const spent = nextTeamEnergy(contest, team.id, now, difficulty, correct);
+  const spent = await spendTeamEnergy(col, contestId, team.id, now, difficulty, correct);
+  if (spent.missing) return res.status(404).json({ success: false, message: 'Contest not found', serverNow: now });
+  if (spent.blocked || spent.conflict || !spent.contest) {
+    const message = spent.blocked
+      ? `The team has ${spent.current} energy. An attempt needs at least ${spent.settings.attemptMin}.`
+      : 'Energy changed while that answer was checked. Try again.';
+    return res.status(400).json({
+      success: false,
+      message,
+      serverNow: now,
+      ...(spent.contest ? { contest: contestPayload(spent.contest, maps, problems, user).contest } : {}),
+    });
+  }
+  if (!correct) {
+    return res.status(400).json({
+      success: false,
+      message: wrongMessage,
+      serverNow: now,
+      contest: contestPayload(spent.contest, maps, problems, user).contest,
+    });
+  }
+
   const claim = { mapId: map.id, cell, teamId: team.id, solvedBy: username, solvedAt: now };
   const held = heldClaimQuery(map.id, cell, primaryMapId(contest), testing ? team.id : '');
   const claimFilter = { id: contestId, claims: { $not: { $elemMatch: held } } };
-  const result = await col.updateOne(
-    claimFilter,
-    { $push: { claims: claim }, $set: { energy: spent.energy, updatedAt: new Date() } }
-  );
+  const result = await col.updateOne(claimFilter, { $push: { claims: claim }, $set: { updatedAt: new Date() } });
+  const updated = await col.findOne({ id: contestId });
   if (result.matchedCount === 0) {
     return res.status(400).json({
       success: false,
       message: testing ? 'Your team already solved this cell.' : 'Another team already holds this cell.',
       serverNow: Date.now(),
+      contest: contestPayload(updated, maps, problems, user).contest,
     });
   }
-  const updated = await col.findOne({ id: contestId });
   return res.status(200).json(contestPayload(updated, maps, problems, user));
 }
 

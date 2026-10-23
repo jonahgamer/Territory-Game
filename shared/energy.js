@@ -32,6 +32,16 @@ export function readEnergySettings(raw) {
   };
 }
 
+export function mergeEnergyLedger(current, incoming) {
+  const next = cleanEnergyLedger(current);
+  for (const entry of cleanEnergyLedger(incoming)) {
+    const index = next.findIndex((item) => item.teamId === entry.teamId);
+    if (index >= 0) next[index] = entry;
+    else next.push(entry);
+  }
+  return next;
+}
+
 export function cleanEnergyLedger(value) {
   if (!Array.isArray(value)) return [];
   const items = [];
@@ -45,17 +55,27 @@ export function cleanEnergyLedger(value) {
   return items;
 }
 
-export function energyNow({ settings, liveAt, endAt, now, stored }) {
-  if (!Number.isInteger(liveAt) || now < liveAt) return ENERGY_MAX;
+export function energyState({ settings, liveAt, endAt, now, stored }) {
+  if (!Number.isInteger(liveAt) || now < liveAt) return { value: ENERGY_MAX, at: Number.isInteger(liveAt) ? liveAt : 0 };
   const base = stored && Number.isInteger(stored.value)
     ? Math.min(ENERGY_MAX, Math.max(0, stored.value))
     : ENERGY_MAX;
   const at = stored && Number.isInteger(stored.at) ? stored.at : liveAt;
   const until = Math.min(now, Number.isInteger(endAt) ? endAt : now);
   const from = Math.max(at, liveAt);
-  if (until <= from || !settings || settings.regen <= 0 || settings.regenSeconds < 1) return base;
-  const ticks = Math.floor((until - from) / (settings.regenSeconds * 1000));
-  return Math.min(ENERGY_MAX, base + ticks * settings.regen);
+  if (until <= from || !settings || settings.regen <= 0 || settings.regenSeconds < 1) {
+    return { value: base, at: from };
+  }
+  const interval = settings.regenSeconds * 1000;
+  const ticks = Math.floor((until - from) / interval);
+  return {
+    value: Math.min(ENERGY_MAX, base + ticks * settings.regen),
+    at: from + ticks * interval,
+  };
+}
+
+export function energyNow(args) {
+  return energyState(args).value;
 }
 
 export function energyAfterAttempt(current, settings, difficulty, correct) {

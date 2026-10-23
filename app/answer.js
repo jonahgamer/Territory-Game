@@ -4,6 +4,9 @@ import { noteServerTime } from "../shared/contest-time.js";
 import { createStatementView } from "../shared/statement.js";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
+import { teamForUser, teamEnergy } from "../shared/contest-data.js";
+import { readEnergySettings } from "../shared/energy.js";
+import { publishContestPatch } from "../shared/contest-sync.js";
 
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
@@ -17,6 +20,36 @@ const promptEl = document.querySelector("#student-problem-prompt");
 const form = document.querySelector("#student-answer-form");
 const answerInput = document.querySelector("#student-answer");
 const errorEl = document.querySelector("#student-answer-error");
+
+let contest = null;
+
+function paintEnergy() {
+  const node = document.querySelector("#answer-energy");
+  const track = document.querySelector("#answer-energy-track");
+  const fill = document.querySelector("#answer-energy-fill");
+  const team = contest && teamForUser(contest);
+  if (!node || !track || !fill || !team) return;
+  const settings = readEnergySettings(contest);
+  const value = teamEnergy(contest, team.id);
+  const blocked = value < settings.attemptMin;
+  node.hidden = false;
+  track.hidden = false;
+  node.textContent = blocked
+    ? `Energy ${value} / 100. An attempt needs at least ${settings.attemptMin}.`
+    : `Energy ${value} / 100. Restores ${settings.regen} every ${settings.regenSeconds}s. Each attempt spends ${settings.attemptCost}.`;
+  fill.style.width = `${value}%`;
+  fill.classList.toggle("low", blocked);
+  const submit = form.querySelector("button");
+  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked;
+}
+
+function takeServerContest(next, serverNow) {
+  if (!contest || !next) return;
+  if (Array.isArray(next.energy)) contest.energy = next.energy;
+  noteServerTime(serverNow);
+  paintEnergy();
+  publishContestPatch(contestId, next, serverNow);
+}
 
 const statement = createStatementView(promptEl, {
   onAnswerValue: (v) => { answerInput.value = v; },
@@ -46,7 +79,7 @@ async function loadProblem() {
   try {
     const data = await api.bootstrap();
     noteServerTime(data.serverNow);
-    const contest = (data.contests || []).find((c) => c.id === contestId);
+    contest = (data.contests || []).find((c) => c.id === contestId) || null;
     openMapId = requestedMapId || contest?.mapId || "";
     const map = contest && (data.maps || []).find((m) => m.id === openMapId);
     const mapCell = map?.cells?.[cellIndex];
@@ -61,6 +94,8 @@ async function loadProblem() {
     title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
     const promptText = problem?.prompt?.trim() ? problem.prompt : "This problem has no text yet.";
     statement.render(promptText, title.textContent);
+    paintEnergy();
+    setInterval(paintEnergy, 1000);
     if (answerInput.offsetParent !== null) answerInput.focus();
   } catch (err) {
     showStatus(err.message || "The problem could not be opened.");
@@ -74,11 +109,13 @@ form.addEventListener("submit", async (event) => {
   const submit = form.querySelector("button");
   if (submit.disabled) return;
   const label = submit.textContent;
+  submit.dataset.busy = "1";
   submit.disabled = true;
   submit.textContent = "Checking...";
 
   const approval = await statement.approveSubmit();
   if (approval.blocked) {
+    submit.dataset.busy = "";
     submit.disabled = false;
     submit.textContent = label;
     errorEl.hidden = false;
@@ -87,14 +124,19 @@ form.addEventListener("submit", async (event) => {
   }
 
   try {
-    await api.solve(contestId, cellIndex, answerInput.value, openMapId);
+    const data = await api.solve(contestId, cellIndex, answerInput.value, openMapId);
+    takeServerContest(data.contest, data.serverNow);
+    submit.dataset.busy = "";
     form.hidden = true;
     showStatus("Answer recorded. You can close this tab.");
   } catch (err) {
+    takeServerContest(err.data?.contest, err.data?.serverNow);
     errorEl.hidden = false;
     errorEl.textContent = err.message;
+    submit.dataset.busy = "";
     submit.disabled = false;
     submit.textContent = label;
+    paintEnergy();
   }
 });
 

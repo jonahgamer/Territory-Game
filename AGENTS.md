@@ -74,7 +74,7 @@ A contest has `mapIds` (and `mapId`, the first of those), `teleports`, `startAt`
 
 Each phase shows a countdown (`phaseClock`).
 
-A team shares one energy pool, maximum 100. During the live phase it restores `energyRegen` points every `energyRegenSeconds`. Each judged attempt spends `energyAttemptCost`, whether the answer is right or wrong. A correct answer also adds the difficulty amount in `energySolve` when the energy before that attempt is below `energySolveBelow`. An attempt is refused when energy is below `energyAttemptMin`. The pool starts full when solving begins. Changing the map, contest mode, or spawn mode clears the pool.
+A team shares one energy pool, maximum 100. During the live phase it restores `energyRegen` points every `energyRegenSeconds`. That clock keeps its phase through an attempt. Each judged attempt spends `energyAttemptCost`, whether the answer is right or wrong, including when another team takes the cell first. A correct answer also adds the difficulty amount in `energySolve` when the energy before that attempt is below `energySolveBelow`. An attempt is refused when energy is below `energyAttemptMin`. The pool starts full when solving begins. Changing the map, contest mode, or spawn mode clears the pool.
 
 `maps`, `problems`, and `contests` each have a revision. A full-list save sends that revision. A mismatch returns 409 and the admin UI opens a per-field diff instead of overwriting. Team changes bump the contests revision on their own.
 
