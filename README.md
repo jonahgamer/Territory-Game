@@ -42,7 +42,7 @@ Restoring always creates a safety snapshot of the current database **before** ch
 | `GITHUB_BACKUP_BRANCH` | Branch used for the snapshots. Defaults to `main`. |
 | `DSCONFIRM` | Exact confirmation code required to restore. The value is never sent to the browser. |
 
-The fallback names `GITHUB_IMAGES_*`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_TOKEN` from the reference uploader are also accepted. The backup repository and its configured branch must already exist.
+The fallback names `GITHUB_IMAGES_*`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_TOKEN` from the reference uploader are also accepted. An empty repository is initialized with a README and the configured branch on first use.
 
 Backups are stored as:
 

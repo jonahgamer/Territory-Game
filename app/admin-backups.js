@@ -127,7 +127,7 @@ function renderConfig(data) {
   const messages = [];
 
   if (!data.configured) {
-    messages.push(`GitHub backup is not configured. ${data.config?.error || "Set the GITHUB_BACKUP_* environment variables."}`);
+    messages.push(data.config?.error || "GitHub backup is not configured. Set the GITHUB_BACKUP_* environment variables.");
   }
   if (data.backupError) {
     messages.push(`The backup repository could not be read: ${data.backupError}`);
@@ -449,7 +449,7 @@ async function backUpNow() {
   setStatus("Backing up the full database…");
   showLog([`[${new Date().toLocaleTimeString()}] Manual backup started.`]);
   try {
-    const data = await request("backup-now");
+    const data = await request("backup-now", {});
     state.data = data.tree;
     state.selected = null;
     render();

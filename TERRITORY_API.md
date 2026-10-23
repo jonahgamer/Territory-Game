@@ -170,7 +170,8 @@ Admin only. Deletes one Credits note by its `id`. The response includes the rema
 ## `/api/backup`
 
 Admin only. Every request needs `Authorization: Bearer <token>`. Responses are
-`Cache-Control: no-store`.
+`Cache-Control: no-store`. An empty backup repository is initialized with a
+README and the configured branch on first access.
 
 ### `GET ?action=tree`
 

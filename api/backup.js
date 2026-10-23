@@ -409,6 +409,12 @@ export default async function handler(req, res) {
     if (req.method === "GET" && action === "tree") {
       return await handleTree(db, res);
     }
+    if (req.method === "GET" && (action === "backup-now" || action === "restore")) {
+      return res.status(405).json({
+        success: false,
+        message: `${action} must be POST, not GET.`,
+      });
+    }
     if (req.method === "POST" && action === "backup-now") {
       return await handleBackupNow(db, auth.user, res);
     }
