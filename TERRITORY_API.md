@@ -183,8 +183,10 @@ in the backup repository:
   "success": true,
   "configured": true,
   "restoreConfigured": true,
+  "secretConfigured": true,
   "current": { "collections": { "users": 12 }, "totalCollections": 1, "totalDocs": 12 },
   "state": { "head": "2026-10-18T18-00-00-000Z", "branch": "main" },
+  "lock": { "exists": false, "active": false, "expired": false },
   "backups": [
     {
       "id": "2026-10-18T18-00-00-000Z",
@@ -204,13 +206,26 @@ in the backup repository:
 missing collection file, or with a count mismatch is not restorable. Directories
 with neither file (from the reference uploader's cron) are shown as legacy
 snapshots and remain restorable. `backupError` is present when the GitHub
-repository cannot be read.
+repository cannot be read. `lock` describes `database/_lock.json`; an active
+lock blocks a new manual backup or restore.
 
-### `POST { "action": "backup-now" }`
+### `POST { "action": "backup-now", "confirm": "..." }`
+
+Manual backup requires `confirm` to equal the server environment variable
+`DSCONFIRM` exactly. If `DSCONFIRM` is missing, backup returns 503. The scheduled
+cron backup uses `CRON_SECRET` instead.
 
 Creates a full snapshot on the current branch and moves the backup head to it.
 The response includes the new backup and a fresh `tree`. A second backup or
 restore cannot run at the same time: the server uses `database/_lock.json`.
+The lock is released before the response tree is built; a stale lock can be
+cleared with `unlock`.
+
+### `POST { "action": "unlock", "confirm": "..." }`
+
+Requires the same `DSCONFIRM` value. Deletes `database/_lock.json`. If the token
+can update but not delete that file, it writes an already-expired lock instead.
+Returns a fresh `tree`.
 
 ### `POST { "action": "restore", "backupId": "...", "confirm": "..." }`
 

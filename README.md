@@ -25,9 +25,10 @@ The full database is copied to a private GitHub repository every day at **02:00 
 
 Open `/admin/backups.html` to see the live database and the backup tree. The page can:
 
-- create a full backup immediately;
+- create a full backup immediately after entering the `DSCONFIRM` value;
 - show each snapshot, its branch, parent, and collection counts;
-- restore the whole database after entering the `DSCONFIRM` value.
+- release a stale backup lock after entering the same value;
+- restore the whole database after entering the same value.
 
 Restoring always creates a safety snapshot of the current database **before** changing anything. It then restores the selected snapshot, writes an after-restore snapshot, and starts a new logical branch from the restored node. The old branch stays in the tree.
 
@@ -40,7 +41,7 @@ Restoring always creates a safety snapshot of the current database **before** ch
 | `GITHUB_BACKUP_OWNER` | User or organization that owns the backup repository. |
 | `GITHUB_BACKUP_REPO` | Backup repository name. Defaults to `backup`. |
 | `GITHUB_BACKUP_BRANCH` | Branch used for the snapshots. Defaults to `main`. |
-| `DSCONFIRM` | Exact confirmation code required to restore. The value is never sent to the browser. |
+| `DSCONFIRM` | Exact confirmation code required for manual backup, lock release, and restore. The value is never sent to the browser. |
 
 The fallback names `GITHUB_IMAGES_*`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_TOKEN` from the reference uploader are also accepted. An empty repository is initialized with a README and the configured branch on first use.
 
@@ -61,4 +62,5 @@ Collection files use MongoDB Extended JSON, so `ObjectId` and `Date` values surv
 - The backup repository should be private. The token is only used by serverless functions.
 - A restore can replace the `users` collection. If the signed-in admin is not in the restored snapshot, that admin is signed out on the next request. The restore endpoint refuses a snapshot that has no usable admin/root account.
 - Snapshots contain documents. MongoDB collection indexes and validators are not included.
+- Manual backups and restores use a short-lived lock in `database/_lock.json`. If a run is interrupted, the page shows the lock and can release it with `DSCONFIRM`; expired locks are also ignored automatically.
 - The backup code is in `lib/github-backup.js`, `api/backup.js`, and `api/cron.js`.

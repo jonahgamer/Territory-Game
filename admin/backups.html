@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/admin/backups.css?v=backup-tree-2" />
+  <link rel="stylesheet" href="/admin/backups.css?v=backup-tree-6" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -39,6 +39,7 @@
         The full database is copied to the private GitHub backup repository every day at
         <strong>02:00 Hong Kong time</strong>. The live database is always the top node.
         Restoring creates a safety snapshot first, then starts a new branch from the restored node.
+        Manual backup and restore both require the server's <code>DSCONFIRM</code> value.
       </p>
 
       <div id="backup-config" class="backup-config" hidden></div>
@@ -47,11 +48,29 @@
         <button id="backup-refresh" class="back-button" type="button">
           <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
         </button>
-        <button id="backup-now" class="save-changes" type="button">
-          <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Back up now
-        </button>
         <span id="backup-status" class="field-note" role="status" aria-live="polite"></span>
       </div>
+
+      <div id="backup-lock" class="backup-lock" hidden></div>
+
+      <section class="backup-manual">
+        <div class="backup-section-head">
+          <h2>Manual backup</h2>
+          <span class="field-note">DSCONFIRM required</span>
+        </div>
+        <p class="field-note">
+          Enter the exact value of the server environment variable <code>DSCONFIRM</code>
+          to create a full database snapshot now. The scheduled 02:00 cron does not use this field.
+        </p>
+        <div class="backup-secret-row">
+          <label for="backup-secret">DSCONFIRM secret</label>
+          <input id="backup-secret" class="backup-confirm-input" type="password"
+            autocomplete="off" spellcheck="false" placeholder="Value of DSCONFIRM" />
+          <button id="backup-now" class="save-changes" type="button" disabled>
+            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Back up now
+          </button>
+        </div>
+      </section>
 
       <section id="backup-current" class="backup-current" aria-live="polite"></section>
 
@@ -82,7 +101,7 @@
         </p>
 
         <label class="backup-confirm-label" for="restore-confirm">
-          Confirmation code
+          DSCONFIRM secret
         </label>
         <input id="restore-confirm" class="backup-confirm-input" type="password"
           autocomplete="off" spellcheck="false" placeholder="Value of DSCONFIRM" />
@@ -107,6 +126,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-backups.js?v=backup-tree-2"></script>
+  <script type="module" src="/app/admin-backups.js?v=backup-tree-6"></script>
 </body>
 </html>

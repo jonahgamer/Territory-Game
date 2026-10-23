@@ -15,8 +15,10 @@ import jwt from "jsonwebtoken";
 import { applyCors, connectToDatabase } from "./_db.js";
 import {
   acquireBackupLock,
+  clearBackupLock,
   createDatabaseBackup,
   getBackupInfo,
+  getBackupLock,
   getLiveDatabaseStats,
   isBackupId,
   listBackups,
@@ -28,7 +30,8 @@ import {
   writeBackupState,
 } from "../lib/github-backup.js";
 
-const LOCK_TTL_MS = 60 * 60 * 1000;
+const BACKUP_LOCK_TTL_MS = 15 * 60 * 1000;
+const RESTORE_LOCK_TTL_MS = 60 * 60 * 1000;
 
 function verifyToken(req) {
   const auth = req.headers.authorization || "";
@@ -121,17 +124,28 @@ async function buildTreePayload(db) {
     current = { collections: {}, totalCollections: 0, totalDocs: 0, error: err.message };
   }
 
+  let lock = { exists: false, active: false, expired: false };
+  if (info.ok) {
+    try {
+      lock = await getBackupLock();
+    } catch (err) {
+      lock = { exists: false, active: false, expired: false, error: err.message };
+    }
+  }
+
   return {
     success: true,
     configured: info.ok,
     config: info.ok
       ? { owner: info.owner, repo: info.repo, branch: info.branch }
       : { error: info.error },
+    secretConfigured: Boolean(process.env.DSCONFIRM),
     restoreConfigured: Boolean(process.env.DSCONFIRM),
     schedule: { utc: "0 18 * * *", hongKong: "02:00" },
     current,
     backups,
     state,
+    lock,
     backupError,
     serverNow: Date.now(),
   };
@@ -141,21 +155,40 @@ async function handleTree(db, res) {
   return res.status(200).json(await buildTreePayload(db));
 }
 
-async function handleBackupNow(db, user, res) {
+async function handleBackupNow(db, user, body, res) {
   const info = getBackupInfo();
   if (!info.ok) {
     return res.status(503).json({ success: false, message: info.error });
   }
+  const expected = process.env.DSCONFIRM;
+  if (!expected) {
+    return res.status(503).json({
+      success: false,
+      message: "Manual backup is disabled because DSCONFIRM is not configured on the server.",
+    });
+  }
+  if (!safeEqual(body.confirm, expected)) {
+    return res.status(403).json({
+      success: false,
+      message: "The confirmation code is not correct.",
+    });
+  }
 
   let lockToken = null;
   try {
-    lockToken = await acquireBackupLock("backup", user.username, LOCK_TTL_MS);
+    lockToken = await acquireBackupLock("backup", user.username, BACKUP_LOCK_TTL_MS);
     const backup = await createDatabaseBackup(db, {
       kind: "manual",
       by: user.username,
       source: "admin",
       updateHead: true,
     });
+    // Release before building the response tree, otherwise the UI receives
+    // the lock that this request still owns and looks permanently locked.
+    if (lockToken) {
+      const released = await releaseBackupLock(lockToken);
+      if (released) lockToken = null;
+    }
     const tree = await buildTreePayload(db);
     return res.status(200).json({
       success: true,
@@ -179,6 +212,40 @@ async function handleBackupNow(db, user, res) {
     });
   } finally {
     if (lockToken) await releaseBackupLock(lockToken);
+  }
+}
+
+async function handleUnlock(db, user, body, res) {
+  const expected = process.env.DSCONFIRM;
+  if (!expected) {
+    return res.status(503).json({
+      success: false,
+      message: "Unlock is disabled because DSCONFIRM is not configured on the server.",
+    });
+  }
+  if (!safeEqual(body.confirm, expected)) {
+    return res.status(403).json({
+      success: false,
+      message: "The confirmation code is not correct.",
+    });
+  }
+
+  try {
+    const result = await clearBackupLock();
+    console.log(`[backup] lock cleared by ${user.username}`);
+    const tree = await buildTreePayload(db);
+    return res.status(200).json({
+      success: true,
+      unlocked: Boolean(result.cleared),
+      forced: Boolean(result.forced),
+      tree,
+    });
+  } catch (err) {
+    console.error("[backup] unlock failed:", err);
+    return res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Could not clear the backup lock.",
+    });
   }
 }
 
@@ -208,7 +275,7 @@ async function handleRestore(db, user, body, res) {
 
   let lockToken = null;
   try {
-    lockToken = await acquireBackupLock("restore", user.username, LOCK_TTL_MS);
+    lockToken = await acquireBackupLock("restore", user.username, RESTORE_LOCK_TTL_MS);
 
     const state = await readBackupState();
     if (state.head === backupId) {
@@ -329,6 +396,10 @@ async function handleRestore(db, user, body, res) {
     }
 
     console.log(`[backup] restored ${backupId} by ${user.username}; new branch ${newBranch}`);
+    if (lockToken) {
+      const released = await releaseBackupLock(lockToken);
+      if (released) lockToken = null;
+    }
     const tree = await buildTreePayload(db);
     return res.status(200).json({
       success: true,
@@ -409,14 +480,17 @@ export default async function handler(req, res) {
     if (req.method === "GET" && action === "tree") {
       return await handleTree(db, res);
     }
-    if (req.method === "GET" && (action === "backup-now" || action === "restore")) {
+    if (req.method === "GET" && (action === "backup-now" || action === "unlock" || action === "restore")) {
       return res.status(405).json({
         success: false,
         message: `${action} must be POST, not GET.`,
       });
     }
     if (req.method === "POST" && action === "backup-now") {
-      return await handleBackupNow(db, auth.user, res);
+      return await handleBackupNow(db, auth.user, body, res);
+    }
+    if (req.method === "POST" && action === "unlock") {
+      return await handleUnlock(db, auth.user, body, res);
     }
     if (req.method === "POST" && action === "restore") {
       return await handleRestore(db, auth.user, body, res);

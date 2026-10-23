@@ -12,6 +12,10 @@ const state = {
   busy: false,
 };
 
+function secretReady(data = state.data) {
+  return Boolean(data?.secretConfigured ?? data?.restoreConfigured);
+}
+
 async function request(action, body) {
   const session = getSession();
   if (!session?.token) {
@@ -45,6 +49,7 @@ async function request(action, body) {
 async function run() {
   document.querySelector("#backup-refresh")?.addEventListener("click", () => load());
   document.querySelector("#backup-now")?.addEventListener("click", backUpNow);
+  document.querySelector("#backup-secret")?.addEventListener("input", syncButtons);
   document.querySelector("#restore-cancel")?.addEventListener("click", closeRestore);
   document.querySelector("#restore-confirm")?.addEventListener("input", syncButtons);
   document.querySelector("#restore-understand")?.addEventListener("change", syncButtons);
@@ -87,15 +92,20 @@ function setStatus(text) {
 
 function syncButtons() {
   const data = state.data;
+  const secret = document.querySelector("#backup-secret")?.value || "";
   const backupNow = document.querySelector("#backup-now");
   const refresh = document.querySelector("#backup-refresh");
-  if (backupNow) backupNow.disabled = state.busy || !data?.configured;
+  if (backupNow) {
+    backupNow.disabled = state.busy || !data?.configured || !secretReady(data) || !secret
+      || Boolean(data?.lock?.active);
+  }
   if (refresh) refresh.disabled = state.busy;
   const restore = document.querySelector("#restore-button");
   if (restore) {
     const code = document.querySelector("#restore-confirm")?.value || "";
     const understood = Boolean(document.querySelector("#restore-understand")?.checked);
-    restore.disabled = state.busy || !state.selected || !code || !understood;
+    restore.disabled = state.busy || !state.selected || !code || !understood
+      || Boolean(data?.lock?.active);
   }
   const cancel = document.querySelector("#restore-cancel");
   if (cancel) cancel.disabled = state.busy;
@@ -103,6 +113,8 @@ function syncButtons() {
   if (confirm) confirm.disabled = state.busy;
   const understood = document.querySelector("#restore-understand");
   if (understood) understood.disabled = state.busy;
+  const unlock = document.querySelector("#backup-unlock");
+  if (unlock) unlock.disabled = state.busy || !secretReady(data) || !secret;
 }
 
 function render() {
@@ -113,6 +125,7 @@ function render() {
   if (loadError && !loadError.textContent) loadError.hidden = true;
 
   renderConfig(data);
+  renderLock(data);
   renderCurrent(data);
   renderTree(data);
   renderRestorePanel();
@@ -132,8 +145,8 @@ function renderConfig(data) {
   if (data.backupError) {
     messages.push(`The backup repository could not be read: ${data.backupError}`);
   }
-  if (!data.restoreConfigured) {
-    messages.push("Restore is disabled because the server environment variable DSCONFIRM is not set.");
+  if (!secretReady(data)) {
+    messages.push("Manual backup, unlock, and restore are disabled because the server environment variable DSCONFIRM is not set.");
   }
 
   if (messages.length === 0) {
@@ -144,6 +157,64 @@ function renderConfig(data) {
   if (!data.configured || data.backupError) box.classList.add("error");
   else box.classList.add("warn");
   for (const message of messages) box.append(el("p", "", message));
+}
+
+function renderLock(data) {
+  const box = document.querySelector("#backup-lock");
+  if (!box) return;
+  box.replaceChildren();
+  box.hidden = true;
+  const lock = data.lock;
+  if (!lock || (!lock.exists && !lock.active)) return;
+
+  box.hidden = false;
+  const line = el("p");
+  if (lock.active) {
+    line.append(document.createTextNode("Backup operation in progress: "));
+    line.append(el("strong", "", lock.action || "unknown"));
+    line.append(document.createTextNode(
+      ` by ${lock.owner || "unknown"}. Started ${formatMoment(lock.startedAt)}; expires ${formatMoment(lock.expiresAt)}.`
+    ));
+  } else {
+    line.textContent = `A stale backup lock is present (${lock.action || "unknown"} by ${lock.owner || "unknown"}). You can release it below.`;
+  }
+  box.append(line);
+  if (lock.error) box.append(el("p", "", lock.error));
+
+  const unlock = el("button", "", "Release lock");
+  unlock.type = "button";
+  unlock.id = "backup-unlock";
+  unlock.addEventListener("click", unlockBackupLock);
+  box.append(unlock);
+}
+
+async function unlockBackupLock() {
+  if (state.busy || !secretReady()) return;
+  const secret = document.querySelector("#backup-secret")?.value || "";
+  if (!secret) {
+    showPageToast("Enter the DSCONFIRM secret first.", "warn");
+    return;
+  }
+  state.busy = true;
+  syncButtons();
+  setStatus("Releasing backup lock…");
+  showLog([`[${new Date().toLocaleTimeString()}] Releasing the backup lock.`]);
+  try {
+    const data = await request("unlock", { confirm: secret });
+    state.data = data.tree || state.data;
+    const secretInput = document.querySelector("#backup-secret");
+    if (secretInput) secretInput.value = "";
+    render();
+    showPageToast("Backup lock released.", "ok");
+    showLog([`[${new Date().toLocaleTimeString()}] Backup lock released.`]);
+  } catch (err) {
+    showPageToast(err.message || "Could not release the backup lock.", "warn");
+    showLog([`[${new Date().toLocaleTimeString()}] Unlock failed.`, err.message]);
+  } finally {
+    state.busy = false;
+    syncButtons();
+    setStatus("");
+  }
 }
 
 function renderCurrent(data) {
@@ -346,8 +417,11 @@ function renderNode(backup, isBranch, headId) {
   } else if (backup.id === headId) {
     button.textContent = "Current head";
     button.disabled = true;
-  } else if (!state.data?.restoreConfigured) {
+  } else if (!secretReady(state.data)) {
     button.textContent = "DSCONFIRM not set";
+    button.disabled = true;
+  } else if (state.data?.lock?.active) {
+    button.textContent = "Locked";
     button.disabled = true;
   } else {
     button.addEventListener("click", () => selectForRestore(backup));
@@ -383,11 +457,15 @@ function kindLabel(kind) {
   return "Manual";
 }
 
-function formatDate(value) {
-  if (!value) return "Unknown time";
-  const ms = Date.parse(value);
+function formatMoment(value) {
+  if (!value) return "unknown";
+  const ms = typeof value === "number" ? value : Date.parse(value);
   if (!Number.isFinite(ms)) return String(value);
   return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatDate(value) {
+  return value ? formatMoment(value) : "Unknown time";
 }
 
 function dateValue(value) {
@@ -403,7 +481,7 @@ function formatBytes(bytes) {
 }
 
 function selectForRestore(backup) {
-  if (state.busy) return;
+  if (state.busy || state.data?.lock?.active) return;
   state.selected = backup;
   render();
   const panel = document.querySelector("#restore-panel");
@@ -443,15 +521,27 @@ function renderRestorePanel() {
 }
 
 async function backUpNow() {
-  if (state.busy || !state.data?.configured) return;
+  if (state.busy || !state.data?.configured || !secretReady()) return;
+  if (state.data?.lock?.active) {
+    showPageToast("Release the current backup lock first.", "warn");
+    return;
+  }
+  const secretInput = document.querySelector("#backup-secret");
+  const secret = secretInput?.value || "";
+  if (!secret) {
+    showPageToast("Enter the DSCONFIRM secret before backing up.", "warn");
+    secretInput?.focus();
+    return;
+  }
   state.busy = true;
   syncButtons();
   setStatus("Backing up the full database…");
   showLog([`[${new Date().toLocaleTimeString()}] Manual backup started.`]);
   try {
-    const data = await request("backup-now", {});
+    const data = await request("backup-now", { confirm: secret });
     state.data = data.tree;
     state.selected = null;
+    if (secretInput) secretInput.value = "";
     render();
     showPageToast(`Backup ${data.backup?.id || ""} complete.`, "ok");
     showLog([
@@ -461,6 +551,10 @@ async function backUpNow() {
       `documents: ${data.backup?.totalDocs ?? "?"}`,
     ]);
   } catch (err) {
+    if (err.data?.lock && state.data) {
+      state.data.lock = { exists: true, active: true, expired: false, ...err.data.lock };
+      render();
+    }
     showPageToast(err.message || "Backup failed.", "warn");
     showLog([`[${new Date().toLocaleTimeString()}] Backup failed.`, err.message]);
   } finally {
@@ -471,7 +565,7 @@ async function backUpNow() {
 }
 
 async function restoreSelected() {
-  if (state.busy || !state.selected) return;
+  if (state.busy || !state.selected || state.data?.lock?.active) return;
   const input = document.querySelector("#restore-confirm");
   const understood = document.querySelector("#restore-understand");
   const error = document.querySelector("#restore-error");
@@ -524,6 +618,10 @@ async function restoreSelected() {
     if (data.stateError) lines.push(`warning: ${data.stateError}`);
     showLog(lines);
   } catch (err) {
+    if (err.data?.lock && state.data) {
+      state.data.lock = { exists: true, active: true, expired: false, ...err.data.lock };
+      render();
+    }
     showRestoreError(err.message || "Restore failed.");
     const lines = [
       `[${new Date().toLocaleTimeString()}] Restore failed.`,
