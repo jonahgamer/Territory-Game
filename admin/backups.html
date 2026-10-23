@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/admin/backups.css?v=backup-tree-6" />
+  <link rel="stylesheet" href="/admin/backups.css?v=backup-tree-7" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -51,8 +51,6 @@
         <span id="backup-status" class="field-note" role="status" aria-live="polite"></span>
       </div>
 
-      <div id="backup-lock" class="backup-lock" hidden></div>
-
       <section class="backup-manual">
         <div class="backup-section-head">
           <h2>Manual backup</h2>
@@ -60,7 +58,8 @@
         </div>
         <p class="field-note">
           Enter the exact value of the server environment variable <code>DSCONFIRM</code>
-          to create a full database snapshot now. The scheduled 02:00 cron does not use this field.
+          to create a full database snapshot now, or to release a stuck backup lock below.
+          The scheduled 02:00 cron does not use this field.
         </p>
         <div class="backup-secret-row">
           <label for="backup-secret">DSCONFIRM secret</label>
@@ -71,6 +70,8 @@
           </button>
         </div>
       </section>
+
+      <div id="backup-lock" class="backup-lock" hidden></div>
 
       <section id="backup-current" class="backup-current" aria-live="polite"></section>
 
@@ -126,6 +127,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-backups.js?v=backup-tree-6"></script>
+  <script type="module" src="/app/admin-backups.js?v=backup-tree-7"></script>
 </body>
 </html>

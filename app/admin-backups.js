@@ -114,7 +114,7 @@ function syncButtons() {
   const understood = document.querySelector("#restore-understand");
   if (understood) understood.disabled = state.busy;
   const unlock = document.querySelector("#backup-unlock");
-  if (unlock) unlock.disabled = state.busy || !secretReady(data) || !secret;
+  if (unlock) unlock.disabled = state.busy || !secretReady(data);
 }
 
 function render() {
@@ -181,9 +181,16 @@ function renderLock(data) {
   box.append(line);
   if (lock.error) box.append(el("p", "", lock.error));
 
+  if (secretReady(data)) {
+    box.append(el("p", "", "Enter the DSCONFIRM secret in Manual backup above, then click Release lock."));
+  } else {
+    box.append(el("p", "", "DSCONFIRM is not configured on the server. To clear this lock, delete database/_lock.json in the backup repository."));
+  }
+
   const unlock = el("button", "", "Release lock");
   unlock.type = "button";
   unlock.id = "backup-unlock";
+  unlock.title = "Requires the DSCONFIRM secret above";
   unlock.addEventListener("click", unlockBackupLock);
   box.append(unlock);
 }
@@ -192,7 +199,8 @@ async function unlockBackupLock() {
   if (state.busy || !secretReady()) return;
   const secret = document.querySelector("#backup-secret")?.value || "";
   if (!secret) {
-    showPageToast("Enter the DSCONFIRM secret first.", "warn");
+    showPageToast("Enter the DSCONFIRM secret in Manual backup first.", "warn");
+    document.querySelector("#backup-secret")?.focus();
     return;
   }
   state.busy = true;
