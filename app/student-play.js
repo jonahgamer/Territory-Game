@@ -13,6 +13,7 @@ import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPh
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
+import { drawTeleportLinks } from "../shared/teleport-link.js";
 import { createStatementView } from "../shared/statement.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -518,6 +519,7 @@ function renderMaps(contest, maps, phase, frozen, team) {
     host.append(block);
     renderGrid(contest, map, phase, frozen, team, grid);
   }
+  drawTeleportLinks(host, contest.teleports);
 }
 
 function renderGrid(contest, map, phase, frozen, team, grid = document.querySelector("#student-maps")) {

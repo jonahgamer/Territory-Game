@@ -12,6 +12,7 @@ import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from 
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
+import { drawTeleportLinks } from "../shared/teleport-link.js";
 
 
 
@@ -599,6 +600,7 @@ function renderBoard() {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.index = String(index);
+      button.dataset.map = map.id;
       button.className = cellClassName(cell, findBoardProblem, "grid-cell");
       const label = teleportLabel(state.current, map.id, index);
       if (!(mapBackdrop(map) === "photo" && cell?.kind === "problem")) fillCellLabel(button, cell, label);
@@ -620,6 +622,7 @@ function renderBoard() {
     block.append(scroll);
     boards.append(block);
   }
+  drawTeleportLinks(boards, state.current?.teleports);
   renderTeleports();
 }
 

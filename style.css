@@ -840,6 +840,20 @@ button[type="submit"],
   margin-top: 18px;
 }
 
+#contest-boards,
+#student-maps {
+  position: relative;
+}
+
+.teleport-links {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 4;
+}
+
 .contest-map-block h3 {
   margin: 0 0 8px;
   font-size: 18px;
