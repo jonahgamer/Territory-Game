@@ -6,7 +6,7 @@ import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js?v=mem";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js?v=page-data";
 
 // ── 顶层常量 ─────────────────────────────────────────────

@@ -1059,10 +1059,11 @@ async function handleRemoveContestant(req, res, db, user, body) {
   return res.status(200).json({ success: true, contestantIds: contest?.contestantIds || [], revision });
 }
 
-async function loadContestMaps(db, contest) {
+async function loadContestMaps(db, contest, { photo = true } = {}) {
   const ids = contestMapIds(contest);
   if (!ids.length) return [];
-  const found = await db.collection('maps').find({ id: { $in: ids } }).toArray();
+  const options = photo ? {} : { projection: { photo: 0 } };
+  const found = await db.collection('maps').find({ id: { $in: ids } }, options).toArray();
   const byId = new Map(found.map((map) => [map.id, map]));
   return ids.map((id) => byId.get(id)).filter((map) => map && Array.isArray(map.cells));
 }
@@ -1316,7 +1317,7 @@ async function handleChooseSpawn(req, res, db, user, body) {
   const teams = cleanTeams(contest.teams);
   const spawnVotes = cleanSpawnVotes(contest.spawnVotes, primaryMapId(contest)).filter((vote) => !(vote.teamId === team.id && sameName(vote.username, username)));
   spawnVotes.push({ teamId: team.id, username, mapId: map.id, cell });
-  await col.updateOne(
+    await col.updateOne(
     { id: contestId, spawnResolved: { $ne: true } },
     {
       $set: {
@@ -1815,9 +1816,9 @@ async function handleContestState(req, res, db, user, body) {
   if (!isAdmin(user) && !teamForUser(contest, user.username)) {
     return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
   }
-  const maps = await loadContestMaps(db, contest);
+  const maps = await loadContestMaps(db, contest, { photo: false });
   contest = await maybeResolveSpawns(db, contest, maps, Date.now());
-  const problems = await db.collection('problems').find({}).toArray();
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json(contestPayload(contest, maps, problems, user));
 }
 
@@ -1923,7 +1924,9 @@ function pageMap(map, withCells) {
     cols: map.cols,
     rows: map.rows,
     mode: map.mode === 'testing' ? 'testing' : 'official',
-    spawnPoints: cells.filter((cell) => cell?.kind === 'spawnpoint').length,
+    spawnPoints: Number.isInteger(map?.spawnPoints)
+      ? map.spawnPoints
+      : cells.filter((cell) => cell?.kind === 'spawnpoint').length,
   };
   if (!withCells) return view;
   view.cells = cells;
@@ -1963,7 +1966,24 @@ function problemIdentity(type, index) {
 
 async function mapCellIndex(db, session) {
   const options = session ? { session } : {};
-  const maps = await db.collection('maps').find({}, { ...options, projection: { id: 1, cells: 1 } }).toArray();
+  const maps = await db.collection('maps').aggregate([
+    { $project: {
+      id: 1,
+      cells: {
+        $map: {
+          input: {
+            $filter: {
+              input: { $ifNull: ['$cells', []] },
+              as: 'cell',
+              cond: { $eq: ['$$cell.kind', 'problem'] },
+            },
+          },
+          as: 'cell',
+          in: { kind: '$$cell.kind', type: '$$cell.type', problemNo: '$$cell.problemNo' },
+        },
+      },
+    } },
+  ], options).toArray();
   const usage = {};
   const reserved = [];
   const seen = new Set();
@@ -2328,7 +2348,7 @@ async function handlePageContests(req, res, db, user) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const [contests, maps, revisions] = await Promise.all([
     db.collection('contests').find({}).toArray(),
-    db.collection('maps').find({}, { projection: { id: 1, name: 1, cols: 1, rows: 1, mode: 1, cells: 1 } }).toArray(),
+    db.collection('maps').aggregate(mapSummaryPipeline()).toArray(),
     pageRevisions(db),
   ]);
   return res.status(200).json({
@@ -2399,7 +2419,7 @@ async function handleDeleteContest(req, res, db, user, body) {
   return res.status(200).json({ success: true, revision });
 }
 
-async function problemsOnMaps(db, maps) {
+async function problemsOnMaps(db, maps, projection) {
   const wanted = [];
   const seen = new Set();
   for (const map of maps) {
@@ -2412,7 +2432,30 @@ async function problemsOnMaps(db, maps) {
     }
   }
   if (!wanted.length) return [];
-  return db.collection('problems').find({ $or: wanted }).toArray();
+  const options = projection ? { projection } : {};
+  return db.collection('problems').find({ $or: wanted }, options).toArray();
+}
+
+function mapSummaryPipeline() {
+  return [
+    { $project: {
+      _id: 0,
+      id: 1,
+      name: 1,
+      cols: 1,
+      rows: 1,
+      mode: 1,
+      spawnPoints: {
+        $size: {
+          $filter: {
+            input: { $ifNull: ['$cells', []] },
+            as: 'cell',
+            cond: { $eq: ['$$cell.kind', 'spawnpoint'] },
+          },
+        },
+      },
+    } },
+  ];
 }
 
 async function handlePageContest(req, res, db, user) {
@@ -2424,14 +2467,14 @@ async function handlePageContest(req, res, db, user) {
   if (!contest) return res.status(404).json({ success: false, message: 'Contest not found.' });
   const ids = contestMapIds(contest);
   const [catalogDocs, boardDocs, revisions] = await Promise.all([
-    db.collection('maps').find({}, { projection: { id: 1, name: 1, cols: 1, rows: 1, mode: 1, cells: 1 } }).toArray(),
+    db.collection('maps').aggregate(mapSummaryPipeline()).toArray(),
     db.collection('maps').find({ id: { $in: ids } }).toArray(),
     pageRevisions(db),
   ]);
   const idSet = new Set(ids);
-  contest = await maybeResolveSpawns(db, contest, catalogDocs.filter((map) => idSet.has(map.id)), Date.now());
+  contest = await maybeResolveSpawns(db, contest, boardDocs.filter((map) => idSet.has(map.id)), Date.now());
   const maps = boardDocs.filter((map) => new Set(contestMapIds(contest)).has(map.id));
-  const problems = await problemsOnMaps(db, maps);
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json({
     success: true,
     user: pageUser(user),
@@ -2458,20 +2501,21 @@ async function handlePagePlay(req, res, db, user) {
   let maps = await loadContestMaps(db, contest);
   contest = await maybeResolveSpawns(db, contest, maps, Date.now());
   maps = await loadContestMaps(db, contest);
-  const storedProblems = await problemsOnMaps(db, maps);
-  const admin = isAdmin(user);
+  const storedProblems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json({
     success: true,
     user: pageUser(user),
     contest: withSchedule(contest, contestPayload(contest, maps, storedProblems, user).contest),
     maps: maps.map((map) => pageMap(map, true)),
-    problems: storedProblems.map((problem) => pageProblem(problem, admin)),
+    problems: storedProblems.map(problemStub),
     serverNow: Date.now(),
   });
 }
 
 async function handlePageStudentContests(req, res, db, user) {
-  const contests = await db.collection('contests').find({}).toArray();
+  const contests = await db.collection('contests').find({}, {
+    projection: { claims: 0, energy: 0, spawnVotes: 0, spawnChoices: 0, spawns: 0 },
+  }).toArray();
   const mine = isAdmin(user) ? contests : contests.filter((contest) => teamForUser(contest, user.username));
   const mapIds = [...new Set(mine.flatMap((contest) => contestMapIds(contest)))];
   const maps = mapIds.length
@@ -2505,15 +2549,19 @@ async function handlePageAnswer(req, res, db, user) {
   if (!isAdmin(user) && !teamForUser(contest, user.username)) {
     return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
   }
-  const maps = await loadContestMaps(db, contest);
   const requested = String(req.query.map || '');
   const mapId = contestMapIds(contest).includes(requested) ? requested : primaryMapId(contest);
-  const map = maps.find((item) => item.id === mapId) || null;
+  const map = mapId
+    ? await db.collection('maps').findOne({ id: mapId }, { projection: { photo: 0 } })
+    : null;
   const mapCell = map?.cells?.[cell];
   if (!map || mapCell?.kind !== 'problem') {
     return res.status(404).json({ success: false, message: 'That problem is not available.' });
   }
-  const stored = await db.collection('problems').findOne({ type: mapCell.type, index: mapCell.problemNo });
+  const stored = await db.collection('problems').findOne(
+    { type: mapCell.type, index: mapCell.problemNo },
+    { projection: { index: 1, type: 1, prompt: 1, difficulty: 1, score: 1 } }
+  );
   const problem = stored ? pageProblem(stored, false) : {
     index: mapCell.problemNo,
     type: mapCell.type,
@@ -2523,7 +2571,7 @@ async function handlePageAnswer(req, res, db, user) {
   };
   return res.status(200).json({
     success: true,
-    contest: withSchedule(contest, contestPayload(contest, maps, stored ? [stored] : [], user).contest),
+    contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest),
     mapId,
     problem,
     serverNow: Date.now(),

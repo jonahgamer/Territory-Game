@@ -9,7 +9,7 @@ import {
 } from "../shared/contest-time.js";
 import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
 import { readEnergySettings } from "../shared/energy.js";
-import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js";
+import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
@@ -995,7 +995,9 @@ async function onGridClick(event) {
   }
 }
 
-function showProblem(contest, map, phase) {
+let promptRequest = 0;
+
+async function showProblem(contest, map, phase) {
   const team = teamForUser(contest);
   const cell = map.cells[state.selectedCell];
   const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
@@ -1005,10 +1007,14 @@ function showProblem(contest, map, phase) {
   if (!playable) { panel.hidden = true; form.hidden = true; return; }
 
   const problem = findProblem(cell.problemNo, cell.type);
+  const request = ++promptRequest;
+  const openMapId = map.id;
+  const openCell = state.selectedCell;
   panel.hidden = false;
   const d = problemDifficulty(problem);
   const pts = problemScore(problem);
-  document.querySelector("#student-problem-tag").textContent = `${DIFFICULTY_NAME[d] || "Normal"} · ${pts} point${pts === 1 ? "" : "s"}`;
+  const tag = document.querySelector("#student-problem-tag");
+  tag.textContent = `${DIFFICULTY_NAME[d] || "Normal"} · ${pts} point${pts === 1 ? "" : "s"}`;
   form.hidden = false;
   paintEnergy();
   document.querySelector("#student-answer-error").hidden = true;
@@ -1016,12 +1022,29 @@ function showProblem(contest, map, phase) {
   const input = document.querySelector("#student-answer");
   input.style.cssText = "";
   input.readOnly = false;
-  const prompt = problem?.prompt?.trim() ? problem.prompt : "This problem has no text yet.";
-  statement.render(prompt, document.querySelector("#student-problem-tag").textContent);
+  let prompt = problem?.prompt?.trim() ? problem.prompt : "";
+  if (!prompt) {
+    statement.render("Loading...", tag.textContent);
+    try {
+      const data = await loadPage("page-answer", { contest: contest.id, map: openMapId, cell: openCell });
+      if (request !== promptRequest || state.selectedMapId !== openMapId || state.selectedCell !== openCell) return;
+      prompt = data.problem?.prompt?.trim() ? data.problem.prompt : "";
+      if (problem) problem.prompt = data.problem?.prompt || "";
+    } catch (err) {
+      if (request !== promptRequest) return;
+      panel.hidden = true;
+      form.hidden = true;
+      showPageToast(err.message || "The problem could not be opened.", "warn");
+      return;
+    }
+  }
+  if (request !== promptRequest) return;
+  statement.render(prompt || "This problem has no text yet.", tag.textContent);
   if (!input.readOnly) input.focus();
 }
 
 function closeProblem() {
+  promptRequest += 1;
   const panel = document.querySelector("#student-problem");
   if (panel.hidden) return;
   state.selectedCell = null;

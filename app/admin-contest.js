@@ -9,7 +9,7 @@ import {
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
 import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js";
-import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js";
+import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
 import { drawTeleportLinks } from "../shared/teleport-link.js";

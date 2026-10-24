@@ -55,7 +55,7 @@ The old single-page bundle still uses this. The split pages do not. Each of thos
 | `page-problem-text` | Export text | Prompts for the requested problems |
 | `page-contests` | Contest list | Contest summaries and map names, not cells |
 | `page-contest&id=` | One contest | That contest, its maps, and the scores of problems on those maps |
-| `page-play&contest=` | Contestant board | That contest, its maps, and those problems' prompts |
+| `page-play&contest=` | Contestant board | That contest, its maps, and the score of each problem on those maps. The prompt comes from `page-answer` |
 | `page-student-contests` | Contestant list | The signed-in student's contests and map names |
 | `page-answer&contest=&map=&cell=` | Answer tab | That problem's prompt and the contest clock and energy |
 | `page-credits` | Credits | Version notes |

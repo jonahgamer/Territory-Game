@@ -209,6 +209,7 @@ export function paintPhotoGrid(grid, map, findProblem) {
   const buttons = [...grid.querySelectorAll(".grid-cell")];
   if (mapBackdrop(map) !== "photo") {
     delete grid.dataset.photoSrc;
+    grid.style.removeProperty("--map-photo");
     for (const button of buttons) {
       button.classList.remove("photo-cell");
       button.style.backgroundImage = "";
@@ -218,6 +219,7 @@ export function paintPhotoGrid(grid, map, findProblem) {
     return;
   }
   const photo = map.photo;
+  grid.style.setProperty("--map-photo", `url("${photo}")`);
   const img = new Image();
   img.onload = () => {
     if (!grid.isConnected || grid.dataset.photoSrc !== photo) return;
@@ -233,7 +235,7 @@ export function paintPhotoGrid(grid, map, findProblem) {
       const col = index % map.cols;
       const row = Math.floor(index / map.cols);
       button.classList.add("photo-cell");
-      button.style.backgroundImage = `url("${photo}")`;
+      button.style.backgroundImage = "var(--map-photo)";
       button.style.backgroundRepeat = "no-repeat";
       button.style.backgroundSize = `${cover.drawW}px ${cover.drawH}px`;
       button.style.backgroundPosition = `${cover.offsetX - col * (cell + gap)}px ${cover.offsetY - row * (cell + gap)}px`;
