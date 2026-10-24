@@ -43,8 +43,11 @@ const OTHER_COLOURS = {
 // ── Pan / zoom limits ────────────────────────────────────
 const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 6;
-const ZOOM_STEP = 1.15;    // was 1.25 — gentler per-step zoom
-const PINCH_DAMP = 0.8;    // exponent applied to pinch ratio to soften it
+const ZOOM_STEP = 1.12;                  // on-screen +/- buttons: gentler per click
+const PINCH_DAMP = 0.8;                  // exponent on touch-pinch ratio
+const WHEEL_ZOOM_SENSITIVITY = 0.0012;   // per pixel of deltaY (mouse wheel & trackpad scroll)
+const WHEEL_PINCH_SENSITIVITY = 0.0040;  // ctrl+wheel = trackpad pinch gesture
+const WHEEL_DELTA_CLAMP = 120;           // cap runaway deltas from some mice/drivers
 
 // ── Dot sizing ───────────────────────────────────────────
 // Occupied-team dot (non-spawn): 78 % of the cell.
@@ -223,10 +226,23 @@ function installPanZoom() {
   };
   state.zoomAtVisibleCenter = zoomAtVisibleCenter;
 
-  board.addEventListener("wheel", (event) => {
+    board.addEventListener("wheel", (event) => {
     if (!event.target.closest?.("#student-board")) return;
     event.preventDefault();
-    const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+
+    // Normalise delta across deltaMode (0 = pixels, 1 = lines, 2 = pages).
+    let dy = event.deltaY;
+    if (event.deltaMode === 1) dy *= 16;
+    else if (event.deltaMode === 2) dy *= 100;
+    dy = clamp(dy, -WHEEL_DELTA_CLAMP, WHEEL_DELTA_CLAMP);
+
+    // Trackpad pinch arrives as ctrl+wheel with very small deltas → needs more gain.
+    const sens = event.ctrlKey ? WHEEL_PINCH_SENSITIVITY : WHEEL_ZOOM_SENSITIVITY;
+    const factor = Math.exp(-dy * sens);
+
+    // Ignore micro-jitter so sideways trackpad drift doesn't shift the map.
+    if (Math.abs(factor - 1) < 1e-4) return;
+
     zoomAtClient(event.clientX, event.clientY, factor);
   }, { passive: false });
 
