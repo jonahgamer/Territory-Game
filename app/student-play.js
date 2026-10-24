@@ -1,5 +1,5 @@
-import { requireContestant, getSession, sameContestant } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";

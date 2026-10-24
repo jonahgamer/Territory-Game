@@ -1,5 +1,5 @@
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin, isRoot } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { api } from "../shared/api.js";
 import { el, renderList, formatAccountDate, confirmTwice } from "../shared/dom.js";
@@ -41,6 +41,7 @@ function matches(account) {
     if (!hay.includes(q)) return false;
   }
   if (state.filter === "admin") return account.role === "admin";
+  if (state.filter === "root") return account.role === "root";
   if (state.filter === "student") return account.role === "student";
   if (state.filter === "suspended") return account.banned === true;
   return true;
@@ -53,6 +54,7 @@ function render() {
     const counts = {
       all: state.accounts.length,
       admin: state.accounts.filter((a) => a.role === "admin").length,
+      root: state.accounts.filter((a) => a.role === "root").length,
       student: state.accounts.filter((a) => a.role === "student").length,
       suspended: state.accounts.filter((a) => a.banned).length,
     };
@@ -61,6 +63,7 @@ function render() {
       ["Accounts", counts.all],
       ["Students", counts.student],
       ["Admins", counts.admin],
+      ["Root", counts.root],
       ["Suspended", counts.suspended],
     ];
     for (const [label, value] of stats) {
@@ -93,11 +96,9 @@ function createCard(account) {
 
   const head = el("div", "account-card-head");
   head.append(el("span", "account-card-name", account.username));
-  head.append(el(
-    "span",
-    `account-badge ${account.role === "admin" ? "role-admin" : "role-student"}`,
-    account.role === "admin" ? "Admin" : "Student"
-  ));
+  const roleName = account.role === "root" ? "Root" : account.role === "admin" ? "Admin" : "Student";
+  const roleClass = account.role === "root" ? "role-root" : account.role === "admin" ? "role-admin" : "role-student";
+  head.append(el("span", `account-badge ${roleClass}`, roleName));
   if (account.banned) head.append(el("span", "account-badge status-banned", "Suspended"));
 
   const displayName = account.displayName && account.displayName !== account.username
@@ -124,8 +125,12 @@ function createCard(account) {
 
   item.append(head, meta, teams);
 
-  if (account.role === "admin") {
-    item.append(el("p", "account-protected", "Administrator account — protected from edits, suspension, and deletion here."));
+  if (account.role === "root") {
+    item.append(el("p", "account-protected", "Root account. It cannot be changed or deleted."));
+    return item;
+  }
+  if (account.role === "admin" && !isRoot()) {
+    item.append(el("p", "account-protected", "Administrator account. Only root can change or delete it."));
     return item;
   }
 
@@ -186,6 +191,7 @@ async function onCreate(event) {
   const username = document.querySelector("#account-username").value.trim();
   const displayName = document.querySelector("#account-display-name").value.trim();
   const password = document.querySelector("#account-password").value;
+  const role = isRoot() && document.querySelector("#account-role")?.value === "admin" ? "admin" : "student";
   const formError = document.querySelector("#account-form-error");
 
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(username)) {
@@ -201,11 +207,13 @@ async function onCreate(event) {
   formError.hidden = true;
 
   try {
-    await api.createAccount({ username, displayName, password });
+    await api.createAccount({ username, displayName, password, role });
     document.querySelector("#account-username").value = "";
     document.querySelector("#account-display-name").value = "";
     document.querySelector("#account-password").value = "";
-    showStatus(`Student ${username} created.`);
+    const roleSelect = document.querySelector("#account-role");
+    if (roleSelect) roleSelect.value = "student";
+    showStatus(`${role === "admin" ? "Admin" : "Student"} ${username} created.`);
     await load();
   } catch (err) {
     formError.hidden = false;
@@ -217,7 +225,7 @@ function onFilter(event) {
   const btn = event.target.closest("[data-account-filter]");
   if (!btn) return;
   const f = btn.dataset.accountFilter;
-  if (!["all", "student", "admin", "suspended"].includes(f)) return;
+  if (!["all", "student", "admin", "root", "suspended"].includes(f)) return;
   state.filter = f;
   render();
 }
@@ -267,8 +275,10 @@ async function onListClick(event) {
   const del = event.target.closest("[data-account-delete]");
   if (!del) return;
   const username = del.dataset.accountDelete;
+  const target = state.accounts.find((account) => account.username === username);
+  const kind = target?.role === "admin" ? "admin" : "student";
   if (!confirmTwice(
-    `Delete the student account ${username}?`,
+    `Delete the ${kind} account ${username}?`,
     `Delete ${username} now? This removes them from contest teams and they will no longer be able to sign in.`
   )) return;
 
@@ -305,6 +315,8 @@ async function updateAccount(username, change, success) {
 
 // ── 启动 ─────────────────────────────────────────────────
 async function run() {
+  const roleField = document.querySelector("#account-role-field");
+  if (roleField) roleField.hidden = !isRoot();
   await load();
   document.querySelector("#account-form")?.addEventListener("submit", onCreate);
   document.querySelector("#account-list")?.addEventListener("click", onListClick);

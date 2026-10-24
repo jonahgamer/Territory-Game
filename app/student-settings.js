@@ -1,5 +1,5 @@
-import { requireContestant, getSession } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireContestant, getSession } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose } from "../shared/toast.js";
 import { ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 

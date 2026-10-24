@@ -35,7 +35,7 @@ Body: `{ "username": "...", "password": "..." }`
 
 Success: `{ "success": true, "token": "...", "user": { "username", "displayName", "role", "pfp" } }`
 
-`role` is `admin` or `student`. A suspended account gets the same message as a wrong password. More than 20 attempts from one address in 5 minutes returns 429. The limit is stored in the database, so it still applies when more than one server is running.
+`role` is `root`, `admin`, or `student`. Root and admin can both run the admin pages. A suspended account gets the same message as a wrong password. More than 20 attempts from one address in 5 minutes returns 429. The limit is stored in the database, so it still applies when more than one server is running.
 
 ## `/api/territory`
 
@@ -143,21 +143,21 @@ Admin only. Returns one entry for each account:
 }
 ```
 
-Passwords are not included. `role` is `admin` or `student`. `createdAt` and `lastLoginAt` are milliseconds since 1970, or `null` when unknown. `teams` is every contest team that currently contains the account.
+Passwords are not included. `role` is `root`, `admin`, or `student`. `createdAt` and `lastLoginAt` are milliseconds since 1970, or `null` when unknown. `teams` is every contest team that currently contains the account.
 
-### `POST { "action": "create-account", "username": "...", "displayName": "...", "password": "..." }`
+### `POST { "action": "create-account", "username": "...", "displayName": "...", "password": "...", "role": "student" }`
 
-Admin only. Creates a student. The username can use letters, numbers, dots, dashes, and underscores. The password must be 4 to 256 characters.
+Admin only. Creates a student. Root can pass `"role": "admin"` to create an admin. The username `root` is reserved. The username can use letters, numbers, dots, dashes, and underscores. The password must be 4 to 256 characters.
 
 ### `POST { "action": "update-account", "username": "...", "displayName": "...", "password": "...", "banned": false }`
 
-Admin only. Changes a student's display name, password, or suspended state. Any of those fields can be left out. Admin accounts cannot be changed here.
+Admin only. Changes a student's display name, password, or suspended state. Any of those fields can be left out. Root can change an admin the same way. The root account cannot be changed here, and an admin cannot change another admin.
 
 Setting `banned` to `true` also removes the student from every contest team, so the rest of the team is not blocked by a student who can no longer sign in. Their old spawn vote is removed and a team that becomes empty is deleted. The suspended account's next API request returns 401 even if it still has a valid token. Restoring an account does not put the student back on a team; add them again from the contest page.
 
 ### `POST { "action": "delete-account", "username": "..." }`
 
-Admin only. Deletes a student account and removes that username from every contest team in the same transaction. An admin cannot delete their own account or another admin.
+Admin only. Deletes a student account and removes that username from every contest team in the same transaction. Root can also delete an admin. Nobody can delete the root account, and an account cannot delete itself.
 
 ### `POST { "action": "add-version", "version": "...", "message": "..." }`
 

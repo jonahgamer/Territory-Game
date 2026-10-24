@@ -1,5 +1,5 @@
 import { API_BASE, LOGIN_URL } from "./constants.js";
-import { getSession, logOut } from "./session.js";
+import { getSession, logOut } from "./session.js?v=roles";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 

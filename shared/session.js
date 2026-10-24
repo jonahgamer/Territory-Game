@@ -15,7 +15,7 @@ export function readStoredSession() {
       user: {
         username,
         displayName: String(stored.user.displayName || username),
-        role: stored.user.role === "admin" ? "admin" : "student",
+        role: normalizeRole(stored.user.role),
         pfp: safePfp(stored.user.pfp),
       },
     };
@@ -63,8 +63,17 @@ export function setSession(session) { _session = session; saveSession(session); 
 export function isSignedIn() {
   return Boolean(_session?.user?.username && _session.token);
 }
+export function normalizeRole(role) {
+  if (role === "root" || role === "admin") return role;
+  return "student";
+}
+
+export function isRoot() {
+  return _session?.user?.role === "root";
+}
+
 export function isAdmin() {
-  return _session?.user?.role === "admin";
+  return _session?.user?.role === "admin" || _session?.user?.role === "root";
 }
 export function isContestant() {
   return isSignedIn() && !isAdmin();

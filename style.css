@@ -2475,6 +2475,11 @@ button[type="submit"],
   color: #ff9a1a;
 }
 
+.account-badge.role-root {
+  border-color: #ff5b6e;
+  color: #ff5b6e;
+}
+
 .account-badge.role-student {
   border-color: var(--cyan);
   color: var(--cyan);

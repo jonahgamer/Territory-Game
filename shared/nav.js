@@ -1,4 +1,4 @@
-import { getSession, isContestant, logOut, safePfp } from "./session.js";
+import { getSession, isContestant, logOut, safePfp } from "./session.js?v=roles";
 
 export function initNav(activePage) {
   const session = getSession();
@@ -44,7 +44,7 @@ export function initNav(activePage) {
   const pfp = document.querySelector("#account-pfp");
   const user = session.user;
   const shownName = user.displayName || user.username;
-  const roleLabel = user.role === "admin" ? "Admin" : "Student";
+  const roleLabel = user.role === "root" ? "Root" : user.role === "admin" ? "Admin" : "Student";
   if (name) { name.hidden = false; name.textContent = shownName; }
   if (role) {
     const same = shownName.trim().toLowerCase() === roleLabel.toLowerCase();
