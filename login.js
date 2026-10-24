@@ -40,7 +40,7 @@ async function logIn(event) {
     const user = {
       username: String(data.user.username),
       displayName: String(data.user.displayName || data.user.username),
-      role: data.user.role === "root" || data.user.role === "admin" ? data.user.role : "student",
+      role: data.user.role === "admin" ? "admin" : "student",
       pfp: safePfp(data.user.pfp),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify({ token: data.token, user }));

@@ -1,6 +1,6 @@
-import { requireAdmin } from "../shared/session.js?v=roles";
-import { getSession, logOut } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=roles";
+import { requireAdmin } from "../shared/session.js";
+import { getSession, logOut } from "../shared/session.js";
+import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { el } from "../shared/dom.js";
 

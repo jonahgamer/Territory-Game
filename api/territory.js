@@ -1547,24 +1547,8 @@ function cleanUsername(value) {
   return username;
 }
 
-function accountRole(record) {
-  if (record?.role === 'root') return 'root';
-  if (record?.role === 'admin') return 'admin';
-  return 'student';
-}
-
-function isRootAccount(record) {
-  return accountRole(record) === 'root';
-}
-
-function isReservedRoot(record) {
-  return isRootAccount(record) || String(record?.username || '').toLowerCase() === 'root';
-}
-
-async function actingAccount(db, user) {
-  const record = await db.collection('users').findOne({ username: user.username });
-  if (!record || record.banned === true) return null;
-  return record;
+function accountIsProtected(record) {
+  return record?.role === 'admin' || record?.role === 'root';
 }
 
 function timestampValue(value) {
@@ -1577,7 +1561,7 @@ function publicAccount(record, memberships = []) {
   return {
     username: String(record.username || ''),
     displayName: String(record.displayName || record.username || ''),
-    role: accountRole(record),
+    role: accountIsProtected(record) ? 'admin' : 'student',
     banned: record.banned === true,
     pfp: typeof record.pfp === 'string' ? record.pfp : '',
     createdAt: timestampValue(record.createdAt),
@@ -1619,27 +1603,15 @@ async function handleListAccounts(req, res, db, user) {
   const accounts = records
     .filter((record) => typeof record.username === 'string' && record.username)
     .map((record) => publicAccount(record, memberships.get(record.username.toLowerCase()) || []))
-    .sort((a, b) => (a.role === 'root' ? 0 : a.role === 'admin' ? 1 : 2) - (b.role === 'root' ? 0 : b.role === 'admin' ? 1 : 2) || a.username.localeCompare(b.username));
+    .sort((a, b) => Number(b.role === 'admin') - Number(a.role === 'admin') || a.username.localeCompare(b.username));
   return res.status(200).json({ success: true, accounts });
 }
 
 async function handleCreateAccount(req, res, db, user, body) {
-  const actor = await actingAccount(db, user);
-  if (!actor) return res.status(401).json({ success: false, message: 'Unauthorized' });
-  if (!isAdmin(actor)) return res.status(403).json({ success: false, message: 'Admin only' });
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const username = cleanUsername(body.username);
   const password = String(body.password || '');
   const displayName = String(body.displayName || '').trim() || username;
-  const role = body.role === 'admin' ? 'admin' : 'student';
-  if (body.role !== undefined && body.role !== 'admin' && body.role !== 'student') {
-    return res.status(400).json({ success: false, message: 'Choose a student or an admin account.' });
-  }
-  if (role === 'admin' && !isRootAccount(actor)) {
-    return res.status(403).json({ success: false, message: 'Only the root account can create an admin.' });
-  }
-  if (username.toLowerCase() === 'root') {
-    return res.status(400).json({ success: false, message: 'That username is reserved.' });
-  }
   if (!username) {
     return res.status(400).json({ success: false, message: 'Username can use letters, numbers, dots, dashes, and underscores, up to 64 characters.' });
   }
@@ -1657,7 +1629,7 @@ async function handleCreateAccount(req, res, db, user, body) {
     username,
     displayName,
     password: passwordHash,
-    role,
+    role: 'student',
     banned: false,
     pfp: '',
     createdAt: new Date(),
@@ -1710,19 +1682,14 @@ async function removeStudentFromTeams(db, username, mongoSession = null) {
 }
 
 async function handleUpdateAccount(req, res, db, user, body) {
-  const actor = await actingAccount(db, user);
-  if (!actor) return res.status(401).json({ success: false, message: 'Unauthorized' });
-  if (!isAdmin(actor)) return res.status(403).json({ success: false, message: 'Admin only' });
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const username = cleanUsername(body.username);
   if (!username) return res.status(400).json({ success: false, message: 'Missing account' });
   const users = db.collection('users');
   const record = await users.findOne({ username });
   if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
-  if (isReservedRoot(record)) {
-    return res.status(400).json({ success: false, message: 'The root account cannot be changed here.' });
-  }
-  if (accountRole(record) === 'admin' && !isRootAccount(actor)) {
-    return res.status(403).json({ success: false, message: 'Only the root account can change an admin.' });
+  if (accountIsProtected(record)) {
+    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
   }
   const update = {};
   if (body.displayName !== undefined) {
@@ -1814,9 +1781,7 @@ async function handleDeleteVersion(req, res, db, user, body) {
 }
 
 async function handleDeleteAccount(req, res, db, user, body) {
-  const actor = await actingAccount(db, user);
-  if (!actor) return res.status(401).json({ success: false, message: 'Unauthorized' });
-  if (!isAdmin(actor)) return res.status(403).json({ success: false, message: 'Admin only' });
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const username = cleanUsername(body.username);
   if (!username) return res.status(400).json({ success: false, message: 'Missing account' });
   if (username === user.username) {
@@ -1825,11 +1790,8 @@ async function handleDeleteAccount(req, res, db, user, body) {
   const users = db.collection('users');
   const record = await users.findOne({ username });
   if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
-  if (isReservedRoot(record)) {
-    return res.status(400).json({ success: false, message: 'The root account cannot be deleted.' });
-  }
-  if (accountRole(record) === 'admin' && !isRootAccount(actor)) {
-    return res.status(403).json({ success: false, message: 'Only the root account can delete an admin.' });
+  if (accountIsProtected(record)) {
+    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
   }
   let teamsChanged = 0;
   const session = getMongoClient().startSession();

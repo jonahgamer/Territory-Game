@@ -48,7 +48,7 @@ function safeUser(user) {
   return {
     username: String(user.username || ""),
     displayName: String(user.displayName || user.username || ""),
-    role: user.role === "root" || user.role === "admin" ? user.role : "student",
+    role: user.role === "admin" || user.role === "root" ? "admin" : "student",
     pfp: typeof user.pfp === "string" ? user.pfp : "",
   };
 }

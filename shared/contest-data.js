@@ -1,4 +1,4 @@
-import { contestantId, sameContestant } from "./session.js?v=roles";
+import { contestantId, sameContestant } from "./session.js";
 import { contestSchedule, serverNow } from "./contest-time.js";
 import { cleanEnergyLedger, energyNow, readEnergySettings } from "./energy.js";
 import { contestMapIds, primaryMapId, cleanTeleports } from "./contest-board.js";

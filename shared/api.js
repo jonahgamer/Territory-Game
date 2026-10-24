@@ -1,18 +1,19 @@
 import { API_BASE, LOGIN_URL } from "./constants.js";
-import { getSession, logOut } from "./session.js?v=roles";
+import { getSession, logOut } from "./session.js";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 
 async function request(url, options = {}) {
+  const { timeoutMs, keepPage, ...init } = options;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs || DEFAULT_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
-      ...options,
+      ...init,
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...(init.headers || {}),
       },
     });
     const data = await response.json().catch(() => ({}));
@@ -20,7 +21,7 @@ async function request(url, options = {}) {
       const error = new Error(data.message || `HTTP ${response.status}`);
       error.status = response.status;
       error.data = data;
-      if (response.status === 401) {
+      if (response.status === 401 && !options.keepPage) {
         logOut();
         return new Promise(() => {}); // 页面即将跳转
       }
@@ -61,6 +62,7 @@ export async function login(username, password) {
   return request(LOGIN_URL, {
     method: "POST",
     body: JSON.stringify({ username, password }),
+    keepPage: true,
   });
 }
 

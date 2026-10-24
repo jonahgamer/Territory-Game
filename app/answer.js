@@ -1,4 +1,4 @@
-import { readStoredSession } from "../shared/session.js?v=roles";
+import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js?v=page-data";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { noteServerTime } from "../shared/contest-time.js";

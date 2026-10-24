@@ -54,7 +54,7 @@ Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the projec
 
 JWT, 7 days, sent as `Authorization: Bearer`. Stored user is `{ token, user: { username, displayName, role, pfp } }`.
 
-`root` and `admin` can use the admin pages. Every other role is a student. Root is the account named `root`. Only root can create, change, or delete an admin. The root account itself cannot be changed or deleted from the accounts page. Unsigned visitors go to `/login.html` (absolute, so `/ui2/` does not look for a login page in that folder).
+`admin` or `root` is an admin. Every other role is a student. Unsigned visitors go to `/login.html` (absolute, so `/ui2/` does not look for a login page in that folder).
 
 Students do not receive `answer` or `logic`. Settings and Tutorial are admin-only. Credits is a label with no page.
 

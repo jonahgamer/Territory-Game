@@ -32,18 +32,12 @@
       <p id="load-error" class="form-error" hidden></p>
       <p class="eyebrow">Admin</p>
       <h1>Accounts</h1>
-      <p class="lead">Create accounts, reset passwords, and suspend accounts. Only root can add or remove an admin.</p>
+      <p class="lead">Create student accounts, reset passwords, suspend accounts.</p>
 
       <form id="account-form" class="create-map">
         <label>Username <input id="account-username" type="text" maxlength="64" required /></label>
         <label>Display name <input id="account-display-name" type="text" maxlength="60" /></label>
         <label>Password <input id="account-password" type="password" minlength="4" maxlength="256" required /></label>
-        <label id="account-role-field" hidden>Role
-          <select id="account-role">
-            <option value="student">Student</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
         <button type="submit">Create account</button>
         <p id="account-form-error" class="form-error" hidden></p>
       </form>
@@ -56,7 +50,6 @@
           <button type="button" data-account-filter="all" aria-pressed="true">All</button>
           <button type="button" data-account-filter="student" aria-pressed="false">Students</button>
           <button type="button" data-account-filter="admin" aria-pressed="false">Admins</button>
-          <button type="button" data-account-filter="root" aria-pressed="false">Root</button>
           <button type="button" data-account-filter="suspended" aria-pressed="false">Suspended</button>
         </div>
       </div>
@@ -71,6 +64,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-accounts.js?v=roles"></script>
+  <script type="module" src="/app/admin-accounts.js"></script>
 </body>
 </html>
