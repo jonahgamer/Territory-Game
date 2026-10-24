@@ -3,125 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Batch add · Territory Game</title>
+  <title>Upload problems · Territory Game</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
   <style>
-    /* --- drop zone -------------------------------------------------- */
-    .batch-drop {
-      border: 2px dashed rgba(120, 200, 255, 0.35);
+    .drop-zone {
+      margin: 1.25rem 0;
+      padding: 2rem 1.25rem;
+      border: 2px dashed var(--border, rgba(140, 160, 190, 0.45));
       border-radius: 14px;
-      background: rgba(120, 200, 255, 0.04);
-      padding: 1.6rem 1.2rem;
       text-align: center;
-      transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
-      margin-bottom: 1.1rem;
       cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
     }
-    .batch-drop:hover,
-    .batch-drop:focus-visible {
-      border-color: rgba(120, 200, 255, 0.6);
-      background: rgba(120, 200, 255, 0.08);
-      outline: none;
+    .drop-zone.is-dragging {
+      border-color: var(--accent, #4cc9f0);
+      background: rgba(76, 201, 240, 0.08);
     }
-    .batch-drop.is-dragover {
-      border-color: #6cd4ff;
-      background: rgba(108, 212, 255, 0.16);
-      transform: scale(1.005);
-    }
-    .batch-drop-title {
+    .drop-zone-title {
       margin: 0 0 0.35rem;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 1rem;
-      letter-spacing: 0.04em;
+      font-family: "Orbitron", sans-serif;
+      font-size: 1.1rem;
     }
-    .batch-drop-hint {
-      margin: 0 0 0.9rem;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.78rem;
-      opacity: 0.7;
-      line-height: 1.6;
-    }
-    .batch-drop-status {
-      margin: 0.7rem 0 0;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.78rem;
-      opacity: 0.8;
-    }
-
-    /* --- rows ------------------------------------------------------- */
-    .batch-rows { display: grid; gap: 1rem; }
-
-    .batch-row {
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 1rem;
-    }
-    .batch-row.is-invalid { border-color: #ff6b6b; }
-
-    .batch-row-head {
+    .drop-zone-hint { margin: 0 0 0.9rem; opacity: 0.7; }
+    .drop-zone-actions {
       display: flex;
+      gap: 0.75rem;
+      justify-content: center;
       flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 0.75rem;
     }
-    .batch-field { display: block; }
-    .batch-field > span {
-      display: block;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      opacity: 0.65;
-      margin-bottom: 0.3rem;
-    }
-    .batch-field-index { flex: 0 1 12rem; }
-    .batch-field-index input {
-      width: 100%;
-      font-family: 'Share Tech Mono', monospace;
-      letter-spacing: 0.05em;
-    }
-    .batch-row-body {
+    .upload-count { opacity: 0.8; font-family: "Share Tech Mono", monospace; }
+    .upload-row {
       display: grid;
-      gap: 0.75rem;
-      margin-top: 0.85rem;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.75rem 1rem;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border, rgba(140, 160, 190, 0.25));
     }
-    .batch-row-body textarea { width: 100%; resize: vertical; }
-
-    .batch-parts { display: flex; gap: 0.4rem; flex: 1 1 auto; }
-    .batch-part {
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.7rem;
-      padding: 0.15rem 0.5rem;
+    .upload-tag {
+      font-family: "Share Tech Mono", monospace;
+      font-size: 1rem;
+    }
+    .upload-files {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-family: "Share Tech Mono", monospace;
+      font-size: 0.85rem;
+    }
+    .upload-file {
+      padding: 0.1rem 0.5rem;
+      border: 1px solid var(--border, rgba(140, 160, 190, 0.4));
       border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: rgba(255, 255, 255, 0.35);
-      white-space: nowrap;
     }
-    .batch-part.is-present {
-      color: #7ef0c0;
-      border-color: rgba(126, 240, 192, 0.55);
-      background: rgba(126, 240, 192, 0.08);
-    }
-
-    .batch-remove {
-      background: none;
-      border: 1px solid rgba(255, 107, 107, 0.5);
-      color: #ff9b9b;
-      border-radius: 8px;
-      padding: 0.35rem 0.7rem;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.72rem;
-      cursor: pointer;
-    }
-    .batch-remove:hover { background: rgba(255, 107, 107, 0.12); }
-
-    @media (min-width: 900px) {
-      .batch-row-body { grid-template-columns: 2fr 1fr; }
-      .batch-row-body .batch-field:first-child { grid-row: span 2; }
+    .upload-file.is-ok { border-color: var(--ok, #4ade80); }
+    .upload-file.is-missing { border-style: dashed; opacity: 0.45; }
+    @media (max-width: 640px) {
+      .upload-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -147,38 +88,39 @@
     <main>
       <p id="load-error" class="form-error" hidden></p>
       <div class="editor-toolbar">
-        <a class="back-button" id="batch-back" href="/admin/problems.html">Back to problems</a>
+        <a class="back-button" id="upload-back" href="/admin/problems.html">Back to problems</a>
         <div class="editor-toolbar-actions">
-          <button class="account-action" id="batch-add-row" type="button">Add row</button>
-          <button class="save-changes" id="batch-save" type="button">Save all</button>
+          <button class="account-action" id="upload-clear" type="button">Clear all</button>
+          <button class="save-changes" id="upload-save" type="button">Save all</button>
         </div>
       </div>
       <p class="eyebrow">Batch</p>
-      <h1 id="batch-title">Batch add</h1>
+      <h1 id="upload-title">Upload problems</h1>
       <p class="lead">
-        Drop a set of problem files — each row becomes a new problem. Rows with an index,
-        statement and answer are saved.
+        Drop files named <code>P&lt;number&gt;.pro</code> (statement), <code>P&lt;number&gt;.ans</code> (answer)
+        and optionally <code>P&lt;number&gt;.gra</code> (grader). Files that share a number are grouped into one problem.
       </p>
+      <p id="upload-error" class="form-error" hidden></p>
 
-      <div class="batch-drop" id="batch-drop" role="region" aria-label="Drop problem files">
-        <input type="file" id="batch-file-input" accept=".pro,.ans,.gra" multiple hidden />
-        <p class="batch-drop-title">Drag &amp; drop problem files</p>
-        <p class="batch-drop-hint">
-          <code>P26104.pro</code> statement · <code>P26104.ans</code> answer · <code>P26104.gra</code> grader<br />
-          Files sharing the same base name are merged into one problem.
-        </p>
-        <button class="account-action" id="batch-browse" type="button">Choose files</button>
-        <p class="batch-drop-status" id="batch-drop-status" aria-live="polite" hidden></p>
+      <div class="drop-zone" id="drop-zone">
+        <p class="drop-zone-title">Drop files here</p>
+        <p class="drop-zone-hint">.pro · .ans · .gra</p>
+        <div class="drop-zone-actions">
+          <button class="account-action" id="pick-files" type="button">Choose files</button>
+          <button class="account-action" id="pick-folder" type="button">Choose folder</button>
+        </div>
+        <input id="file-input" type="file" multiple accept=".pro,.ans,.gra" hidden />
+        <input id="folder-input" type="file" webkitdirectory multiple hidden />
       </div>
 
-      <p id="batch-error" class="form-error" hidden></p>
-      <div class="batch-rows" id="batch-rows"></div>
+      <p id="upload-count" class="upload-count" hidden></p>
+      <div class="batch-rows" id="upload-list"></div>
     </main>
   </div>
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-problem-batch-upload.js"></script>
+  <script type="module" src="/app/admin-problem-upload.js?v=page-data"></script>
 </body>
 </html>
