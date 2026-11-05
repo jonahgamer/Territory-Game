@@ -6,7 +6,7 @@ import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
-import { createStatementView } from "../shared/statement.js?v=preview-whole";
+import { createStatementView } from "../shared/statement.js?v=part-align";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);

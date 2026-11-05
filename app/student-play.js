@@ -15,7 +15,7 @@ import { problemDifficulty, problemTag, problemScore } from "../shared/difficult
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks } from "../shared/teleport-link.js";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
-import { createStatementView } from "../shared/statement.js";
+import { createStatementView } from "../shared/statement.js?v=part-align";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);

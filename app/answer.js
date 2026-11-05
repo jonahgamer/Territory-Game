@@ -2,7 +2,7 @@ import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js?v=parts";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { noteServerTime } from "../shared/contest-time.js";
-import { createStatementView } from "../shared/statement.js";
+import { createStatementView } from "../shared/statement.js?v=part-align";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
 import { teamForUser, teamEnergy } from "../shared/contest-data.js";
