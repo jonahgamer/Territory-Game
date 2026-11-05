@@ -63,6 +63,7 @@ const MIN_PROBLEM_NO = 1;
 const MAX_PROBLEM_NO = 99999;
 const PROBLEM_YEAR = 26;
 const MAX_PROBLEM_TEXT = 50000;
+const MAX_PROBLEM_PARTS = 20;
 const MAX_PROBLEM_LOGIC = 10000;
 const MAX_TEST_TEXT = 10000;
 const MAX_NAME_LEN = 60;
@@ -149,12 +150,29 @@ function normalizeMap(v) {
   };
 }
 
+function cleanProblemParts(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > MAX_PROBLEM_PARTS) return null;
+  const parts = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return null;
+    const prompt = typeof item.prompt === 'string' ? item.prompt : '';
+    const answer = typeof item.answer === 'string' ? item.answer : '';
+    if (prompt.length > MAX_PROBLEM_TEXT || answer.length > MAX_PROBLEM_TEXT) return null;
+    if (!answer.trim()) return null;
+    parts.push({ prompt, answer });
+  }
+  return parts;
+}
+
 function normalizeProblem(v) {
   if (!v || typeof v !== 'object') return null;
   if (!Number.isInteger(v.index) || v.index < MIN_PROBLEM_NO || v.index > MAX_PROBLEM_NO) return null;
   if (!PROBLEM_TYPES.includes(v.type)) return null;
   if (typeof v.prompt !== 'string' || v.prompt.length > MAX_PROBLEM_TEXT) return null;
   if (typeof v.answer !== 'string' || v.answer.length > MAX_PROBLEM_TEXT) return null;
+  const parts = cleanProblemParts(v.parts);
+  if (!parts) return null;
   const solution = typeof v.solution === 'string' ? v.solution : '';
   if (solution.length > MAX_PROBLEM_TEXT) return null;
   const logic = typeof v.logic === 'string' ? v.logic : '';
@@ -171,6 +189,7 @@ function normalizeProblem(v) {
     type: v.type,
     prompt: v.prompt,
     answer: v.answer,
+    parts,
     solution,
     logic,
     difficulty,
@@ -1397,10 +1416,26 @@ async function handleSolve(req, res, db, user, body) {
   }
 
   const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
+  const parts = Array.isArray(problem?.parts) ? problem.parts : [];
   let correct = false;
   let wrongMessage = '';
-  if (logic) {
-    const judged = runProblemLogic(logic, problem.answer, body.answer);
+  let expected = problem?.answer;
+  let given = body.answer;
+  let givenList = null;
+  if (parts.length) {
+    givenList = Array.isArray(body.answers) ? body.answers.map((item) => String(item ?? '')) : null;
+    if (!givenList || givenList.length !== parts.length || givenList.some((item) => item.length > MAX_TEST_TEXT)) {
+      return res.status(400).json({ success: false, message: 'Answer every part.', serverNow: now });
+    }
+    expected = JSON.stringify(parts.map((part) => part.answer));
+    given = JSON.stringify(givenList);
+    if (!logic) {
+      correct = parts.every((part, index) => answersMatch(part.answer, givenList[index]));
+      if (!correct) wrongMessage = 'That answer is not right.';
+    }
+  }
+  if (logic && !wrongMessage) {
+    const judged = runProblemLogic(logic, expected, given);
     if (judged.systemError) {
       return res.status(500).json({
         success: false,
@@ -1410,12 +1445,14 @@ async function handleSolve(req, res, db, user, body) {
     }
     correct = judged.correct === true;
     if (!correct) wrongMessage = judged.comment || 'That answer is not right.';
-  } else if (!problem || !answersMatch(problem.answer, body.answer)) {
-    wrongMessage = problem && String(problem.answer || '').trim()
-      ? 'That answer is not right.'
-      : 'This problem has no answer yet.';
-  } else {
-    correct = true;
+  } else if (!parts.length && !logic) {
+    if (!problem || !answersMatch(problem.answer, body.answer)) {
+      wrongMessage = problem && String(problem.answer || '').trim()
+        ? 'That answer is not right.'
+        : 'This problem has no answer yet.';
+    } else {
+      correct = true;
+    }
   }
 
   const spent = await spendTeamEnergy(col, contestId, team.id, now, difficulty, correct);
@@ -1936,6 +1973,7 @@ function pageMap(map, withCells) {
 }
 
 function pageProblem(problem, admin) {
+  const storedParts = Array.isArray(problem.parts) ? problem.parts.filter((part) => part && typeof part === 'object') : [];
   const view = {
     index: problem.index,
     type: problem.type,
@@ -1943,6 +1981,13 @@ function pageProblem(problem, admin) {
     difficulty: DIFFICULTIES.includes(problem.difficulty) ? problem.difficulty : 'normal',
     score: problemScore(problem),
   };
+  if (admin || storedParts.length) {
+    view.parts = storedParts.map((part) => (
+      admin
+        ? { prompt: typeof part.prompt === 'string' ? part.prompt : '', answer: typeof part.answer === 'string' ? part.answer : '' }
+        : { prompt: typeof part.prompt === 'string' ? part.prompt : '' }
+    ));
+  }
   if (admin) {
     view.answer = problem.answer;
     view.solution = typeof problem.solution === 'string' ? problem.solution : '';
@@ -2560,7 +2605,7 @@ async function handlePageAnswer(req, res, db, user) {
   }
   const stored = await db.collection('problems').findOne(
     { type: mapCell.type, index: mapCell.problemNo },
-    { projection: { index: 1, type: 1, prompt: 1, difficulty: 1, score: 1 } }
+    { projection: { index: 1, type: 1, prompt: 1, difficulty: 1, score: 1, parts: 1 } }
   );
   const problem = stored ? pageProblem(stored, false) : {
     index: mapCell.problemNo,

@@ -20,9 +20,14 @@ const form = document.querySelector("#problem-editor-form");
 const titleEl = document.querySelector("#problem-editor-title");
 const indexInput = document.querySelector("#problem-index-input");
 const indexError = document.querySelector("#problem-index-error");
+const MAX_PARTS = 20;
 const scoreEl = document.querySelector("#problem-score");
 const promptEl = document.querySelector("#problem-prompt");
 const answerEl = document.querySelector("#problem-answer");
+const answerField = document.querySelector("#problem-answer-field");
+const partsEditor = document.querySelector("#problem-parts-editor");
+const partCountEl = document.querySelector("#problem-part-count");
+const partListEl = document.querySelector("#problem-part-list");
 const solutionEl = document.querySelector("#problem-solution");
 const logicEl = document.querySelector("#problem-logic");
 const saveError = document.querySelector("#problem-save-error");
@@ -56,9 +61,12 @@ async function run() {
   state.revisions = data.revisions;
 
   const existing = data.problem;
+  const storedParts = Array.isArray(existing?.parts)
+    ? existing.parts.map((part) => ({ prompt: part?.prompt || "", answer: part?.answer || "" }))
+    : [];
   state.draft = existing
-    ? { ...existing, isNew: false }
-    : { index, type, prompt: "", answer: "", solution: "", logic: "", difficulty: "normal", score: difficultyScore("normal"), isNew: true };
+    ? { ...existing, parts: storedParts, answerMode: storedParts.length ? "parts" : "single", isNew: false }
+    : { index, type, prompt: "", answer: "", parts: [], answerMode: "single", solution: "", logic: "", difficulty: "normal", score: difficultyScore("normal"), isNew: true };
   state.dirty = false;
 
   titleEl.textContent = problemTag(index, type);
@@ -93,6 +101,13 @@ function render() {
   answerEl.value = draft.answer;
   solutionEl.value = draft.solution || "";
   logicEl.value = draft.logic || "";
+  const partsMode = draft.answerMode === "parts";
+  for (const btn of document.querySelectorAll("[data-answer-mode]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.answerMode === (partsMode ? "parts" : "single")));
+  }
+  if (answerField) answerField.hidden = partsMode;
+  if (partsEditor) partsEditor.hidden = !partsMode;
+  if (partsMode) renderPartFields();
 
   const usage = problemUsage(draft.index, draft.type);
   usageEl.textContent = usage.cells > 0
@@ -114,6 +129,21 @@ function bindEvents() {
     const btn = event.target.closest("[data-problem-type]");
     if (!btn) return;
     setType(btn.dataset.problemType);
+  });
+
+  document.querySelector("#problem-answer-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-answer-mode]");
+    if (!btn || btn.dataset.answerMode === state.draft.answerMode) return;
+    setAnswerMode(btn.dataset.answerMode);
+  });
+  partCountEl?.addEventListener("change", () => {
+    const count = clampPartCount(partCountEl.value);
+    partCountEl.value = String(count);
+    state.draft.parts = resizeParts(collectPartsFromDom(), count);
+    state.dirty = true;
+    updateSaveState();
+    renderPartFields();
+    requestAnimationFrame(renderPreview);
   });
 
   document.querySelector("#problem-difficulty-choices")?.addEventListener("click", (event) => {
@@ -298,12 +328,90 @@ function updateSaveState() {
   else { saveState.textContent = "Saved"; saveState.dataset.state = "saved"; }
 }
 
+function clampPartCount(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return 2;
+  return Math.min(MAX_PARTS, Math.max(1, n));
+}
+
+function resizeParts(parts, count) {
+  const next = [];
+  for (let i = 0; i < count; i += 1) {
+    next.push(parts[i] ? { prompt: parts[i].prompt || "", answer: parts[i].answer || "" } : { prompt: "", answer: "" });
+  }
+  return next;
+}
+
+function collectPartsFromDom() {
+  const blocks = partListEl ? [...partListEl.querySelectorAll(".problem-part")] : [];
+  if (!blocks.length) return Array.isArray(state.draft.parts) ? state.draft.parts : [];
+  return blocks.map((block) => ({
+    prompt: block.querySelector("[data-part-prompt]")?.value || "",
+    answer: block.querySelector("[data-part-answer]")?.value || "",
+  }));
+}
+
+function renderPartFields() {
+  if (!partListEl || !partCountEl) return;
+  const parts = resizeParts(Array.isArray(state.draft.parts) ? state.draft.parts : [], Math.max(1, state.draft.parts?.length || 2));
+  state.draft.parts = parts;
+  partCountEl.value = String(parts.length);
+  partListEl.replaceChildren();
+  parts.forEach((part, index) => {
+    const block = el("fieldset", "problem-part");
+    const legend = document.createElement("legend");
+    legend.textContent = `Part ${index + 1}`;
+    const promptLabel = el("label", null, "Description");
+    const prompt = document.createElement("textarea");
+    prompt.rows = 5;
+    prompt.dataset.partPrompt = String(index);
+    prompt.value = part.prompt;
+    promptLabel.append(prompt);
+    const answerLabel = el("label", null, "Answer");
+    const answer = document.createElement("textarea");
+    answer.rows = 3;
+    answer.dataset.partAnswer = String(index);
+    answer.value = part.answer;
+    answerLabel.append(answer);
+    const onInput = () => {
+      state.draft.parts = collectPartsFromDom();
+      state.dirty = true;
+      updateSaveState();
+      requestAnimationFrame(renderPreview);
+    };
+    prompt.addEventListener("input", onInput);
+    answer.addEventListener("input", onInput);
+    block.append(legend, promptLabel, answerLabel);
+    partListEl.append(block);
+  });
+}
+
+function setAnswerMode(mode) {
+  if (mode === "parts") {
+    const current = state.draft.answerMode === "parts" ? collectPartsFromDom() : (state.draft.parts || []);
+    state.draft.parts = current.length
+      ? current
+      : [{ prompt: "", answer: state.draft.answer || "" }, { prompt: "", answer: "" }];
+  } else if (state.draft.answerMode === "parts") {
+    const parts = collectPartsFromDom();
+    state.draft.parts = parts;
+    if (!String(state.draft.answer || "").trim() && parts[0]) state.draft.answer = parts[0].answer;
+  }
+  state.draft.answerMode = mode === "parts" ? "parts" : "single";
+  state.dirty = true;
+  render();
+  requestAnimationFrame(renderPreview);
+}
+
 function renderPreview() {
   previewEl.replaceChildren();
   const promptHtml = (promptEl.value || "").trim();
-  const answerHtml = (answerEl.value || "").trim();
+  const partsMode = state.draft?.answerMode === "parts";
+  const parts = partsMode ? collectPartsFromDom() : [];
+  const answerHtml = partsMode ? "" : (answerEl.value || "").trim();
   const solutionHtml = (solutionEl.value || "").trim();
-  if (!promptHtml && !answerHtml && !solutionHtml) { previewEl.hidden = true; return; }
+  const partText = parts.some((part) => part.prompt.trim() || part.answer.trim());
+  if (!promptHtml && !answerHtml && !solutionHtml && !partText) { previewEl.hidden = true; return; }
   previewEl.hidden = false;
 
   const box = el("div", "problem-preview-box");
@@ -315,6 +423,14 @@ function renderPreview() {
     box.append(title, content);
     createStatementView(content, {}).render(promptHtml);
   }
+  parts.forEach((part, index) => {
+    if (!part.prompt.trim() && !part.answer.trim()) return;
+    const title = el("div", "problem-preview-title", `Part ${index + 1}`);
+    const content = el("div", "problem-preview-content");
+    box.append(title, content);
+    if (part.prompt.trim()) createStatementView(content, {}).render(part.prompt);
+    if (part.answer.trim()) content.append(el("p", null, `Answer: ${part.answer.trim()}`));
+  });
   if (answerHtml) {
     const title = el("div", "problem-preview-title", "Answer — preview");
     const content = el("div", "problem-preview-content");
@@ -337,8 +453,11 @@ async function save() {
   const solution = solutionEl.value;
   const logic = logicEl.value;
   const score = Number(scoreEl.value);
+  const partsMode = draft.answerMode === "parts";
+  const parts = partsMode ? collectPartsFromDom() : [];
   draft.prompt = prompt;
-  draft.answer = answer;
+  draft.answer = partsMode ? parts.map((part) => part.answer).join("\n") : answer;
+  draft.parts = parts;
   draft.solution = solution;
   draft.logic = logic;
 
@@ -349,7 +468,13 @@ async function save() {
   }
   draft.score = score;
 
-  if (!prompt.trim() || !answer.trim()) {
+  if (partsMode) {
+    if (!parts.length || parts.some((part) => !part.answer.trim())) {
+      saveError.hidden = false;
+      saveError.textContent = "Each part needs an answer before saving.";
+      return;
+    }
+  } else if (!prompt.trim() || !answer.trim()) {
     saveError.hidden = false;
     saveError.textContent = "Add both a question and an answer before saving.";
     return;
@@ -360,7 +485,8 @@ async function save() {
     index: draft.index,
     type: draft.type,
     prompt,
-    answer,
+    answer: draft.answer,
+    parts,
     solution,
     logic,
     difficulty: draft.difficulty,
@@ -416,6 +542,7 @@ async function duplicateProblem() {
     type: draft.type,
     prompt: draft.prompt,
     answer: draft.answer,
+    parts: Array.isArray(draft.parts) ? draft.parts.map((part) => ({ prompt: part.prompt || "", answer: part.answer || "" })) : [],
     solution: draft.solution,
     logic: draft.logic,
     difficulty: draft.difficulty,

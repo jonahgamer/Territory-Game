@@ -1031,7 +1031,9 @@ button[type="submit"],
   color: var(--muted);
 }
 
-.answer-page input {
+.answer-page input,
+.answer-page textarea,
+.student-problem textarea {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -1039,6 +1041,30 @@ button[type="submit"],
   color: var(--ink);
   font: inherit;
   font-size: 16px;
+}
+
+.problem-part {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+
+.problem-part legend {
+  padding: 0 6px;
+  font-family: var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#problem-parts-editor:not([hidden]),
+#answer-parts:not([hidden]),
+#student-answer-parts:not([hidden]),
+#problem-part-list {
+  display: grid;
+  gap: 12px;
 }
 
 .cell-owner {
@@ -1821,6 +1847,10 @@ button[type="submit"],
 
 .problem-editor textarea {
   resize: vertical;
+}
+
+#problem-parts-editor textarea {
+  width: 100%;
 }
 
 #team-member-pick {

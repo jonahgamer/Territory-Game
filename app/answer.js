@@ -1,5 +1,5 @@
 import { readStoredSession } from "../shared/session.js";
-import { api } from "../shared/api.js?v=page-data";
+import { api } from "../shared/api.js?v=parts";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { noteServerTime } from "../shared/contest-time.js";
 import { createStatementView } from "../shared/statement.js";
@@ -23,6 +23,46 @@ const answerInput = document.querySelector("#student-answer");
 const errorEl = document.querySelector("#student-answer-error");
 
 let contest = null;
+let problemParts = [];
+
+function renderParts(parts) {
+  problemParts = Array.isArray(parts) ? parts : [];
+  const host = document.querySelector("#answer-parts");
+  const single = document.querySelector("#single-answer-field");
+  if (!host || !single) return;
+  host.replaceChildren();
+  const multi = problemParts.length > 0;
+  host.hidden = !multi;
+  single.hidden = multi;
+  problemParts.forEach((part, index) => {
+    const block = document.createElement("fieldset");
+    block.className = "problem-part";
+    const legend = document.createElement("legend");
+    legend.textContent = `Part ${index + 1}`;
+    block.append(legend);
+    if (part?.prompt?.trim()) {
+      const desc = document.createElement("div");
+      desc.className = "problem-part-prompt";
+      block.append(desc);
+      createStatementView(desc, {}).render(part.prompt);
+    }
+    const label = document.createElement("label");
+    label.append("Answer");
+    const input = document.createElement("textarea");
+    input.dataset.partAnswer = String(index);
+    input.rows = 3;
+    input.maxLength = 5000;
+    label.append(input);
+    block.append(label);
+    host.append(block);
+  });
+}
+
+function submittedAnswers() {
+  if (!problemParts.length) return { answer: answerInput.value, answers: null };
+  const answers = [...form.querySelectorAll("[data-part-answer]")].map((input) => input.value);
+  return { answer: answers.join("\n"), answers };
+}
 
 function paintEnergy() {
   const node = document.querySelector("#answer-energy");
@@ -85,7 +125,11 @@ async function loadProblem() {
     const difficulty = problem?.difficulty && DIFFICULTY_NAME[problem.difficulty] ? problem.difficulty : "normal";
     const points = problemScore(problem);
     title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
-    const promptText = problem?.prompt?.trim() ? problem.prompt : "This problem has no text yet.";
+    const parts = Array.isArray(problem?.parts) ? problem.parts : [];
+    renderParts(parts);
+    const promptText = problem?.prompt?.trim()
+      ? problem.prompt
+      : (parts.length ? "" : "This problem has no text yet.");
     statement.render(promptText, title.textContent);
     paintEnergy();
     setInterval(paintEnergy, 1000);
@@ -116,8 +160,19 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const submitted = submittedAnswers();
+  if (submitted.answers && submitted.answers.some((value) => !value.trim())) {
+    submit.dataset.busy = "";
+    submit.disabled = false;
+    submit.textContent = label;
+    errorEl.hidden = false;
+    errorEl.textContent = "Answer every part.";
+    paintEnergy();
+    return;
+  }
+
   try {
-    const data = await api.solve(contestId, cellIndex, answerInput.value, openMapId);
+    const data = await api.solve(contestId, cellIndex, submitted.answer, openMapId, submitted.answers);
     takeServerContest(data.contest, data.serverNow);
     submit.dataset.busy = "";
     form.hidden = true;

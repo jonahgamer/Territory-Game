@@ -74,9 +74,23 @@
         <label>Prompt (HTML allowed)
           <textarea id="problem-prompt" rows="10"></textarea>
         </label>
-        <label>Answer
+        <p id="problem-prompt-note" class="field-note">Shown at the top of the problem. In multiple-parts mode this can be left blank.</p>
+
+        <div class="kind-choices" id="problem-answer-mode" role="group" aria-label="Answer mode">
+          <button type="button" data-answer-mode="single" aria-pressed="true">Single answer</button>
+          <button type="button" data-answer-mode="parts" aria-pressed="false">Multiple parts</button>
+        </div>
+
+        <label id="problem-answer-field">Answer
           <textarea id="problem-answer" rows="4"></textarea>
         </label>
+        <div id="problem-parts-editor" hidden>
+          <label>Number of parts
+            <input id="problem-part-count" type="number" min="1" max="20" step="1" value="2" />
+          </label>
+          <p class="field-note">Each part has its own description and answer. A checker script receives those answers as JSON arrays in <code>expected</code> and <code>answer</code>.</p>
+          <div id="problem-part-list"></div>
+        </div>
         <label>Solution
           <textarea id="problem-solution" rows="8"></textarea>
         </label>
@@ -95,6 +109,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/admin-problem-editor.js?v=page-data"></script>
+  <script type="module" src="/app/admin-problem-editor.js?v=parts"></script>
 </body>
 </html>

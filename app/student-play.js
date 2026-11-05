@@ -2,7 +2,7 @@ import { requireContestant, getSession, sameContestant } from "../shared/session
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
-import { api } from "../shared/api.js?v=page-data";
+import { api } from "../shared/api.js?v=parts";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
@@ -1022,14 +1022,20 @@ async function showProblem(contest, map, phase) {
   const input = document.querySelector("#student-answer");
   input.style.cssText = "";
   input.readOnly = false;
-  let prompt = problem?.prompt?.trim() ? problem.prompt : "";
-  if (!prompt) {
+  let prompt = problem?.opened ? (problem.prompt || "") : "";
+  let parts = problem?.opened && Array.isArray(problem.parts) ? problem.parts : null;
+  if (!problem?.opened) {
     statement.render("Loading...", tag.textContent);
     try {
       const data = await loadPage("page-answer", { contest: contest.id, map: openMapId, cell: openCell });
       if (request !== promptRequest || state.selectedMapId !== openMapId || state.selectedCell !== openCell) return;
-      prompt = data.problem?.prompt?.trim() ? data.problem.prompt : "";
-      if (problem) problem.prompt = data.problem?.prompt || "";
+      prompt = data.problem?.prompt || "";
+      parts = Array.isArray(data.problem?.parts) ? data.problem.parts : [];
+      if (problem) {
+        problem.prompt = prompt;
+        problem.parts = parts;
+        problem.opened = true;
+      }
     } catch (err) {
       if (request !== promptRequest) return;
       panel.hidden = true;
@@ -1039,8 +1045,43 @@ async function showProblem(contest, map, phase) {
     }
   }
   if (request !== promptRequest) return;
-  statement.render(prompt || "This problem has no text yet.", tag.textContent);
-  if (!input.readOnly) input.focus();
+  renderPlayParts(parts || []);
+  statement.render(prompt.trim() ? prompt : ((parts && parts.length) ? "" : "This problem has no text yet."), tag.textContent);
+  const focus = (parts && parts.length)
+    ? document.querySelector("#student-answer-parts [data-part-answer]")
+    : input;
+  if (focus && !focus.readOnly) focus.focus();
+}
+
+function renderPlayParts(parts) {
+  const host = document.querySelector("#student-answer-parts");
+  const single = document.querySelector("#single-answer-field");
+  if (!host || !single) return;
+  host.replaceChildren();
+  const multi = parts.length > 0;
+  host.hidden = !multi;
+  single.hidden = multi;
+  parts.forEach((part, index) => {
+    const block = document.createElement("fieldset");
+    block.className = "problem-part";
+    const legend = document.createElement("legend");
+    legend.textContent = `Part ${index + 1}`;
+    block.append(legend);
+    if (part?.prompt?.trim()) {
+      const desc = document.createElement("div");
+      block.append(desc);
+      createStatementView(desc, {}).render(part.prompt);
+    }
+    const label = document.createElement("label");
+    label.append("Answer");
+    const field = document.createElement("textarea");
+    field.dataset.partAnswer = String(index);
+    field.rows = 3;
+    field.maxLength = 5000;
+    label.append(field);
+    block.append(label);
+    host.append(block);
+  });
 }
 
 function closeProblem() {
@@ -1130,6 +1171,18 @@ async function submitAnswer(event) {
     return;
   }
 
+  const partInputs = [...document.querySelectorAll("#student-answer-parts [data-part-answer]")];
+  const answers = partInputs.length ? partInputs.map((input) => input.value) : null;
+  const answer = answers ? answers.join("\n") : document.querySelector("#student-answer").value;
+  if (answers && answers.some((value) => !value.trim())) {
+    submit.dataset.busy = "";
+    submit.disabled = false;
+    submit.textContent = label;
+    errorEl.hidden = false;
+    errorEl.textContent = "Answer every part.";
+    return;
+  }
+
   const prevClaims = (contest.claims || []).slice();
   const pending = { cell, teamId: team.id, solvedBy: getSession()?.user?.username, solvedAt: Date.now(), pending: true };
   contest.claims = prevClaims.filter((c) => c.cell !== cell).concat(pending);
@@ -1137,7 +1190,7 @@ async function submitAnswer(event) {
 
   let failure = "";
   try {
-    const data = await api.solve(contest.id, cell, document.querySelector("#student-answer").value, map.id);
+    const data = await api.solve(contest.id, cell, answer, map.id, answers);
     applyPlayState(data);
     publishContestPatch(contest.id, data.contest, data.serverNow);
     document.querySelector("#student-answer").value = "";
