@@ -1837,7 +1837,7 @@ button[type="submit"],
 .problem-editor {
   display: grid;
   gap: 12px;
-  max-width: 40rem;
+  max-width: none;
   margin-top: 8px;
 }
 
