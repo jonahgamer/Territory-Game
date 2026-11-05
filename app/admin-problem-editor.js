@@ -6,7 +6,7 @@ import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
-import { createStatementView } from "../shared/statement.js";
+import { createStatementView } from "../shared/statement.js?v=preview-whole";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -403,6 +403,28 @@ function setAnswerMode(mode) {
   requestAnimationFrame(renderPreview);
 }
 
+function previewFragment(source) {
+  const text = String(source || "");
+  if (!text.trim()) return "";
+  if (/<\/?[a-z][\w:-]*\b[^>]*>/i.test(text)) return text;
+  return `<pre class="statement-text">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+}
+
+function buildProblemPreview(prompt, parts) {
+  const chunks = [];
+  if (prompt.trim()) chunks.push(previewFragment(prompt));
+  parts.forEach((part, index) => {
+    const body = previewFragment(part.prompt);
+    const answer = part.answer.trim()
+      ? `<p class="part-answer">Answer: ${part.answer.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`
+      : "";
+    if (!body && !answer) return;
+    const mark = `(${String.fromCharCode(97 + index)})`;
+    chunks.push(`<div class="part-line"><span class="part-mark">${mark}</span><div class="part-body">${body}${answer}</div></div>`);
+  });
+  return chunks.join("");
+}
+
 function renderPreview() {
   previewEl.replaceChildren();
   const promptHtml = (promptEl.value || "").trim();
@@ -417,22 +439,13 @@ function renderPreview() {
   const box = el("div", "problem-preview-box");
   previewEl.append(box);
 
-  if (promptHtml) {
+  const problemHtml = buildProblemPreview(promptHtml, parts);
+  if (problemHtml) {
     const title = el("div", "problem-preview-title", "Prompt — preview");
     const content = el("div", "problem-preview-content");
     box.append(title, content);
-    createStatementView(content, {}).render(promptHtml);
+    createStatementView(content, {}).render(problemHtml);
   }
-  parts.forEach((part, index) => {
-    if (!part.prompt.trim() && !part.answer.trim()) return;
-    const line = el("div", "problem-part-line");
-    line.append(el("span", "problem-part-mark", `(${String.fromCharCode(97 + index)})`));
-    const content = el("div", "problem-part-body");
-    line.append(content);
-    box.append(line);
-    if (part.prompt.trim()) createStatementView(content, {}).render(part.prompt);
-    if (part.answer.trim()) content.append(el("p", null, `Answer: ${part.answer.trim()}`));
-  });
   if (answerHtml) {
     const title = el("div", "problem-preview-title", "Answer — preview");
     const content = el("div", "problem-preview-content");

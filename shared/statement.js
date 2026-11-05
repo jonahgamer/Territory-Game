@@ -25,7 +25,11 @@ function buildStatementDocument(source, tag = "") {
   #territory-bridge { display: none; }
   .statement-content { overflow-wrap: anywhere; font-size: 16px; }
   .katex { font-size: 1em; }
-  .statement-content pre { margin: 0; white-space: pre-wrap; overflow: auto; }
+  .statement-content pre { margin: 0; white-space: pre-wrap; overflow: visible; }
+  .part-line { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); column-gap: 0.75rem; align-items: start; margin-top: 1.1rem; }
+  .part-mark { color: #d7f6ff; }
+  .part-body { min-width: 0; }
+  .part-answer { margin: 0.8rem 0 0; }
   .statement-content img, .statement-content video,
   .statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }
   .statement-content table { max-width: 100%; border-collapse: collapse; }
@@ -131,12 +135,23 @@ export function createStatementView(container, options = {}) {
   function handleMessage(event) {
     const data = event.data;
     if (!data || typeof data.type !== "string") return;
-    const frame = statementFrames.get(event.source);
+    let frame = statementFrames.get(event.source);
+    if (!frame) {
+      for (const candidate of document.querySelectorAll("iframe.statement-frame")) {
+        try {
+          if (candidate.contentWindow === event.source) {
+            statementFrames.set(event.source, candidate);
+            frame = candidate;
+            break;
+          }
+        } catch { /* sandboxed frame */ }
+      }
+    }
     if (!frame) return;
     if (data.type === "territory-statement-height") {
       const height = Number(data.height);
       if (!Number.isFinite(height)) return;
-      frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height)))}px`;
+      frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height) + 16))}px`;
       return;
     }
     if (frame !== activeFrame) return;
@@ -162,10 +177,23 @@ export function createStatementView(container, options = {}) {
       frame.className = "statement-frame";
       frame.setAttribute("sandbox", "allow-scripts");
       frame.setAttribute("title", "Problem statement");
-      frame.style.height = "120px";
-      frame.srcdoc = buildStatementDocument(source, tag);
+      frame.style.height = "240px";
+      frame.addEventListener("load", () => {
+        if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
+        const fit = () => {
+          try {
+            const doc = frame.contentDocument;
+            if (!doc) return;
+            const height = Math.max(doc.documentElement?.scrollHeight || 0, doc.body?.scrollHeight || 0);
+            if (height > 0) frame.style.height = `${Math.min(8000, Math.ceil(height) + 16)}px`;
+          } catch { /* sandboxed frame reports its height by message */ }
+        };
+        fit();
+        setTimeout(fit, 60);
+        setTimeout(fit, 400);
+      });
       container.append(frame);
-      if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
+      frame.srcdoc = buildStatementDocument(source, tag);
       activeFrame = frame;
       return frame;
     },

@@ -1884,11 +1884,11 @@ button[type="submit"],
 }
 
 #problem-prompt {
-  min-height: 16rem;
+  min-height: 32rem;
 }
 
 #problem-solution {
-  min-height: 10rem;
+  min-height: 24rem;
 }
 
 #problem-logic {
@@ -1955,7 +1955,7 @@ button[type="submit"],
   font-size: 16px;
   line-height: 1.5;
   white-space: pre-wrap;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .problem-test-box {
