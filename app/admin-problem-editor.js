@@ -360,7 +360,7 @@ function renderPartFields() {
   parts.forEach((part, index) => {
     const block = el("fieldset", "problem-part");
     const legend = document.createElement("legend");
-    legend.textContent = `Part ${index + 1}`;
+    legend.textContent = `(${String.fromCharCode(97 + index)})`;
     const promptLabel = el("label", null, "Description");
     const prompt = document.createElement("textarea");
     prompt.rows = 5;
@@ -425,9 +425,11 @@ function renderPreview() {
   }
   parts.forEach((part, index) => {
     if (!part.prompt.trim() && !part.answer.trim()) return;
-    const title = el("div", "problem-preview-title", `Part ${index + 1}`);
-    const content = el("div", "problem-preview-content");
-    box.append(title, content);
+    const line = el("div", "problem-part-line");
+    line.append(el("span", "problem-part-mark", `(${String.fromCharCode(97 + index)})`));
+    const content = el("div", "problem-part-body");
+    line.append(content);
+    box.append(line);
     if (part.prompt.trim()) createStatementView(content, {}).render(part.prompt);
     if (part.answer.trim()) content.append(el("p", null, `Answer: ${part.answer.trim()}`));
   });

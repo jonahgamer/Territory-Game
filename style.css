@@ -1047,16 +1047,40 @@ button[type="submit"],
   display: grid;
   gap: 8px;
   margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.problem-part-line {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr;
+  column-gap: 0.35rem;
+  align-items: start;
+}
+
+.problem-part-mark {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  padding-top: 0.15em;
+}
+
+.problem-part-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+#problem-parts-editor .problem-part {
   padding: 12px;
   border: 1px solid var(--line);
 }
 
-.problem-part legend {
+#problem-parts-editor .problem-part legend {
   padding: 0 6px;
   font-family: var(--font-ui);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink);
 }
 
 #problem-parts-editor:not([hidden]),

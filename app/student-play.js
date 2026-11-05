@@ -1062,14 +1062,18 @@ function renderPlayParts(parts) {
   host.hidden = !multi;
   single.hidden = multi;
   parts.forEach((part, index) => {
-    const block = document.createElement("fieldset");
+    const block = document.createElement("div");
     block.className = "problem-part";
-    const legend = document.createElement("legend");
-    legend.textContent = `Part ${index + 1}`;
-    block.append(legend);
+    const line = document.createElement("div");
+    line.className = "problem-part-line";
+    const mark = document.createElement("span");
+    mark.className = "problem-part-mark";
+    mark.textContent = `(${String.fromCharCode(97 + index)})`;
+    const body = document.createElement("div");
+    body.className = "problem-part-body";
     if (part?.prompt?.trim()) {
       const desc = document.createElement("div");
-      block.append(desc);
+      body.append(desc);
       createStatementView(desc, {}).render(part.prompt);
     }
     const label = document.createElement("label");
@@ -1079,7 +1083,9 @@ function renderPlayParts(parts) {
     field.rows = 3;
     field.maxLength = 5000;
     label.append(field);
-    block.append(label);
+    body.append(label);
+    line.append(mark, body);
+    block.append(line);
     host.append(block);
   });
 }
