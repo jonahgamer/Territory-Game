@@ -5,10 +5,10 @@ import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
-  PROBLEM_PAGE_SIZE, YEAR_INDEX_START, YEAR_INDEX_END,
-  DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
+  PROBLEM_PAGE_SIZE, PROBLEM_YEAR, YEAR_INDEX_START, YEAR_INDEX_END,
+  PROBLEM_TYPES, DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
 } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
+import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore, problemYear, yearTypeFrequency } from "../shared/difficulty.js?v=year-freq";
 
 // ── 顶层状态 ─────────────────────────────────────────────
 const state = {
@@ -282,6 +282,25 @@ function exportSelectedText() {
   location.assign(`/admin/export-problems.html?items=${encodeURIComponent(items)}`);
 }
 
+function yearFrequencyLines(problems) {
+  const years = new Set([PROBLEM_YEAR]);
+  for (const problem of problems) {
+    const year = problemYear(problem.index);
+    if (year) years.add(year);
+  }
+  const ordered = [...years].sort((a, b) => b - a);
+  return ordered.map((year) => {
+    const counts = yearTypeFrequency(problems, year);
+    const line = el("p", "year-frequency");
+    line.append(el("span", "year-frequency-label", `Year ${year}`));
+    for (const type of PROBLEM_TYPES) {
+      const mark = el("span", "year-frequency-count", `${type.tag}${year} ${counts[type.id]}`);
+      line.append(mark);
+    }
+    return line;
+  });
+}
+
 function problemUsage(index, type) {
   return state.usage[`${type}:${index}`] || { cells: 0, maps: 0 };
 }
@@ -296,6 +315,9 @@ function render() {
     btn.setAttribute("aria-label", `${type.name}, ${count} problems`);
     btn.setAttribute("aria-pressed", String(btn.dataset.section === state.activeType));
   }
+
+  const frequencyEl = document.querySelector("#problem-year-frequency");
+  if (frequencyEl) frequencyEl.replaceChildren(...yearFrequencyLines(state.problems));
 
   const type = typeInfo(state.activeType);
   const section = document.querySelector("#problem-section");

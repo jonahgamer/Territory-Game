@@ -1673,6 +1673,32 @@ button[type="submit"],
   max-width: 52rem;
 }
 
+.year-frequency-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+
+.year-frequency {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0;
+  align-items: baseline;
+}
+
+.year-frequency-label {
+  min-width: 5.5rem;
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.year-frequency-count {
+  color: var(--ink);
+}
+
 .problem-group-head {
   display: flex;
   flex-wrap: wrap;
