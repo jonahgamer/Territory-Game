@@ -1234,7 +1234,7 @@ async function handleSaveTeam(req, res, db, user, body) {
     }
   }
 
-  const maps = await loadContestMaps(db, contest);
+  const maps = await loadContestMaps(db, contest, { photo: false });
   const spawnCount = spawnPlaces(maps).length;
   if (!maps.length || spawnCount === 0) {
     return res.status(400).json({ success: false, message: 'This contest has no spawn points. Add spawn points before creating teams.' });
@@ -1266,7 +1266,7 @@ async function handleSaveTeam(req, res, db, user, body) {
     }
   );
   const updated = await col.findOne({ id: contestId });
-  const problems = await db.collection('problems').find({}).toArray();
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const revision = await bumpRevision(db, 'contests');
   return res.status(200).json({ ...contestPayload(updated, maps, problems, user), revision });
 }
@@ -1293,8 +1293,8 @@ async function handleRemoveTeam(req, res, db, user, body) {
   if (teams.length === 0) update.spawnResolved = false;
   await col.updateOne({ id: contestId }, { $set: update });
   const updated = await col.findOne({ id: contestId });
-  const maps = await loadContestMaps(db, updated);
-  const problems = await db.collection('problems').find({}).toArray();
+  const maps = await loadContestMaps(db, updated, { photo: false });
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const revision = await bumpRevision(db, 'contests');
   return res.status(200).json({ ...contestPayload(updated, maps, problems, user), revision });
 }
@@ -1326,7 +1326,7 @@ async function handleChooseSpawn(req, res, db, user, body) {
     return res.status(400).json({ success: false, message: 'Spawning is not open.', serverNow: now });
   }
 
-  const maps = await loadContestMaps(db, contest);
+  const maps = await loadContestMaps(db, contest, { photo: false });
   const mapId = typeof body.mapId === 'string' && contestMapIds(contest).includes(body.mapId) ? body.mapId : primaryMapId(contest);
   const map = maps.find((item) => item.id === mapId) || null;
   if (!map || cell >= map.cells.length || map.cells[cell]?.kind !== 'spawnpoint') {
@@ -1348,7 +1348,7 @@ async function handleChooseSpawn(req, res, db, user, body) {
   );
   const stored = await col.findOne({ id: contestId });
   const updated = await maybeResolveSpawns(db, stored, maps, Date.now());
-  const problems = await db.collection('problems').find({}).toArray();
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json(contestPayload(updated, maps, problems, user));
 }
 
@@ -1366,10 +1366,10 @@ async function handleSolve(req, res, db, user, body) {
   const team = teamForUser(contest, username);
   if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
 
-  const maps = (await loadContestMaps(db, contest)).map((item) => playableContestMap(item, contest));
+  const maps = (await loadContestMaps(db, contest, { photo: false })).map((item) => playableContestMap(item, contest));
   const mapId = typeof body.mapId === 'string' && contestMapIds(contest).includes(body.mapId) ? body.mapId : primaryMapId(contest);
   const map = maps.find((item) => item.id === mapId) || null;
-  const problems = await db.collection('problems').find({}).toArray();
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const now = Date.now();
   contest = await maybeResolveSpawns(db, contest, maps, now);
   const timing = contestWindow(contest);
@@ -1402,7 +1402,7 @@ async function handleSolve(req, res, db, user, body) {
   }
 
   const mapCell = map.cells[cell];
-  const problem = problems.find((item) => item.index === mapCell.problemNo && item.type === mapCell.type);
+  const problem = await findStoredProblem(db.collection('problems'), mapCell.type, mapCell.problemNo);
   const difficulty = problemDifficulty(problem);
   const settings = readEnergySettings(contest);
   const preview = teamEnergySnapshot(contest, team.id, now);
@@ -1513,10 +1513,10 @@ async function handleClaimTeleport(req, res, db, user, body) {
   const team = teamForUser(contest, username);
   if (!team) return res.status(403).json({ success: false, message: 'You are not on a team in this contest.' });
 
-  const maps = (await loadContestMaps(db, contest)).map((item) => playableContestMap(item, contest));
+  const maps = (await loadContestMaps(db, contest, { photo: false })).map((item) => playableContestMap(item, contest));
   const mapId = typeof body.mapId === 'string' && contestMapIds(contest).includes(body.mapId) ? body.mapId : primaryMapId(contest);
   const map = maps.find((item) => item.id === mapId) || null;
-  const problems = await db.collection('problems').find({}).toArray();
+  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const now = Date.now();
   contest = await maybeResolveSpawns(db, contest, maps, now);
   const timing = contestWindow(contest);
@@ -2005,6 +2005,30 @@ function problemStub(problem) {
   };
 }
 
+const LIST_SNIPPET = 240;
+
+function problemListSnippet(value) {
+  const text = String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > LIST_SNIPPET ? `${text.slice(0, LIST_SNIPPET).trimEnd()}…` : text;
+}
+
+function problemListItem(problem) {
+  return {
+    ...problemStub(problem),
+    snippet: problemListSnippet(problem.prompt),
+    answer: typeof problem.answer === 'string' ? problem.answer : '',
+  };
+}
+
 function problemIdentity(type, index) {
   return `${type}:${index}`;
 }
@@ -2180,14 +2204,16 @@ async function handleDeleteMap(req, res, db, user, body) {
 async function handlePageProblems(req, res, db, user) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const [problems, index, revisions] = await Promise.all([
-    db.collection('problems').find({}).toArray(),
+    db.collection('problems').find({}, {
+      projection: { index: 1, type: 1, prompt: 1, answer: 1, difficulty: 1, score: 1 },
+    }).toArray(),
     mapCellIndex(db),
     pageRevisions(db),
   ]);
   return res.status(200).json({
     success: true,
     user: pageUser(user),
-    problems: problems.map((problem) => pageProblem(problem, true)),
+    problems: problems.map(problemListItem),
     usage: index.usage,
     reserved: index.reserved,
     revisions,
@@ -2249,6 +2275,44 @@ async function handlePageProblemText(req, res, db, user, body) {
     problems: problems.map((problem) => ({ index: problem.index, type: problem.type, prompt: problem.prompt || '' })),
     serverNow: Date.now(),
   });
+}
+
+async function handleSetProblemDifficulty(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const difficulty = body.difficulty;
+  if (!DIFFICULTIES.includes(difficulty)) {
+    return res.status(400).json({ success: false, message: 'Choose a difficulty.' });
+  }
+  const wanted = (Array.isArray(body.problems) ? body.problems : []).filter((item) => (
+    PROBLEM_TYPES.includes(item?.type) && Number.isInteger(item?.index)
+  ));
+  if (!wanted.length) return res.status(400).json({ success: false, message: 'Select at least one problem.' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      const col = db.collection('problems');
+      for (const item of wanted) {
+        const existing = await findStoredProblem(col, item.type, item.index, session);
+        if (!existing) continue;
+        const wasDefault = problemScore(existing) === DIFFICULTY_SCORE[problemDifficulty(existing)];
+        const score = wasDefault ? DIFFICULTY_SCORE[difficulty] : problemScore(existing);
+        await col.updateOne(
+          { _id: existing._id },
+          { $set: { difficulty, score, updatedAt: new Date() } },
+          { session }
+        );
+      }
+      revision = await bumpRevision(db, 'problems', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
 }
 
 async function handleSaveProblem(req, res, db, user, body) {
@@ -2709,6 +2773,7 @@ export default async function handler(req, res) {
       case 'page-problem-keys': return await handlePageProblemKeys(req, res, db, user);
       case 'page-problem-text': return await handlePageProblemText(req, res, db, user, body);
       case 'save-problem':  return await handleSaveProblem(req, res, db, user, body);
+      case 'set-problem-difficulty': return await handleSetProblemDifficulty(req, res, db, user, body);
       case 'add-problems':  return await handleAddProblems(req, res, db, user, body);
       case 'delete-problems': return await handleDeleteProblems(req, res, db, user, body);
       case 'move-problem':  return await handleMoveProblem(req, res, db, user, body);

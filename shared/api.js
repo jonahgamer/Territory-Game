@@ -85,6 +85,7 @@ export const api = {
   saveMap: (map, revision) => apiCall("save-map", { map, revision }),
   deleteMap: (mapId, revision) => apiCall("delete-map", { mapId, revision }),
   saveProblem: (problem, revision) => apiCall("save-problem", { problem, revision }),
+  setProblemDifficulty: (problems, difficulty, revision) => apiCall("set-problem-difficulty", { problems, difficulty, revision }),
   addProblems: (problems, revision) => apiCall("add-problems", { problems, revision }),
   deleteProblems: (problems, revision) => apiCall("delete-problems", { problems, revision }),
   moveProblem: (from, to, revision) => apiCall("move-problem", { from, to, revision }),

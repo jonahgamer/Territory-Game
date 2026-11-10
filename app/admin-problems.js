@@ -2,7 +2,7 @@ import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
-import { api } from "../shared/api.js?v=page-data";
+import { api } from "../shared/api.js?v=mem-list";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
   PROBLEM_PAGE_SIZE, PROBLEM_YEAR, YEAR_INDEX_START, YEAR_INDEX_END,
@@ -139,12 +139,22 @@ function bindEvents() {
     if (!DIFFICULTIES.includes(d) || chosen.length === 0) return;
     const label = chosen.length === 1 ? problemTag(chosen[0].index, chosen[0].type) : `${chosen.length} problems`;
     if (!window.confirm(`Set ${label} to ${DIFFICULTY_NAME[d]}? A typed score stays. Any score that still matches the old difficulty becomes ${difficultyScore(d)}.`)) return;
+    try {
+      const data = await api.setProblemDifficulty(
+        chosen.map((p) => ({ type: p.type, index: p.index })),
+        d,
+        state.revisions.problems,
+      );
+      state.revisions.problems = data.revision;
+    } catch (err) {
+      showPageToast(err.message || "Could not change the difficulty.", "warn");
+      return;
+    }
     for (const p of chosen) {
       const wasDefault = problemScore(p) === difficultyScore(problemDifficulty(p));
       p.difficulty = d;
       p.score = wasDefault ? difficultyScore(d) : problemScore(p);
     }
-    await persistProblems();
     render();
   });
 
@@ -237,7 +247,7 @@ function filteredProblems() {
   const filtered = all.filter((p) => {
     if (state.difficultyFilter !== "all" && problemDifficulty(p) !== state.difficultyFilter) return false;
     if (!q) return true;
-    const haystack = [problemTag(p.index, p.type), String(p.index), plainText(p.prompt), plainText(p.answer)].join(" ").toLowerCase();
+    const haystack = [problemTag(p.index, p.type), String(p.index), p.snippet || "", p.answer || ""].join(" ").toLowerCase();
     return haystack.includes(q);
   });
   if (state.sortMode === "index-desc") filtered.sort((a, b) => b.index - a.index || a.type.localeCompare(b.type));
@@ -246,30 +256,8 @@ function filteredProblems() {
   return filtered;
 }
 
-function plainText(html) {
-  return String(html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function selectedProblems() {
   return state.problems.filter((p) => p.type === state.activeType && state.selected.has(`${p.type}:${p.index}`));
-}
-
-function exportPlain(html) {
-  try {
-    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
-    doc.querySelectorAll("script, style").forEach((node) => node.remove());
-    doc.querySelectorAll("br").forEach((node) => node.replaceWith("\n"));
-    doc.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, tr, blockquote").forEach((node) => node.append("\n"));
-    return (doc.body?.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  } catch {
-    return plainText(html);
-  }
 }
 
 function exportSelectedText() {
@@ -285,10 +273,6 @@ function exportSelectedText() {
     return;
   }
   const items = list.map((p) => `${p.type}:${p.index}`).join(",");
-  try {
-    const text = list.map((p) => `${problemTag(p.index, p.type)}\n${exportPlain(p.prompt) || "(No text)"}`).join("\n\n");
-    sessionStorage.setItem("territory-problem-export", JSON.stringify({ count: list.length, text }));
-  } catch { /* the export page can reload these problems from the link */ }
   location.assign(`/admin/export-problems.html?items=${encodeURIComponent(items)}`);
 }
 
@@ -400,7 +384,7 @@ function createProblemRow(problem) {
   openBtn.append(
     el("span", `problem-key ${problem.type}`, tag),
     el("span", `difficulty-chip ${level}`, `${DIFFICULTY_NAME[level]} · ${problemScore(problem)}`),
-    el("span", "problem-snippet", plainText(problem.prompt) || "(empty)")
+    el("span", "problem-snippet", problem.snippet || "(empty)")
   );
   openBtn.addEventListener("click", () => {
     location.assign(`/admin/problem-editor.html?type=${encodeURIComponent(problem.type)}&index=${problem.index}`);
@@ -443,7 +427,17 @@ async function duplicateProblem(source) {
   }
   const nextIndex = nextProblemNo(source.type);
   if (nextIndex === null) { showPageToast("No free index.", "warn"); return; }
-  const copy = { ...source, index: nextIndex };
+  let stored;
+  try {
+    const loaded = await loadPage("page-problem", { type: source.type, index: source.index });
+    stored = loaded.problem;
+    if (loaded.revisions?.problems) state.revisions.problems = loaded.revisions.problems;
+  } catch (err) {
+    showPageToast(err.message || "Could not duplicate the problem.", "warn");
+    return;
+  }
+  if (!stored) { showPageToast("That problem was not found.", "warn"); return; }
+  const copy = { ...stored, index: nextIndex };
   try {
     const data = await api.saveProblem(copy, state.revisions.problems);
     state.revisions.problems = data.revision;
@@ -546,17 +540,6 @@ function renderPages(pageCount) {
     prev = p;
   }
   add("Next ›", state.page + 1, { disabled: state.page >= pageCount });
-}
-
-async function persistProblems() {
-  try {
-    const data = await api.saveProblems(state.problems, state.revisions.problems);
-    state.revisions.problems = data.revision;
-    return true;
-  } catch (err) {
-    showPageToast(err.message || "Could not save problems.", "warn");
-    return false;
-  }
 }
 
 // ── 启动（最后） ─────────────────────────────────────────

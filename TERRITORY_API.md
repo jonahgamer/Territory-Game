@@ -49,7 +49,7 @@ The old single-page bundle still uses this. The split pages do not. Each of thos
 | --- | --- | --- |
 | `page-maps` | Map list | Every map, without the photo file |
 | `page-map&map=` | Map editor and difficulty view | That map, plus problem index, type, difficulty, and score |
-| `page-problems` | Problem list | Every problem, plus how many cells use each one |
+| `page-problems` | Problem list | Each problem's index, type, difficulty, score, answer, and a short plain-text snippet. The full prompt, solution, logic, and parts stay on the server |
 | `page-problem&type=&index=` | Problem editor | That problem, the other problem keys, and its cell count |
 | `page-problem-keys` | Batch add | Problem keys only |
 | `page-problem-text` | Export text | Prompts for the requested problems |
@@ -77,6 +77,10 @@ Each team has one energy pool, maximum 100. It starts full when solving begins. 
 Admin only. Every map must be valid. If one map is invalid, nothing is saved. Body may include `revision` from `bootstrap`. The save runs in one database transaction, upserts the maps sent, and removes only maps that are no longer in the list. If `revision` does not match the current revision, the request returns 409 and nothing changes.
 
 A map’s `backdrop` is `terrain` or `photo`. Photo mode stores `photo` as a `data:image/jpeg`, `png`, or `webp` base64 URL no longer than 700000 characters. Terrain mode stores an empty `photo`. Contestants receive the same backdrop so the board can draw the picture. The picture is scaled to cover the grid.
+
+### `POST { "action": "set-problem-difficulty", "difficulty": "easy", "problems": [{ "type": "oi", "index": 26000 }] }`
+
+Admin only. Sets `difficulty` on the listed problems and leaves the prompt, answer, solution, logic, and parts untouched. A score that still matches the old difficulty default changes to the new default. A typed score stays. Body may include `revision`; a stale revision returns 409. The response includes the new `revision`.
 
 ### `POST { "action": "save-problems", "problems": [...] }`
 
