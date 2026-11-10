@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=year-freq" />
+  <link rel="stylesheet" href="/style.css?v=year-diff" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
 </head>
@@ -36,7 +36,12 @@
       <h1>Problems</h1>
       <p class="lead">Browse and edit problems by type.</p>
 
-      <div id="problem-year-frequency" class="year-frequency-list" aria-label="Problems in each year"></div>
+      <div class="year-frequency" id="problem-year-frequency">
+        <label class="year-frequency-label">Year
+          <input id="problem-year-input" type="number" min="1" max="99" step="1" value="26" />
+        </label>
+        <p id="problem-difficulty-frequency" class="year-frequency-counts" aria-label="Difficulty counts"></p>
+      </div>
 
       <div class="kind-choices" id="problem-section-choices" role="group" aria-label="Problem type">
         <button type="button" data-section="math" aria-pressed="false">Math</button>
@@ -101,6 +106,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/admin-problems.js?v=year-freq"></script>
+  <script type="module" src="/app/admin-problems.js?v=year-diff"></script>
 </body>
 </html>

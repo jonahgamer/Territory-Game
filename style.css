@@ -1673,26 +1673,42 @@ button[type="submit"],
   max-width: 52rem;
 }
 
-.year-frequency-list {
-  display: grid;
-  gap: 8px;
-  margin: 16px 0 20px;
-}
-
 .year-frequency {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
-  margin: 0;
-  align-items: baseline;
+  gap: 8px 18px;
+  align-items: center;
+  margin: 16px 0 20px;
 }
 
 .year-frequency-label {
-  min-width: 5.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
   color: var(--cyan);
   font-family: var(--font-ui);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+#problem-year-input {
+  width: 4.5rem;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.year-frequency-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
 }
 
 .year-frequency-count {

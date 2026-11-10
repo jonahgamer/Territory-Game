@@ -6,9 +6,9 @@ import { api } from "../shared/api.js?v=page-data";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
   PROBLEM_PAGE_SIZE, PROBLEM_YEAR, YEAR_INDEX_START, YEAR_INDEX_END,
-  PROBLEM_TYPES, DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
+  DIFFICULTY_NAME, DIFFICULTIES, DIFFICULTY_SCORE,
 } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore, problemYear, yearTypeFrequency } from "../shared/difficulty.js?v=year-freq";
+import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore, yearDifficultyFrequency } from "../shared/difficulty.js?v=year-diff";
 
 // ── 顶层状态 ─────────────────────────────────────────────
 const state = {
@@ -18,6 +18,7 @@ const state = {
   query: "",
   difficultyFilter: "all",
   sortMode: "index",
+  frequencyYear: PROBLEM_YEAR,
   page: 1,
   selectMode: false,
   selected: new Set(),
@@ -94,6 +95,15 @@ function bindEvents() {
     state.selectMode = !state.selectMode;
     if (!state.selectMode) state.selected.clear();
     render();
+  });
+
+  const yearInput = document.querySelector("#problem-year-input");
+  if (yearInput) yearInput.value = String(state.frequencyYear);
+  yearInput?.addEventListener("input", () => {
+    const year = Number(yearInput.value);
+    if (!Number.isInteger(year) || year < 1 || year > 99) return;
+    state.frequencyYear = year;
+    renderDifficultyFrequency();
   });
 
   document.querySelector("#problem-section")?.addEventListener("click", onListClick);
@@ -282,23 +292,14 @@ function exportSelectedText() {
   location.assign(`/admin/export-problems.html?items=${encodeURIComponent(items)}`);
 }
 
-function yearFrequencyLines(problems) {
-  const years = new Set([PROBLEM_YEAR]);
-  for (const problem of problems) {
-    const year = problemYear(problem.index);
-    if (year) years.add(year);
+function renderDifficultyFrequency() {
+  const host = document.querySelector("#problem-difficulty-frequency");
+  if (!host) return;
+  const counts = yearDifficultyFrequency(state.problems, state.frequencyYear);
+  host.replaceChildren();
+  for (const difficulty of DIFFICULTIES) {
+    host.append(el("span", "year-frequency-count", `${DIFFICULTY_NAME[difficulty]} ${counts[difficulty]}`));
   }
-  const ordered = [...years].sort((a, b) => b - a);
-  return ordered.map((year) => {
-    const counts = yearTypeFrequency(problems, year);
-    const line = el("p", "year-frequency");
-    line.append(el("span", "year-frequency-label", `Year ${year}`));
-    for (const type of PROBLEM_TYPES) {
-      const mark = el("span", "year-frequency-count", `${type.tag}${year} ${counts[type.id]}`);
-      line.append(mark);
-    }
-    return line;
-  });
 }
 
 function problemUsage(index, type) {
@@ -316,8 +317,9 @@ function render() {
     btn.setAttribute("aria-pressed", String(btn.dataset.section === state.activeType));
   }
 
-  const frequencyEl = document.querySelector("#problem-year-frequency");
-  if (frequencyEl) frequencyEl.replaceChildren(...yearFrequencyLines(state.problems));
+  const yearInput = document.querySelector("#problem-year-input");
+  if (yearInput && document.activeElement !== yearInput) yearInput.value = String(state.frequencyYear);
+  renderDifficultyFrequency();
 
   const type = typeInfo(state.activeType);
   const section = document.querySelector("#problem-section");

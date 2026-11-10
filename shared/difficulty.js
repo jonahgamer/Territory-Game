@@ -15,17 +15,16 @@ export function problemYear(index) {
   return Math.floor(n / 1000);
 }
 
-export function yearTypeFrequency(problems, year) {
+export function yearDifficultyFrequency(problems, year) {
   const counts = {};
-  for (const type of PROBLEM_TYPES) counts[type.id] = 0;
+  for (const difficulty of DIFFICULTIES) counts[difficulty] = 0;
   const y = Number(year);
   if (!Number.isInteger(y) || y < 1 || y > 99) return counts;
   const start = y * 1000;
   const end = start + 999;
   for (const problem of problems || []) {
     if (!Number.isInteger(problem?.index) || problem.index < start || problem.index > end) continue;
-    if (counts[problem.type] === undefined) continue;
-    counts[problem.type] += 1;
+    counts[problemDifficulty(problem)] += 1;
   }
   return counts;
 }
