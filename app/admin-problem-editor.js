@@ -6,7 +6,7 @@ import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
-import { createStatementView } from "../shared/statement.js?v=part-align";
+import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -450,14 +450,12 @@ function buildProblemPreview(prompt, parts) {
   const chunks = [];
   if (prompt.trim()) chunks.push(previewFragment(prompt));
   parts.forEach((part, index) => {
-    const body = previewFragment(part.prompt);
+    const body = partStatement(part.prompt, partMark(part));
     const answer = part.answer.trim()
       ? `<p class="part-answer">Answer: ${part.answer.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`
       : "";
-    if (!body && !answer) return;
     const mark = `(${String.fromCharCode(97 + index)})`;
-    const worth = `<p class="part-answer">${partMark(part)} point${partMark(part) === 1 ? "" : "s"}</p>`;
-    chunks.push(`<div class="part-line"><span class="part-mark">${mark}</span><div class="part-body">${worth}${body}${answer}</div></div>`);
+    chunks.push(`<div class="part-line"><span class="part-mark">${mark}</span><div class="part-body">${body}${answer}</div></div>`);
   });
   return chunks.join("");
 }

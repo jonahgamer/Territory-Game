@@ -11,6 +11,17 @@ function containsHtml(source) {
   return /<\/?[a-z][\w:-]*\b[^>]*>/i.test(source);
 }
 
+export function partStatement(source, marks) {
+  const count = Number.isInteger(marks) ? marks : 1;
+  const label = ` (${count} mark${count === 1 ? "" : "s"})`;
+  const text = String(source || "").trim();
+  if (!text) return `<p>${label.trim()}</p>`;
+  if (!containsHtml(text)) return `<p>${escapeStatementText(text)}${label}</p>`;
+  const closing = text.match(/<\/(p|div|li|h[1-6]|blockquote|pre)>\s*$/i);
+  if (closing) return `${text.slice(0, closing.index)}${label}${text.slice(closing.index)}`;
+  return `${text}<span>${label}</span>`;
+}
+
 function buildStatementDocument(source, tag = "") {
   const text = String(source || "");
   const tagText = escapeStatementText(tag);

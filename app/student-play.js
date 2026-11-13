@@ -15,7 +15,7 @@ import { problemDifficulty, problemTag, problemScore } from "../shared/difficult
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks } from "../shared/teleport-link.js";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
-import { createStatementView } from "../shared/statement.js?v=part-align";
+import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -1137,15 +1137,9 @@ function renderPlayParts(parts, solved = new Set()) {
     mark.textContent = `(${String.fromCharCode(97 + index)})`;
     const body = document.createElement("div");
     body.className = "problem-part-body";
-    const worth = document.createElement("p");
-    worth.className = "problem-part-worth";
-    worth.textContent = done ? `${points} point${points === 1 ? "" : "s"} · solved` : `${points} point${points === 1 ? "" : "s"}`;
-    body.append(worth);
-    if (part?.prompt?.trim()) {
-      const desc = document.createElement("div");
-      body.append(desc);
-      createStatementView(desc, {}).render(part.prompt);
-    }
+    const desc = document.createElement("div");
+    body.append(desc);
+    createStatementView(desc, {}).render(partStatement(part?.prompt, points));
     const label = document.createElement("label");
     label.append("Answer");
     const field = document.createElement("textarea");

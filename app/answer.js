@@ -2,7 +2,7 @@ import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js?v=parts";
 import { loadPage } from "../shared/data.js?v=part-score";
 import { noteServerTime } from "../shared/contest-time.js";
-import { createStatementView } from "../shared/statement.js?v=part-align";
+import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
 import { teamForUser, teamEnergy } from "../shared/contest-data.js";
@@ -54,16 +54,10 @@ function renderParts(parts) {
     mark.textContent = `(${String.fromCharCode(97 + index)})`;
     const body = document.createElement("div");
     body.className = "problem-part-body";
-    const worth = document.createElement("p");
-    worth.className = "problem-part-worth";
-    worth.textContent = done ? `${points} point${points === 1 ? "" : "s"} · solved` : `${points} point${points === 1 ? "" : "s"}`;
-    body.append(worth);
-    if (part?.prompt?.trim()) {
-      const desc = document.createElement("div");
-      desc.className = "problem-part-prompt";
-      body.append(desc);
-      createStatementView(desc, {}).render(part.prompt);
-    }
+    const desc = document.createElement("div");
+    desc.className = "problem-part-prompt";
+    body.append(desc);
+    createStatementView(desc, {}).render(partStatement(part?.prompt, points));
     const label = document.createElement("label");
     label.append("Answer");
     const input = document.createElement("textarea");
