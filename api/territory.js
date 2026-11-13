@@ -150,6 +150,11 @@ function normalizeMap(v) {
   };
 }
 
+function partMark(part) {
+  const n = Number(part?.score);
+  return Number.isInteger(n) && n >= 0 && n <= MAX_PROBLEM_SCORE ? n : 1;
+}
+
 function cleanProblemParts(value) {
   if (value == null) return [];
   if (!Array.isArray(value) || value.length > MAX_PROBLEM_PARTS) return null;
@@ -160,7 +165,13 @@ function cleanProblemParts(value) {
     const answer = typeof item.answer === 'string' ? item.answer : '';
     if (prompt.length > MAX_PROBLEM_TEXT || answer.length > MAX_PROBLEM_TEXT) return null;
     if (!answer.trim()) return null;
-    parts.push({ prompt, answer });
+    let score = 1;
+    if (item.score !== undefined && item.score !== null && item.score !== '') {
+      const n = typeof item.score === 'number' ? item.score : Number(item.score);
+      if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) return null;
+      score = n;
+    }
+    parts.push({ prompt, answer, score });
   }
   return parts;
 }
@@ -179,7 +190,10 @@ function normalizeProblem(v) {
   if (logic.length > MAX_PROBLEM_LOGIC) return null;
   const difficulty = DIFFICULTIES.includes(v.difficulty) ? v.difficulty : 'normal';
   let score = DIFFICULTY_SCORE[difficulty];
-  if (v.score !== undefined && v.score !== null && v.score !== '') {
+  if (parts.length) {
+    score = parts.reduce((sum, part) => sum + part.score, 0);
+    if (score > MAX_PROBLEM_SCORE) return null;
+  } else if (v.score !== undefined && v.score !== null && v.score !== '') {
     const n = typeof v.score === 'number' ? v.score : Number(v.score);
     if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) return null;
     score = n;
@@ -282,13 +296,20 @@ function cleanClaims(value, fallbackMapId = '') {
     const key = `${mapId}:${claim.cell}:${teamId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    claims.push({
+    const solvedParts = Array.isArray(claim.solvedParts)
+      ? [...new Set(claim.solvedParts.filter((index) => Number.isInteger(index) && index >= 0 && index < MAX_PROBLEM_PARTS))].sort((a, b) => a - b)
+      : [];
+    const stored = {
       mapId,
       cell: claim.cell,
       teamId,
       solvedBy,
       solvedAt: Number.isFinite(claim.solvedAt) ? claim.solvedAt : 0,
-    });
+      complete: claim.complete !== false,
+    };
+    if (solvedParts.length) stored.solvedParts = solvedParts;
+    if (Number.isInteger(claim.score) && claim.score >= 0 && claim.score <= MAX_PROBLEM_SCORE * MAX_PROBLEM_PARTS) stored.score = claim.score;
+    claims.push(stored);
   }
   return claims;
 }
@@ -404,10 +425,10 @@ function adjacentToTeam(map, contest, teamId, cell) {
   return neighbors.some((index) => owned.has(index));
 }
 
-function allProblemsClaimed(maps, claims, fallbackMapId) {
+function teamSolvedAll(maps, claims, teamId, fallbackMapId) {
   const list = (Array.isArray(maps) ? maps : [maps]).filter(Boolean);
-  if (!list.length) return false;
-  const cleaned = cleanClaims(claims, fallbackMapId);
+  if (!list.length || !teamId) return false;
+  const cleaned = cleanClaims(claims, fallbackMapId).filter((claim) => claim.teamId === teamId && claim.complete !== false);
   let problems = 0;
   for (const map of list) {
     for (const index of problemCellIndexes(map)) {
@@ -427,6 +448,57 @@ export function answersMatch(expected, given) {
   return expected.trim().toLowerCase() === String(given ?? '').trim().toLowerCase();
 }
 
+export function gradeProblemAnswers(problem, body) {
+  const parts = Array.isArray(problem?.parts) ? problem.parts : [];
+  const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
+  if (parts.length) {
+    const givenList = Array.isArray(body?.answers) ? body.answers.map((item) => String(item ?? '')) : null;
+    if (!givenList || givenList.length !== parts.length || givenList.some((item) => item.length > MAX_TEST_TEXT)) {
+      return { error: 'Answer every part.' };
+    }
+    if (logic) {
+      if (givenList.some((item) => !item.trim())) return { error: 'Answer every part.' };
+      const judged = runProblemLogic(
+        logic,
+        JSON.stringify(parts.map((part) => part.answer)),
+        JSON.stringify(givenList)
+      );
+      if (judged.systemError) return { systemError: judged.comment || 'The checker could not run.' };
+      if (judged.correct !== true) return { matched: [], wrong: judged.comment || 'That answer is not right.' };
+      return { matched: parts.map((_, index) => index) };
+    }
+    if (!givenList.some((item) => item.trim())) return { error: 'Answer at least one part.' };
+    const matched = [];
+    for (let index = 0; index < parts.length; index += 1) {
+      if (givenList[index].trim() && answersMatch(parts[index].answer, givenList[index])) matched.push(index);
+    }
+    if (!matched.length) return { matched: [], wrong: 'That answer is not right.' };
+    return { matched };
+  }
+  const given = typeof body?.answer === 'string' ? body.answer : String(body?.answer ?? '');
+  if (given.length > MAX_TEST_TEXT) return { error: 'The answer is too long.' };
+  if (logic) {
+    const judged = runProblemLogic(logic, problem?.answer, given);
+    if (judged.systemError) return { systemError: judged.comment || 'The checker could not run.' };
+    if (judged.correct !== true) return { matched: [], wrong: judged.comment || 'That answer is not right.', single: true };
+    return { matched: [0], single: true };
+  }
+  if (!problem || !answersMatch(problem.answer, given)) {
+    return {
+      matched: [],
+      single: true,
+      wrong: problem && String(problem.answer || '').trim() ? 'That answer is not right.' : 'This problem has no answer yet.',
+    };
+  }
+  return { matched: [0], single: true };
+}
+
+function marksFor(problem, indexes, single) {
+  if (single) return problemScore(problem);
+  const parts = Array.isArray(problem?.parts) ? problem.parts : [];
+  return indexes.reduce((sum, index) => sum + partMark(parts[index]), 0);
+}
+
 function buildLeaderboard(contest, maps, problems) {
   const fallback = primaryMapId(contest);
   const claims = cleanClaims(contest?.claims, fallback);
@@ -443,7 +515,7 @@ function buildLeaderboard(contest, maps, problems) {
       const cell = mapById.get(claim.mapId)?.cells?.[claim.cell];
       if (!cell || cell.kind !== 'problem') continue;
       const problem = (problems || []).find((item) => item.index === cell.problemNo && item.type === cell.type);
-      score += problemScore(problem);
+      score += Number.isInteger(claim.score) ? claim.score : problemScore(problem);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };
@@ -498,8 +570,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
   const visibleTeams = testing && !admin ? teams.filter((item) => team && item.id === team.id) : teams;
   const visibleClaims = claims.filter(own);
   const ended = Date.now() >= (contestWindow(contest)?.endAt ?? Infinity);
-  const frozenClaims = testing && team ? claims.filter((item) => item.teamId === team.id) : claims;
-  const frozen = maps.length > 0 && (ended || (!testing || !admin) && allProblemsClaimed(maps, frozenClaims, fallback));
+  const frozen = maps.length > 0 && (ended || (Boolean(team) && !admin && teamSolvedAll(maps, claims, team.id, fallback)));
   const visibleVotes = testing && !admin
     ? votes.filter((vote) => team && vote.teamId === team.id)
     : (admin || resolved ? votes : votes.filter((vote) => team && vote.teamId === team.id));
@@ -1386,24 +1457,29 @@ async function handleSolve(req, res, db, user, body) {
   if (!map || cell >= map.cells.length || map.cells[cell]?.kind !== 'problem') {
     return res.status(400).json({ success: false, message: 'That cell is not a problem.', serverNow: now });
   }
-  const teamClaims = cleanClaims(contest.claims, primaryMapId(contest)).filter((claim) => !testing || claim.teamId === team.id);
-  if (allProblemsClaimed(maps, teamClaims, primaryMapId(contest))) {
+  const claimsNow = cleanClaims(contest.claims, primaryMapId(contest));
+  const myClaim = claimsNow.find((claim) => claim.teamId === team.id && claim.mapId === map.id && claim.cell === cell);
+  if (teamSolvedAll(maps, claimsNow, team.id, primaryMapId(contest))) {
     return res.status(400).json({ success: false, message: 'Every problem is already solved.', serverNow: now });
   }
-  if (teamClaims.some((claim) => claim.mapId === map.id && claim.cell === cell)) {
-    return res.status(400).json({
-      success: false,
-      message: testing ? 'Your team already solved this cell.' : 'Another team already holds this cell.',
-      serverNow: now,
-    });
+  if (myClaim && myClaim.complete !== false) {
+    return res.status(400).json({ success: false, message: 'Your team already solved this cell.', serverNow: now });
   }
-  if (!adjacentToTeam(map, contest, team.id, cell)) {
+  if (!myClaim && !adjacentToTeam(map, contest, team.id, cell)) {
     return res.status(400).json({ success: false, message: 'That cell is not next to your territory.', serverNow: now });
   }
 
   const mapCell = map.cells[cell];
   const problem = await findStoredProblem(db.collection('problems'), mapCell.type, mapCell.problemNo);
   const difficulty = problemDifficulty(problem);
+  const graded = gradeProblemAnswers(problem, body);
+  if (graded.error) return res.status(400).json({ success: false, message: graded.error, serverNow: now });
+  if (graded.systemError) return res.status(500).json({ success: false, message: graded.systemError, serverNow: now });
+  const already = new Set(Array.isArray(myClaim?.solvedParts) ? myClaim.solvedParts : []);
+  const fresh = graded.matched.filter((index) => graded.single || !already.has(index));
+  if (!fresh.length && !graded.wrong) {
+    return res.status(400).json({ success: false, message: 'Your team already scored those parts.', serverNow: now });
+  }
   const settings = readEnergySettings(contest);
   const preview = teamEnergySnapshot(contest, team.id, now);
   if (preview.value < settings.attemptMin) {
@@ -1415,51 +1491,12 @@ async function handleSolve(req, res, db, user, body) {
     });
   }
 
-  const logic = typeof problem?.logic === 'string' ? problem.logic.trim() : '';
-  const parts = Array.isArray(problem?.parts) ? problem.parts : [];
-  let correct = false;
-  let wrongMessage = '';
-  let expected = problem?.answer;
-  let given = body.answer;
-  let givenList = null;
-  if (parts.length) {
-    givenList = Array.isArray(body.answers) ? body.answers.map((item) => String(item ?? '')) : null;
-    if (!givenList || givenList.length !== parts.length || givenList.some((item) => item.length > MAX_TEST_TEXT)) {
-      return res.status(400).json({ success: false, message: 'Answer every part.', serverNow: now });
-    }
-    expected = JSON.stringify(parts.map((part) => part.answer));
-    given = JSON.stringify(givenList);
-    if (!logic) {
-      correct = parts.every((part, index) => answersMatch(part.answer, givenList[index]));
-      if (!correct) wrongMessage = 'That answer is not right.';
-    }
-  }
-  if (logic && !wrongMessage) {
-    const judged = runProblemLogic(logic, expected, given);
-    if (judged.systemError) {
-      return res.status(500).json({
-        success: false,
-        message: judged.comment || 'The checker could not run.',
-        serverNow: now,
-      });
-    }
-    correct = judged.correct === true;
-    if (!correct) wrongMessage = judged.comment || 'That answer is not right.';
-  } else if (!parts.length && !logic) {
-    if (!problem || !answersMatch(problem.answer, body.answer)) {
-      wrongMessage = problem && String(problem.answer || '').trim()
-        ? 'That answer is not right.'
-        : 'This problem has no answer yet.';
-    } else {
-      correct = true;
-    }
-  }
-
+  const correct = fresh.length > 0;
   const spent = await spendTeamEnergy(col, contestId, team.id, now, difficulty, correct);
   if (spent.missing) return res.status(404).json({ success: false, message: 'Contest not found', serverNow: now });
   if (spent.blocked || spent.conflict || !spent.contest) {
     const message = spent.blocked
-      ? `The team has ${spent.current} energy. An attempt needs at least ${spent.settings.attemptMin}.`
+      ? `The team has ${spent.current} energy. An attempt needs at least ${settings.attemptMin}.`
       : 'Energy changed while that answer was checked. Try again.';
     return res.status(400).json({
       success: false,
@@ -1471,26 +1508,68 @@ async function handleSolve(req, res, db, user, body) {
   if (!correct) {
     return res.status(400).json({
       success: false,
-      message: wrongMessage,
+      message: graded.wrong || 'That answer is not right.',
       serverNow: now,
       contest: contestPayload(spent.contest, maps, problems, user).contest,
     });
   }
 
-  const claim = { mapId: map.id, cell, teamId: team.id, solvedBy: username, solvedAt: now };
-  const held = heldClaimQuery(map.id, cell, primaryMapId(contest), testing ? team.id : '');
-  const claimFilter = { id: contestId, claims: { $not: { $elemMatch: held } } };
-  const result = await col.updateOne(claimFilter, { $push: { claims: claim }, $set: { updatedAt: new Date() } });
+  const parts = Array.isArray(problem?.parts) ? problem.parts : [];
+  const solvedParts = graded.single ? [] : [...already, ...fresh].sort((a, b) => a - b);
+  const complete = Boolean(graded.single) || solvedParts.length === parts.length;
+  const gained = marksFor(problem, fresh, graded.single);
+  const score = (Number.isInteger(myClaim?.score) ? myClaim.score : 0) + gained;
+  const claim = {
+    mapId: map.id,
+    cell,
+    teamId: team.id,
+    solvedBy: username,
+    solvedAt: now,
+    score,
+    complete,
+    ...(solvedParts.length ? { solvedParts } : {}),
+  };
+  let result;
+  if (!myClaim) {
+    result = await col.updateOne(
+      { id: contestId, claims: { $not: { $elemMatch: { mapId: map.id, cell, teamId: team.id } } } },
+      { $push: { claims: claim }, $set: { updatedAt: new Date() } }
+    );
+  }
+  if (myClaim || result?.matchedCount === 0) {
+    result = await col.updateOne(
+      { id: contestId, claims: { $elemMatch: { mapId: map.id, cell, teamId: team.id } } },
+      { $set: {
+        'claims.$.score': score,
+        'claims.$.complete': complete,
+        'claims.$.solvedParts': solvedParts,
+        'claims.$.solvedBy': username,
+        'claims.$.solvedAt': now,
+        updatedAt: new Date(),
+      } }
+    );
+  }
   const updated = await col.findOne({ id: contestId });
-  if (result.matchedCount === 0) {
+  if (!result || result.matchedCount === 0) {
     return res.status(400).json({
       success: false,
-      message: testing ? 'Your team already solved this cell.' : 'Another team already holds this cell.',
+      message: 'That cell changed while the answer was checked. Try again.',
       serverNow: Date.now(),
       contest: contestPayload(updated, maps, problems, user).contest,
     });
   }
-  return res.status(200).json(contestPayload(updated, maps, problems, user));
+  const names = fresh.map((index) => `(${String.fromCharCode(97 + index)})`).join(', ');
+  const message = graded.single
+    ? 'Answer accepted.'
+    : (complete
+      ? `Correct: ${names}.`
+      : `Correct: ${names}. The other parts are still open.`);
+  return res.status(200).json({
+    ...contestPayload(updated, maps, problems, user),
+    complete,
+    awarded: gained,
+    message,
+  });
 }
 
 function heldClaimQuery(mapId, cell, primary, teamId) {
@@ -1984,8 +2063,8 @@ function pageProblem(problem, admin) {
   if (admin || storedParts.length) {
     view.parts = storedParts.map((part) => (
       admin
-        ? { prompt: typeof part.prompt === 'string' ? part.prompt : '', answer: typeof part.answer === 'string' ? part.answer : '' }
-        : { prompt: typeof part.prompt === 'string' ? part.prompt : '' }
+        ? { prompt: typeof part.prompt === 'string' ? part.prompt : '', answer: typeof part.answer === 'string' ? part.answer : '', score: partMark(part) }
+        : { prompt: typeof part.prompt === 'string' ? part.prompt : '', score: partMark(part) }
     ));
   }
   if (admin) {

@@ -57,13 +57,19 @@ export function normalizeClaims(value, fallbackMapId = "") {
     const key = `${mapId}:${c.cell}:${c.teamId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    claims.push({
+    const claim = {
       mapId,
       cell: c.cell,
       teamId: c.teamId,
       solvedBy: typeof c.solvedBy === "string" ? c.solvedBy : "",
       solvedAt: Number.isFinite(c.solvedAt) ? c.solvedAt : 0,
-    });
+      complete: c.complete !== false,
+    };
+    if (Array.isArray(c.solvedParts)) {
+      claim.solvedParts = [...new Set(c.solvedParts.filter((index) => Number.isInteger(index) && index >= 0))].sort((a, b) => a - b);
+    }
+    if (Number.isInteger(c.score) && c.score >= 0) claim.score = c.score;
+    claims.push(claim);
   }
   return claims;
 }

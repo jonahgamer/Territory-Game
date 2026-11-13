@@ -1,6 +1,6 @@
 import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js?v=parts";
-import { loadPage } from "../shared/data.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=part-score";
 import { noteServerTime } from "../shared/contest-time.js";
 import { createStatementView } from "../shared/statement.js?v=part-align";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
@@ -25,8 +25,16 @@ const errorEl = document.querySelector("#student-answer-error");
 let contest = null;
 let problemParts = [];
 
+function solvedPartSet() {
+  const team = contest && teamForUser(contest);
+  if (!team) return new Set();
+  const claim = (contest.claims || []).find((item) => item.teamId === team.id && item.cell === cellIndex && (!openMapId || item.mapId === openMapId));
+  return new Set(Array.isArray(claim?.solvedParts) ? claim.solvedParts : []);
+}
+
 function renderParts(parts) {
   problemParts = Array.isArray(parts) ? parts : [];
+  const solved = solvedPartSet();
   const host = document.querySelector("#answer-parts");
   const single = document.querySelector("#single-answer-field");
   if (!host || !single) return;
@@ -35,6 +43,8 @@ function renderParts(parts) {
   host.hidden = !multi;
   single.hidden = multi;
   problemParts.forEach((part, index) => {
+    const done = solved.has(index);
+    const points = Number.isInteger(part?.score) ? part.score : 1;
     const block = document.createElement("div");
     block.className = "problem-part";
     const line = document.createElement("div");
@@ -44,6 +54,10 @@ function renderParts(parts) {
     mark.textContent = `(${String.fromCharCode(97 + index)})`;
     const body = document.createElement("div");
     body.className = "problem-part-body";
+    const worth = document.createElement("p");
+    worth.className = "problem-part-worth";
+    worth.textContent = done ? `${points} point${points === 1 ? "" : "s"} · solved` : `${points} point${points === 1 ? "" : "s"}`;
+    body.append(worth);
     if (part?.prompt?.trim()) {
       const desc = document.createElement("div");
       desc.className = "problem-part-prompt";
@@ -56,6 +70,10 @@ function renderParts(parts) {
     input.dataset.partAnswer = String(index);
     input.rows = 3;
     input.maxLength = 5000;
+    if (done) {
+      input.disabled = true;
+      input.placeholder = "Solved";
+    }
     label.append(input);
     body.append(label);
     line.append(mark, body);
@@ -93,6 +111,7 @@ function paintEnergy() {
 function takeServerContest(next, serverNow) {
   if (!contest || !next) return;
   if (Array.isArray(next.energy)) contest.energy = next.energy;
+  if (Array.isArray(next.claims)) contest.claims = next.claims;
   noteServerTime(serverNow);
   paintEnergy();
   publishContestPatch(contestId, next, serverNow);
@@ -167,12 +186,12 @@ form.addEventListener("submit", async (event) => {
   }
 
   const submitted = submittedAnswers();
-  if (submitted.answers && submitted.answers.some((value) => !value.trim())) {
+  if (submitted.answers && !submitted.answers.some((value) => value.trim())) {
     submit.dataset.busy = "";
     submit.disabled = false;
     submit.textContent = label;
     errorEl.hidden = false;
-    errorEl.textContent = "Answer every part.";
+    errorEl.textContent = "Answer at least one part.";
     paintEnergy();
     return;
   }
@@ -181,8 +200,16 @@ form.addEventListener("submit", async (event) => {
     const data = await api.solve(contestId, cellIndex, submitted.answer, openMapId, submitted.answers);
     takeServerContest(data.contest, data.serverNow);
     submit.dataset.busy = "";
+    if (data.complete === false) {
+      renderParts(problemParts);
+      submit.disabled = false;
+      submit.textContent = label;
+      showStatus(data.message || "Part recorded. The other parts are still open.");
+      paintEnergy();
+      return;
+    }
     form.hidden = true;
-    showStatus("Answer recorded. You can close this tab.");
+    showStatus(data.message || "Answer recorded. You can close this tab.");
   } catch (err) {
     takeServerContest(err.data?.contest, err.data?.serverNow);
     errorEl.hidden = false;

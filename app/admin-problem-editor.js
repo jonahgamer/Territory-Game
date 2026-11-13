@@ -62,7 +62,11 @@ async function run() {
 
   const existing = data.problem;
   const storedParts = Array.isArray(existing?.parts)
-    ? existing.parts.map((part) => ({ prompt: part?.prompt || "", answer: part?.answer || "" }))
+    ? existing.parts.map((part) => ({
+      prompt: part?.prompt || "",
+      answer: part?.answer || "",
+      score: partMark(part, existing.difficulty),
+    }))
     : [];
   state.draft = existing
     ? { ...existing, parts: storedParts, answerMode: storedParts.length ? "parts" : "single", isNew: false }
@@ -96,7 +100,6 @@ function render() {
     btn.setAttribute("aria-pressed", String(btn.dataset.problemDifficulty === draft.difficulty));
   }
 
-  if (scoreEl) scoreEl.value = String(problemScore(draft));
   promptEl.value = draft.prompt;
   answerEl.value = draft.answer;
   solutionEl.value = draft.solution || "";
@@ -108,6 +111,10 @@ function render() {
   if (answerField) answerField.hidden = partsMode;
   if (partsEditor) partsEditor.hidden = !partsMode;
   if (partsMode) renderPartFields();
+  if (scoreEl) {
+    scoreEl.readOnly = partsMode;
+    scoreEl.value = partsMode ? String(partTotal(draft.parts)) : String(problemScore(draft));
+  }
 
   const usage = problemUsage(draft.index, draft.type);
   usageEl.textContent = usage.cells > 0
@@ -334,10 +341,22 @@ function clampPartCount(value) {
   return Math.min(MAX_PARTS, Math.max(1, n));
 }
 
+function partMark(part, difficulty = state.draft?.difficulty) {
+  const n = Number(part?.score);
+  if (Number.isInteger(n) && n >= 0 && n <= MAX_PROBLEM_SCORE) return n;
+  return difficultyScore(difficulty || "normal");
+}
+
+function partTotal(parts) {
+  return (Array.isArray(parts) ? parts : []).reduce((sum, part) => sum + partMark(part), 0);
+}
+
 function resizeParts(parts, count) {
   const next = [];
   for (let i = 0; i < count; i += 1) {
-    next.push(parts[i] ? { prompt: parts[i].prompt || "", answer: parts[i].answer || "" } : { prompt: "", answer: "" });
+    next.push(parts[i]
+      ? { prompt: parts[i].prompt || "", answer: parts[i].answer || "", score: partMark(parts[i]) }
+      : { prompt: "", answer: "", score: difficultyScore(state.draft?.difficulty || "normal") });
   }
   return next;
 }
@@ -348,6 +367,7 @@ function collectPartsFromDom() {
   return blocks.map((block) => ({
     prompt: block.querySelector("[data-part-prompt]")?.value || "",
     answer: block.querySelector("[data-part-answer]")?.value || "",
+    score: partMark({ score: block.querySelector("[data-part-score]")?.value }),
   }));
 }
 
@@ -373,15 +393,28 @@ function renderPartFields() {
     answer.dataset.partAnswer = String(index);
     answer.value = part.answer;
     answerLabel.append(answer);
+    const scoreLabel = el("label", null, "Mark");
+    const score = document.createElement("input");
+    score.type = "number";
+    score.min = "0";
+    score.max = String(MAX_PROBLEM_SCORE);
+    score.step = "1";
+    score.className = "problem-part-score";
+    score.dataset.partScore = String(index);
+    score.value = String(partMark(part));
+    scoreLabel.append(score);
     const onInput = () => {
       state.draft.parts = collectPartsFromDom();
+      state.draft.score = partTotal(state.draft.parts);
+      if (scoreEl) scoreEl.value = String(state.draft.score);
       state.dirty = true;
       updateSaveState();
       requestAnimationFrame(renderPreview);
     };
     prompt.addEventListener("input", onInput);
     answer.addEventListener("input", onInput);
-    block.append(legend, promptLabel, answerLabel);
+    score.addEventListener("input", onInput);
+    block.append(legend, promptLabel, answerLabel, scoreLabel);
     partListEl.append(block);
   });
 }
@@ -391,7 +424,10 @@ function setAnswerMode(mode) {
     const current = state.draft.answerMode === "parts" ? collectPartsFromDom() : (state.draft.parts || []);
     state.draft.parts = current.length
       ? current
-      : [{ prompt: "", answer: state.draft.answer || "" }, { prompt: "", answer: "" }];
+      : [
+        { prompt: "", answer: state.draft.answer || "", score: partMark(state.draft) },
+        { prompt: "", answer: "", score: difficultyScore(state.draft.difficulty) },
+      ];
   } else if (state.draft.answerMode === "parts") {
     const parts = collectPartsFromDom();
     state.draft.parts = parts;
@@ -420,7 +456,8 @@ function buildProblemPreview(prompt, parts) {
       : "";
     if (!body && !answer) return;
     const mark = `(${String.fromCharCode(97 + index)})`;
-    chunks.push(`<div class="part-line"><span class="part-mark">${mark}</span><div class="part-body">${body}${answer}</div></div>`);
+    const worth = `<p class="part-answer">${partMark(part)} point${partMark(part) === 1 ? "" : "s"}</p>`;
+    chunks.push(`<div class="part-line"><span class="part-mark">${mark}</span><div class="part-body">${worth}${body}${answer}</div></div>`);
   });
   return chunks.join("");
 }
@@ -476,20 +513,33 @@ async function save() {
   draft.solution = solution;
   draft.logic = logic;
 
-  if (!Number.isInteger(score) || score < 0 || score > MAX_PROBLEM_SCORE) {
-    saveError.hidden = false;
-    saveError.textContent = `Score must be a whole number from 0 to ${MAX_PROBLEM_SCORE}.`;
-    return;
-  }
-  draft.score = score;
-
   if (partsMode) {
     if (!parts.length || parts.some((part) => !part.answer.trim())) {
       saveError.hidden = false;
       saveError.textContent = "Each part needs an answer before saving.";
       return;
     }
-  } else if (!prompt.trim() || !answer.trim()) {
+    if (parts.some((part) => !Number.isInteger(part.score) || part.score < 0 || part.score > MAX_PROBLEM_SCORE)) {
+      saveError.hidden = false;
+      saveError.textContent = `Each mark must be a whole number from 0 to ${MAX_PROBLEM_SCORE}.`;
+      return;
+    }
+    const total = partTotal(parts);
+    if (total > MAX_PROBLEM_SCORE) {
+      saveError.hidden = false;
+      saveError.textContent = `The part marks add up to ${total}. The total must be at most ${MAX_PROBLEM_SCORE}.`;
+      return;
+    }
+    draft.score = total;
+  } else if (!Number.isInteger(score) || score < 0 || score > MAX_PROBLEM_SCORE) {
+    saveError.hidden = false;
+    saveError.textContent = `Score must be a whole number from 0 to ${MAX_PROBLEM_SCORE}.`;
+    return;
+  } else {
+    draft.score = score;
+  }
+
+  if (!partsMode && (!prompt.trim() || !answer.trim())) {
     saveError.hidden = false;
     saveError.textContent = "Add both a question and an answer before saving.";
     return;

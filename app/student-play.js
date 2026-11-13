@@ -1,13 +1,13 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=part-score";
 import { api } from "../shared/api.js?v=parts";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js?v=part-score";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
@@ -589,7 +589,7 @@ function buildLeaderboard(contest, map) {
       const boardCell = boardMap?.cells?.[claim.cell];
       if (!boardCell || boardCell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === boardCell.problemNo && x.type === boardCell.type);
-      score += problemScore(p);
+      score += Number.isInteger(claim.score) ? claim.score : problemScore(p);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };
@@ -600,13 +600,15 @@ function isFrozen(contest, maps) {
   const list = Array.isArray(maps) ? maps : [maps].filter(Boolean);
   if (!contest || !list.length) return contestPhase(contest) === "ended";
   if (contestPhase(contest) === "ended") return true;
+  const team = teamForUser(contest);
+  if (!team) return false;
   let problems = 0;
   for (const map of list) {
     for (let index = 0; index < (map.cells || []).length; index += 1) {
       if (map.cells[index]?.kind !== "problem") continue;
       problems += 1;
-      const held = (contest.claims || []).some((claim) => (claim.mapId || primaryMapId(contest)) === map.id && claim.cell === index);
-      if (!held) return false;
+      const mine = (contest.claims || []).find((claim) => claim.teamId === team.id && (claim.mapId || primaryMapId(contest)) === map.id && claim.cell === index);
+      if (!mine || mine.complete === false) return false;
     }
   }
   return problems > 0;
@@ -705,7 +707,10 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
     button.dataset.index = String(index);
     button.dataset.map = map.id;
 
-    const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
+    const here = (contest.claims || []).filter((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
+    const mine = team ? here.find((c) => c.teamId === team.id) : null;
+    const mineDone = Boolean(mine && mine.complete !== false);
+    const claim = here[0] || null;
     const owner = ownerAt(contest, map.id, index, cell);
     const isSpawnCell = cell.kind === "spawnpoint";
 
@@ -735,7 +740,16 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
 
     if (cell.kind === "obstacle") button.classList.add("obstacle-cell");
 
-    if (owner && isSpawnCell) {
+    if (cell.kind === "problem" && here.length) {
+      button.classList.add(mine ? "owned" : "taken");
+      button.classList.add(mine ? "mine" : "rival");
+      button.classList.add("cell-occupied");
+      button.textContent = "";
+      appendOwnerDots(button, contest, here, team?.id);
+      const reachable = phase === "live" && !frozen && team && !mineDone && (Boolean(mine) || adjacentToTeam(map, contest, team.id, index));
+      button.disabled = !reachable;
+      button.style.filter = mine ? "brightness(1)" : "brightness(0.85)";
+    } else if (owner && isSpawnCell) {
       // ── Claimed spawn: large pulsing team dot, no SPAWN text ──
       button.classList.add(owner.id === team.id ? "owned" : "taken");
       button.classList.add(owner.id === team.id ? "mine" : "rival");
@@ -831,7 +845,12 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
 
     if (state.selectedCell === index && state.selectedMapId === map.id) button.setAttribute("aria-pressed", "true");
     const place = cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1);
-    button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
+    if (cell.kind === "problem" && here.length) {
+      const names = here.map((item) => (contest.teams || []).find((t) => t.id === item.teamId)?.name).filter(Boolean);
+      button.setAttribute("aria-label", `${place}, occupied by ${names.join(", ") || "a team"}`);
+    } else {
+      button.setAttribute("aria-label", owner && owner.id !== team.id ? `${place}, occupied by ${owner.name}` : place);
+    }
     grid.append(button);
   });
   paintPhotoGrid(grid, map, findProblem);
@@ -875,12 +894,15 @@ function cellTipLines(contest, map, index, cell) {
     const label = teleportLabel(contest, map.id, index);
     lines.push(label ? `Teleport ${label}` : "Teleport, not connected");
   } else lines.push("Empty");
-  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
-  if (claim) {
-    const team = (contest.teams || []).find((t) => t.id === claim.teamId);
-    const when = claim.solvedAt ? formatContestTime(claim.solvedAt) : "";
-    const who = claim.solvedBy ? ` · ${claim.solvedBy}` : "";
-    lines.push(`Occupied by ${team?.name || "a team"}${who}${when ? ` at ${when}` : ""}`);
+  const held = (contest.claims || []).filter((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
+  if (held.length) {
+    for (const claim of held) {
+      const team = (contest.teams || []).find((t) => t.id === claim.teamId);
+      const when = claim.solvedAt ? formatContestTime(claim.solvedAt) : "";
+      const who = claim.solvedBy ? ` · ${claim.solvedBy}` : "";
+      const points = Number.isInteger(claim.score) ? ` · ${claim.score} point${claim.score === 1 ? "" : "s"}` : "";
+      lines.push(`Occupied by ${team?.name || "a team"}${who}${when ? ` at ${when}` : ""}${points}`);
+    }
   } else if (cell.kind === "spawnpoint" && contest.spawnResolved) {
     const spawn = (contest.spawns || []).find((s) => (s.mapId || primaryMapId(contest)) === map.id && s.cell === index);
     const team = spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) : null;
@@ -891,6 +913,45 @@ function cellTipLines(contest, map, index, cell) {
 
 function findProblem(index, type) {
   return state.problems.find((p) => p.index === index && p.type === type) || null;
+}
+
+function appendOwnerDots(button, contest, claims, mineId) {
+  const row = document.createElement("span");
+  row.className = "cell-owner-row";
+  row.style.position = "absolute";
+  row.style.inset = "0";
+  row.style.display = "flex";
+  row.style.alignItems = "center";
+  row.style.justifyContent = "center";
+  row.style.gap = "2px";
+  row.style.pointerEvents = "none";
+  const shown = claims.slice(0, 4);
+  for (const claim of shown) {
+    const owner = (contest.teams || []).find((t) => t.id === claim.teamId);
+    if (!owner) continue;
+    const dot = el("span", "cell-team-dot");
+    const size = shown.length > 1 ? "34%" : `${DOT_DIAMETER_PCT}%`;
+    dot.style.position = "relative";
+    dot.style.width = size;
+    dot.style.height = size;
+    dot.style.borderRadius = "50%";
+    dot.style.background = teamColor(contest, owner.id);
+    dot.style.border = owner.id === mineId ? "2px solid rgba(255,255,255,0.95)" : "1.5px solid rgba(255,255,255,0.7)";
+    dot.style.display = "flex";
+    dot.style.alignItems = "center";
+    dot.style.justifyContent = "center";
+    dot.style.boxSizing = "border-box";
+    dot.style.fontFamily = '"Share Tech Mono", monospace';
+    dot.style.fontWeight = "700";
+    dot.style.lineHeight = "1";
+    dot.style.color = "#ffffff";
+    dot.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
+    dot.style.overflow = "hidden";
+    dot.textContent = teamShort(owner.name).slice(0, shown.length > 1 ? 1 : 3).toUpperCase();
+    dot.title = owner.name;
+    row.append(dot);
+  }
+  button.append(row);
 }
 
 function ownerAt(contest, mapId, index, cell) {
@@ -978,8 +1039,9 @@ async function onGridClick(event) {
     return;
   }
   if (cell?.kind === "problem" && phase === "live" && !isFrozen(contest, maps)) {
-    const claim = (contest.claims || []).some((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
-    if (claim || !adjacentToTeam(map, contest, team.id, index)) return;
+    const mine = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
+    const mineDone = Boolean(mine && mine.complete !== false);
+    if (mineDone || (!mine && !adjacentToTeam(map, contest, team.id, index))) return;
     if (answerOpenMode() === "newtab") {
       const url = new URL("/answer.html", location.origin);
       url.searchParams.set("contest", contest.id);
@@ -1000,8 +1062,9 @@ let promptRequest = 0;
 async function showProblem(contest, map, phase) {
   const team = teamForUser(contest);
   const cell = map.cells[state.selectedCell];
-  const claim = (contest.claims || []).find((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
-  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !claim && adjacentToTeam(map, contest, team.id, state.selectedCell);
+  const claim = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
+  const mineDone = Boolean(claim && claim.complete !== false);
+  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !mineDone && (Boolean(claim) || adjacentToTeam(map, contest, team.id, state.selectedCell));
   const panel = document.querySelector("#student-problem");
   const form = document.querySelector("#student-answer-form");
   if (!playable) { panel.hidden = true; form.hidden = true; return; }
@@ -1045,7 +1108,8 @@ async function showProblem(contest, map, phase) {
     }
   }
   if (request !== promptRequest) return;
-  renderPlayParts(parts || []);
+  const solved = new Set(Array.isArray(claim?.solvedParts) ? claim.solvedParts : []);
+  renderPlayParts(parts || [], solved);
   statement.render(prompt.trim() ? prompt : ((parts && parts.length) ? "" : "This problem has no text yet."), tag.textContent);
   const focus = (parts && parts.length)
     ? document.querySelector("#student-answer-parts [data-part-answer]")
@@ -1053,7 +1117,7 @@ async function showProblem(contest, map, phase) {
   if (focus && !focus.readOnly) focus.focus();
 }
 
-function renderPlayParts(parts) {
+function renderPlayParts(parts, solved = new Set()) {
   const host = document.querySelector("#student-answer-parts");
   const single = document.querySelector("#single-answer-field");
   if (!host || !single) return;
@@ -1062,6 +1126,8 @@ function renderPlayParts(parts) {
   host.hidden = !multi;
   single.hidden = multi;
   parts.forEach((part, index) => {
+    const done = solved.has(index);
+    const points = Number.isInteger(part?.score) ? part.score : 1;
     const block = document.createElement("div");
     block.className = "problem-part";
     const line = document.createElement("div");
@@ -1071,6 +1137,10 @@ function renderPlayParts(parts) {
     mark.textContent = `(${String.fromCharCode(97 + index)})`;
     const body = document.createElement("div");
     body.className = "problem-part-body";
+    const worth = document.createElement("p");
+    worth.className = "problem-part-worth";
+    worth.textContent = done ? `${points} point${points === 1 ? "" : "s"} · solved` : `${points} point${points === 1 ? "" : "s"}`;
+    body.append(worth);
     if (part?.prompt?.trim()) {
       const desc = document.createElement("div");
       body.append(desc);
@@ -1082,6 +1152,10 @@ function renderPlayParts(parts) {
     field.dataset.partAnswer = String(index);
     field.rows = 3;
     field.maxLength = 5000;
+    if (done) {
+      field.disabled = true;
+      field.placeholder = "Solved";
+    }
     label.append(field);
     body.append(label);
     line.append(mark, body);
@@ -1180,30 +1254,34 @@ async function submitAnswer(event) {
   const partInputs = [...document.querySelectorAll("#student-answer-parts [data-part-answer]")];
   const answers = partInputs.length ? partInputs.map((input) => input.value) : null;
   const answer = answers ? answers.join("\n") : document.querySelector("#student-answer").value;
-  if (answers && answers.some((value) => !value.trim())) {
+  if (answers && !answers.some((value) => value.trim())) {
     submit.dataset.busy = "";
     submit.disabled = false;
     submit.textContent = label;
     errorEl.hidden = false;
-    errorEl.textContent = "Answer every part.";
+    errorEl.textContent = "Answer at least one part.";
     return;
   }
 
   const prevClaims = (contest.claims || []).slice();
-  const pending = { cell, teamId: team.id, solvedBy: getSession()?.user?.username, solvedAt: Date.now(), pending: true };
-  contest.claims = prevClaims.filter((c) => c.cell !== cell).concat(pending);
+  const pending = { mapId: map.id, cell, teamId: team.id, solvedBy: getSession()?.user?.username, solvedAt: Date.now(), pending: true, complete: false };
+  contest.claims = prevClaims.filter((c) => !(c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === cell)).concat(pending);
   render();
 
   let failure = "";
+  let partialMessage = "";
   try {
     const data = await api.solve(contest.id, cell, answer, map.id, answers);
     applyPlayState(data);
     publishContestPatch(contest.id, data.contest, data.serverNow);
+    if (data.complete === false) {
+      partialMessage = data.message || "Part recorded. The other parts are still open.";
+    } else {
     document.querySelector("#student-answer").value = "";
     document.querySelector("#student-answer-form").hidden = true;
     const success = document.querySelector("#student-answer-success");
     success.hidden = false;
-    success.textContent = "Answer accepted. Close this problem to continue.";
+    success.textContent = data.message || "Answer accepted. Close this problem to continue.";
 
     // ── SHOW POP-UP ON SUCCESS ──────────────────────────────────────
     var overlay = document.createElement("div");
@@ -1283,7 +1361,7 @@ async function submitAnswer(event) {
       img.style.display = "block";
     }
     // ────────────────────────────────────────────────────────────────
-
+    }
   } catch (err) {
     contest.claims = prevClaims;
     if (err.data?.contest) {
@@ -1295,6 +1373,13 @@ async function submitAnswer(event) {
   submit.dataset.busy = "";
   submit.disabled = false; submit.textContent = label;
   render();
+  if (partialMessage) {
+    showProblem(state.contest, map, contestPhase(state.contest));
+    const success = document.querySelector("#student-answer-success");
+    success.hidden = false;
+    success.textContent = partialMessage;
+    showPageToast(partialMessage, "ok");
+  }
   if (failure) {
     errorEl.hidden = false;
     errorEl.textContent = failure;

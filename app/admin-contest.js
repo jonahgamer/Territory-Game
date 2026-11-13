@@ -1,14 +1,14 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=part-score";
 import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js?v=part-score";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
@@ -595,7 +595,7 @@ function buildLeaderboard(contest) {
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
-      score += problemScore(p);
+      score += Number.isInteger(claim.score) ? claim.score : problemScore(p);
       solved += 1;
     }
     return { teamId: team.id, name: team.name, score, solved, territory };
@@ -625,13 +625,17 @@ function renderBoard() {
       button.className = cellClassName(cell, findBoardProblem, "grid-cell");
       const label = teleportLabel(state.current, map.id, index);
       if (!(mapBackdrop(map) === "photo" && cell?.kind === "problem")) fillCellLabel(button, cell, label);
-      const owner = ownerAt(contest, map.id, index, cell);
-      if (owner) {
+      const owners = cell?.kind === "problem"
+        ? (contest.claims || []).filter((c) => (c.mapId || primaryMapId(contest)) === map.id && c.cell === index).map((c) => (contest.teams || []).find((t) => t.id === c.teamId)).filter(Boolean)
+        : [];
+      const owner = owners.length ? null : ownerAt(contest, map.id, index, cell);
+      const shown = owners.length ? owners : (owner ? [owner] : []);
+      if (shown.length) {
         button.classList.add("owned");
-        const color = teamColor(state.current, owner.id);
+        const color = teamColor(state.current, shown[0].id);
         button.style.setProperty("--team", color);
-        const mark = el("span", "cell-owner", teamShort(owner.name));
-        mark.title = owner.name;
+        const mark = el("span", "cell-owner", shown.map((item) => teamShort(item.name)).join(" "));
+        mark.title = shown.map((item) => item.name).join(", ");
         mark.style.color = color;
         button.append(mark);
       }

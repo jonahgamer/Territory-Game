@@ -1064,6 +1064,16 @@ button[type="submit"],
   padding-top: 0.15em;
 }
 
+.problem-part-worth {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.problem-part-score {
+  width: 5.5rem;
+}
+
 .problem-part-body {
   display: grid;
   gap: 8px;
