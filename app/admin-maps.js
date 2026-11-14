@@ -1,15 +1,11 @@
 import { requireAdmin } from "../shared/session.js";
 import { initNav } from "../shared/nav.js";
-import { bindToastClose, showPageToast } from "../shared/toast.js";
+import { bindToastClose } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
-import { api } from "../shared/api.js?v=page-data";
 import { el, renderList } from "../shared/dom.js";
-import { MIN_SIZE, MAX_SIZE } from "../shared/constants.js";
-import { mapMode, emptyCells } from "../shared/map-render.js";
+import { mapMode } from "../shared/map-render.js";
 
-
-
-let state = { maps: [], revisions: { maps: 0 }, newMode: "official" };
+let state = { maps: [], revisions: { maps: 0 }, listMode: "official" };
 
 async function run() {
   try {
@@ -26,28 +22,28 @@ async function run() {
   document.querySelector("#map-mode-choices")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-map-mode]");
     if (!btn) return;
-    state.newMode = btn.dataset.mapMode === "testing" ? "testing" : "official";
+    state.listMode = btn.dataset.mapMode === "testing" ? "testing" : "official";
     renderMode();
     renderList_();
   });
-
-  document.querySelector("#create-map-form")?.addEventListener("submit", onCreateMap);
 }
 
 function renderMode() {
   for (const btn of document.querySelectorAll("[data-map-mode]")) {
-    btn.setAttribute("aria-pressed", String(btn.dataset.mapMode === state.newMode));
+    btn.setAttribute("aria-pressed", String(btn.dataset.mapMode === state.listMode));
   }
+  const link = document.querySelector("#create-map-link");
+  if (link) link.href = `/admin/map-create.html?mode=${state.listMode}`;
 }
 
 function renderList_() {
-  const group = state.maps.filter((m) => mapMode(m) === state.newMode);
+  const group = state.maps.filter((m) => mapMode(m) === state.listMode);
   const empty = document.querySelector("#map-empty");
   const list = document.querySelector("#map-list");
   if (!empty || !list) return;
   empty.hidden = group.length > 0;
   empty.textContent = state.maps.length === 0 ? "No maps yet."
-    : state.newMode === "testing" ? "No testing maps yet." : "No official maps yet.";
+    : state.listMode === "testing" ? "No testing maps yet." : "No official maps yet.";
   list.hidden = group.length === 0;
   renderList(list, group, (map) => {
     const item = el("li");
@@ -83,52 +79,6 @@ function createPreview(map) {
   return preview;
 }
 
-async function onCreateMap(event) {
-  event.preventDefault();
-  const name = document.querySelector("#map-name").value.trim();
-  const cols = Number(document.querySelector("#map-cols").value);
-  const rows = Number(document.querySelector("#map-rows").value);
-  const formError = document.querySelector("#map-form-error");
-
-  if (!name || name.length > 60) {
-    formError.hidden = false;
-    formError.textContent = "Give the map a name (1–60 characters).";
-    return;
-  }
-  if (!Number.isInteger(cols) || cols < MIN_SIZE || cols > MAX_SIZE
-    || !Number.isInteger(rows) || rows < MIN_SIZE || rows > MAX_SIZE) {
-    formError.hidden = false;
-    formError.textContent = `Width and height must be whole numbers from ${MIN_SIZE} to ${MAX_SIZE}.`;
-    return;
-  }
-  formError.hidden = true;
-
-  const newMap = {
-    id: crypto.randomUUID(),
-    name,
-    cols,
-    rows,
-    cells: emptyCells(cols * rows),
-    mode: state.newMode,
-    backdrop: "terrain",
-    photo: "",
-  };
-
-  state.maps.unshift(newMap);
-  renderList_();
-
-  try {
-    const data = await api.saveMap(newMap, state.revisions.maps);
-    state.revisions.maps = data.revision;
-    showPageToast(`Map ${name} created.`, "ok");
-    location.assign(`/admin/map-editor.html?map=${encodeURIComponent(newMap.id)}`);
-  } catch (err) {
-    state.maps = state.maps.filter((m) => m.id !== newMap.id);
-    renderList_();
-    formError.hidden = false;
-    formError.textContent = err.message || "Could not save the new map.";
-  }
-}
 if (requireAdmin()) {
   initNav("maps");
   bindToastClose();

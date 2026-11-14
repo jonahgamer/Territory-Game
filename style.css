@@ -585,7 +585,7 @@ button[type="submit"],
   display: grid;
   gap: 6px;
   margin-top: 16px;
-  width: fit-content;
+  width: min(48rem, 100%);
   font-family: var(--font-ui);
   font-size: 13px;
   letter-spacing: 0.06em;
@@ -593,8 +593,10 @@ button[type="submit"],
   color: var(--muted);
 }
 
-.map-name-field input {
-  width: min(16rem, 100%);
+.map-name-field input,
+.create-map input.map-name-input {
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid var(--line);
   background: rgba(4, 12, 22, 0.85);
@@ -603,6 +605,25 @@ button[type="submit"],
   font-size: 16px;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.create-map-page {
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: none;
+}
+
+.create-map-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+}
+
+a.create-map-link {
+  display: inline-block;
+  margin-top: 18px;
+  text-decoration: none;
 }
 
 .map-preview {

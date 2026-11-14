@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=map-name" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -33,20 +33,14 @@
       <p id="load-error" class="form-error" hidden></p>
       <p class="eyebrow">Admin</p>
       <h1>Maps</h1>
-      <p class="lead">Create maps, paint problems, obstacles, and spawn points.</p>
+      <p class="lead">Open a map to paint problems, obstacles, and spawn points.</p>
 
       <div class="kind-choices" id="map-mode-choices" role="group" aria-label="Map mode">
         <button type="button" data-map-mode="official" aria-pressed="true">Official</button>
         <button type="button" data-map-mode="testing" aria-pressed="false">Testing</button>
       </div>
 
-      <form id="create-map-form" class="create-map">
-        <label>Name <input id="map-name" type="text" maxlength="60" required /></label>
-        <label>Width <input id="map-cols" type="number" min="1" max="40" value="8" required /></label>
-        <label>Height <input id="map-rows" type="number" min="1" max="40" value="8" required /></label>
-        <button type="submit">Create map</button>
-        <p id="map-form-error" class="form-error" hidden></p>
-      </form>
+      <a class="add-problem create-map-link" id="create-map-link" href="/admin/map-create.html">Create map</a>
 
       <p id="map-empty">No maps yet.</p>
       <ul id="map-list" class="map-list" hidden></ul>
@@ -56,6 +50,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-maps.js?v=page-data"></script>
+  <script type="module" src="/app/admin-maps.js?v=map-name"></script>
 </body>
 </html>
