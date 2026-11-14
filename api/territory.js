@@ -147,7 +147,7 @@ function normalizeMap(v) {
     cells,
     mode: v.mode === 'testing' ? 'testing' : 'official',
     backdrop,
-    photo: backdrop === 'photo' ? photo : '',
+    photo,
   };
 }
 
@@ -2033,7 +2033,7 @@ async function pageRevisions(db) {
   return revisions;
 }
 
-function pageMap(map, withCells) {
+function pageMap(map, withCells, options = {}) {
   const cells = Array.isArray(map?.cells) ? map.cells : [];
   const view = {
     id: map.id,
@@ -2047,8 +2047,9 @@ function pageMap(map, withCells) {
   };
   if (!withCells) return view;
   view.cells = cells;
-  view.backdrop = map.backdrop === 'photo' && typeof map.photo === 'string' && map.photo ? 'photo' : 'terrain';
-  view.photo = view.backdrop === 'photo' ? map.photo : '';
+  const photo = cleanMapPhoto(map.photo);
+  view.backdrop = map.backdrop === 'photo' && photo ? 'photo' : 'terrain';
+  view.photo = view.backdrop === 'photo' || options.keepPhoto ? photo : '';
   return view;
 }
 
@@ -2224,7 +2225,7 @@ async function handlePageMap(req, res, db, user) {
   return res.status(200).json({
     success: true,
     user: pageUser(user),
-    map: pageMap(map, true),
+    map: pageMap(map, true, { keepPhoto: true }),
     problems: problems.map(problemStub),
     reserved: cellIndex.reserved,
     revisions,

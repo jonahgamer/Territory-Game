@@ -3247,8 +3247,65 @@ a.create-map-link {
   color: var(--cyan);
 }
 
-.map-backdrop-choices {
+.map-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.map-view-bar .kind-choices {
   margin: 0;
+}
+
+.difficulty-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.1rem;
+  margin-top: 14px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.difficulty-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.difficulty-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+
+#editor-grid .grid-cell.difficulty-cell {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.cell-face {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cell-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.58;
+  pointer-events: none;
+  background-repeat: no-repeat;
 }
 
 .map-photo-field {

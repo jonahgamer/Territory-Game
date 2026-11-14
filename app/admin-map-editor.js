@@ -4,14 +4,15 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE } from "../shared/constants.js";
-import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto, resizeMapCells, cellsOutsideResize } from "../shared/map-render.js?v=map-size";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE, CELL_SIZE } from "../shared/constants.js";
+import { typeInfo, problemDifficulty } from "../shared/difficulty.js";
+import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, photoCover, readMapPhoto, resizeMapCells, cellsOutsideResize } from "../shared/map-render.js?v=map-views";
+import { DIFFICULTY_LEGEND, difficultyCellPaint, difficultyTierValues, rgbCss } from "../shared/map-difficulty.js?v=map-views";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js?v=page-data";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
-const mapId = params.get("map");
+const mapId = params.get("map") || params.get("id");
 
 const mapEl = document.querySelector("#editor-grid");
 const titleEl = document.querySelector("#editor-title");
@@ -26,6 +27,7 @@ const deleteButton = document.querySelector("#delete-open-map");
 const state = {
   maps: [], problems: [], reserved: [], revisions: { maps: 0, problems: 0 },
   current: null, dirty: false,
+  view: params.get("view") === "difficulty" ? "difficulty" : "basic",
   paintKind: "problem",
   placeType: "math",
   placeMode: "manual",
@@ -50,7 +52,7 @@ async function run() {
   syncSizeInputs();
   renderMapCounts(countsEl, state.current);
   renderMode();
-  renderBackdrop();
+  renderView();
   chooseTool("problem");
   renderGrid();
   if (state.current.mode === "testing") {
@@ -65,19 +67,35 @@ function bindEvents() {
     const btn = event.target.closest("[data-tool]");
     if (btn) chooseTool(btn.dataset.tool);
   });
-  document.querySelector("#map-backdrop-choices")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-backdrop]");
-    if (!btn || !state.current) return;
-    const next = btn.dataset.backdrop === "photo" ? "photo" : "terrain";
-    if (next === "terrain") {
-      if (mapBackdrop(state.current) === "terrain" && !state.current.photo) return;
+  document.querySelector("#map-view-choices")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-map-view]");
+    if (!btn) return;
+    state.view = btn.dataset.mapView === "difficulty" ? "difficulty" : "basic";
+    const next = new URLSearchParams(location.search);
+    next.set("view", state.view);
+    history.replaceState(null, "", `${location.pathname}?${next.toString()}`);
+    renderView();
+    renderGrid();
+  });
+  document.querySelector("#map-photo-toggle")?.addEventListener("click", () => {
+    if (!state.current) return;
+    if (mapBackdrop(state.current) === "photo") {
       state.current.backdrop = "terrain";
-      state.current.photo = "";
       markDirty();
-      renderBackdrop();
+      renderView();
       renderGrid();
       return;
     }
+    if (!state.current.photo) {
+      document.querySelector("#map-photo-input")?.click();
+      return;
+    }
+    state.current.backdrop = "photo";
+    markDirty();
+    renderView();
+    renderGrid();
+  });
+  document.querySelector("#map-photo-change")?.addEventListener("click", () => {
     document.querySelector("#map-photo-input")?.click();
   });
   document.querySelector("#map-photo-input")?.addEventListener("change", async (event) => {
@@ -88,7 +106,7 @@ function bindEvents() {
       state.current.photo = await readMapPhoto(file);
       state.current.backdrop = "photo";
       markDirty();
-      renderBackdrop();
+      renderView();
       renderGrid();
     } catch (error) {
       showPageToast(error.message || "That photo could not be used.", "warn");
@@ -212,21 +230,48 @@ function renderPlaceMode() {
   document.querySelector("#place-range-field").hidden = state.placePickSource !== "range";
 }
 
-function renderBackdrop() {
-  const photo = mapBackdrop(state.current) === "photo";
-  for (const btn of document.querySelectorAll("[data-backdrop]")) {
-    btn.setAttribute("aria-pressed", String((btn.dataset.backdrop === "photo") === photo));
+function renderView() {
+  for (const btn of document.querySelectorAll("[data-map-view]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.mapView === state.view));
   }
-  const field = document.querySelector("#map-photo-field");
-  if (field) field.hidden = !photo;
+  const photoOn = mapBackdrop(state.current) === "photo";
+  document.querySelector("#map-photo-toggle")?.setAttribute("aria-pressed", String(photoOn));
+  const change = document.querySelector("#map-photo-change");
+  if (change) change.hidden = !state.current?.photo;
+  const legend = document.querySelector("#difficulty-legend");
+  if (!legend) return;
+  legend.hidden = state.view !== "difficulty";
+  if (state.view !== "difficulty" || legend.childElementCount) return;
+  legend.replaceChildren();
+  for (const [label, rgb] of DIFFICULTY_LEGEND) {
+    const item = document.createElement("span");
+    const swatch = document.createElement("span");
+    swatch.className = "difficulty-swatch";
+    swatch.style.background = rgbCss(rgb);
+    item.append(swatch, document.createTextNode(label));
+    legend.append(item);
+  }
 }
 
-function applyCellFace(button, cell) {
-  if (mapBackdrop(state.current) === "photo" && cell?.kind === "problem") {
-    button.replaceChildren();
-    return;
+let tierValues = [];
+
+function applyCellFace(button, cell, index) {
+  button.className = state.view === "difficulty" ? "grid-cell difficulty-cell" : cellClassName(cell, findProblem, "grid-cell");
+  button.style.background = "";
+  button.style.color = "";
+  button.style.textShadow = "";
+  const face = document.createElement("span");
+  face.className = "cell-face";
+  if (state.view === "difficulty") {
+    const paint = difficultyCellPaint(state.current, index, cell, tierValues, findProblem);
+    button.style.background = paint.background;
+    button.style.color = paint.color;
+    button.style.textShadow = paint.color === "#111111" ? "none" : "0 1px 2px rgba(0,0,0,0.55)";
+    face.textContent = paint.text;
+  } else {
+    fillCellLabel(face, cell);
   }
-  fillCellLabel(button, cell);
+  button.replaceChildren(face);
 }
 
 function syncSizeInputs() {
@@ -273,6 +318,7 @@ function applySize() {
 
 function renderGrid() {
   const map = state.current;
+  tierValues = state.view === "difficulty" ? difficultyTierValues(map, findProblem) : [];
   mapEl.dataset.cols = String(map.cols);
   mapEl.dataset.rows = String(map.rows);
   layoutMapGrid(mapEl, map.cols, map.rows);
@@ -281,15 +327,66 @@ function renderGrid() {
     if (!cell) return;
     const row = Math.floor(index / map.cols) + 1;
     const column = (index % map.cols) + 1;
-    const button = el("button", cellClassName(cell, findProblem, "grid-cell"));
-    applyCellFace(button, cell);
+    const button = el("button", "grid-cell");
     button.type = "button";
     button.dataset.index = String(index);
+    applyCellFace(button, cell, index);
     button.setAttribute("aria-label", cellLabel(cell, row, column));
     mapEl.append(button);
   });
-  paintPhotoGrid(mapEl, map, findProblem);
+  paintEditorPhoto();
   renderMapCounts(countsEl, map);
+}
+
+let photoLayout = null;
+
+function paintEditorPhoto(onlyIndex) {
+  const map = state.current;
+  const photo = mapBackdrop(map) === "photo" ? map.photo : "";
+  const targets = onlyIndex == null
+    ? [...mapEl.querySelectorAll(".grid-cell")]
+    : [...mapEl.querySelectorAll(`[data-index="${onlyIndex}"]`)];
+  for (const button of targets) button.querySelector(".cell-photo")?.remove();
+  if (!photo) {
+    photoLayout = null;
+    delete mapEl.dataset.photoSrc;
+    return;
+  }
+  const styles = getComputedStyle(mapEl);
+  const cell = parseFloat(styles.getPropertyValue("--cell")) || CELL_SIZE;
+  const gap = parseFloat(styles.columnGap) || 0;
+  if (photoLayout?.photo === photo && photoLayout.cols === map.cols && photoLayout.rows === map.rows && photoLayout.cell === cell) {
+    applyPhotoLayers(targets, photoLayout);
+    return;
+  }
+  const img = new Image();
+  img.onload = () => {
+    if (!mapEl.isConnected || mapBackdrop(state.current) !== "photo" || state.current.photo !== photo) return;
+    const gridW = map.cols * cell + gap * Math.max(0, map.cols - 1);
+    const gridH = map.rows * cell + gap * Math.max(0, map.rows - 1);
+    photoLayout = {
+      photo, cols: map.cols, rows: map.rows, cell, gap,
+      cover: photoCover(img.naturalWidth, img.naturalHeight, gridW, gridH),
+    };
+    applyPhotoLayers([...mapEl.querySelectorAll(".grid-cell")], photoLayout);
+  };
+  mapEl.dataset.photoSrc = photo;
+  img.src = photo;
+}
+
+function applyPhotoLayers(buttons, layout) {
+  for (const button of buttons) {
+    const index = Number(button.dataset.index);
+    if (!Number.isInteger(index) || button.querySelector(".cell-photo")) continue;
+    const layer = document.createElement("span");
+    layer.className = "cell-photo";
+    layer.style.backgroundImage = `url("${layout.photo}")`;
+    layer.style.backgroundSize = `${layout.cover.drawW}px ${layout.cover.drawH}px`;
+    const col = index % layout.cols;
+    const row = Math.floor(index / layout.cols);
+    layer.style.backgroundPosition = `${layout.cover.offsetX - col * (layout.cell + layout.gap)}px ${layout.cover.offsetY - row * (layout.cell + layout.gap)}px`;
+    button.append(layer);
+  }
 }
 
 function findProblem(index, type) {
@@ -303,10 +400,10 @@ function paintCell(index) {
   const cell = map.cells[index];
   const row = Math.floor(index / map.cols) + 1;
   const column = (index % map.cols) + 1;
-  button.className = cellClassName(cell, findProblem, "grid-cell");
-  applyCellFace(button, cell);
+  if (state.view === "difficulty") tierValues = difficultyTierValues(map, findProblem);
+  applyCellFace(button, cell, index);
   button.setAttribute("aria-label", cellLabel(cell, row, column));
-  paintPhotoGrid(mapEl, map, findProblem);
+  paintEditorPhoto(index);
   renderMapCounts(countsEl, map);
 }
 
@@ -515,7 +612,7 @@ async function save() {
           titleEl.textContent = state.current.name;
           nameInput.value = state.current.name;
           syncSizeInputs();
-          renderBackdrop();
+          renderView();
           renderGrid();
         },
         persist: async () => {
