@@ -884,8 +884,8 @@ async function saveCollection(db, name, docs, idOf, expectedRevision) {
 
 async function handleBootstrap(req, res, db, user) {
   const [maps, problems, storedContests, metaDocs] = await Promise.all([
-    db.collection('maps').find({}).toArray(),
-    db.collection('problems').find({}).toArray(),
+    db.collection('maps').find({}, { projection: { photo: 0 } }).toArray(),
+    db.collection('problems').find({}, { projection: { logic: 0, solution: 0 } }).toArray(),
     db.collection('contests').find({}).toArray(),
     db.collection('meta').find({ _id: { $in: ['maps', 'problems', 'contests'] } }).toArray(),
   ]);

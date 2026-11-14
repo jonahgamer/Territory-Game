@@ -11,13 +11,7 @@ npm run dev
 
 The dev server loads `.env`, serves the project root, and runs `api/*.js` the way Vercel does. It needs `MONGODB_URI` and `JWT_SECRET`. Node 20+.
 
-The browser bundle `script.js` is generated from the numbered files in `scripts/`. After changing those files run:
-
-```bash
-npm run build:scripts
-```
-
-The split admin pages under `/admin/` use the ES modules in `/app/` and `/shared/` directly.
+Pages under `/admin/` and the student pages load the ES modules in `/app/` and `/shared/` directly. Each page asks the API only for the records that page shows.
 
 ## Database backups
 

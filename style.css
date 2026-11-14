@@ -258,6 +258,10 @@ main {
   overflow-x: auto;
 }
 
+main:has(.editor-layout) {
+  overflow-x: hidden;
+}
+
 main > section {
   min-width: 0;
   max-width: 100%;
@@ -646,17 +650,35 @@ a.create-map-link {
 
 .editor-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 17rem;
+  grid-template-columns: minmax(0, 1fr) 22rem;
   gap: 28px;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+}
+
+.editor-board {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.editor-board h1,
+.editor-board .map-counts {
+  max-width: 100%;
 }
 
 .map-settings {
   position: sticky;
   top: 16px;
+  z-index: 3;
+  width: 22rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: end;
   padding: 16px;
   border: 1px solid var(--line);
-  background: rgba(4, 12, 22, 0.72);
+  background: #071018;
 }
 
 .map-settings h2 {
@@ -668,8 +690,17 @@ a.create-map-link {
   color: var(--cyan);
 }
 
-.map-settings .map-name-field {
+.map-settings .map-name-field,
+.map-settings .map-name-field input,
+.map-settings .map-size-controls,
+.map-settings .map-size-controls input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.map-settings .map-name-field {
   margin-top: 0;
 }
 
@@ -1099,6 +1130,12 @@ a.create-map-link {
 .grid-scroll {
   margin-top: 28px;
   overflow: visible;
+}
+
+.editor-board .grid-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
 }
 
 .editor-grid {

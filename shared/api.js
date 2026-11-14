@@ -74,7 +74,6 @@ function authedGet(search) {
 }
 
 export const api = {
-  bootstrap: () => apiCall("bootstrap"),
   page: (action, params = {}) => {
     const search = new URLSearchParams({ action });
     for (const [key, value] of Object.entries(params)) {

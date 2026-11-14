@@ -4,15 +4,7 @@ Puzzle Territory is a Wah Yan College maths-team contest. Teams claim cells on a
 
 ## Where to edit
 
-The browser bundle `script.js` is generated. Change the numbered files in `scripts/`, then run:
-
-```bash
-npm run build:scripts
-```
-
-`scripts/batch-problems.js` is not part of that bundle. `index.html` loads it before `script.js`.
-
-`scripts/01-core.js` currently starts with the generated-file banner. A rebuild will copy that banner into `script.js` again. Do not add a second copy.
+Live pages are one HTML file plus one module in `app/`. Shared helpers live in `shared/`. The server is `api/territory.js`. A page loads only the `page-*` action it needs.
 
 Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the project root, and runs `api/*.js` the way Vercel does. Needs `MONGODB_URI` and `JWT_SECRET`. Node 20+. Do not commit `.env`.
 
@@ -20,26 +12,10 @@ Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the projec
 
 | Path | Role |
 | --- | --- |
-| `index.html`, `style.css` | Main single-page app. Hash routes, listed in `TERRITORY_API.md`. |
-| `scripts/01-core.js` | Constants, DOM lookups, API helper, hash router. |
-| `scripts/02-events.js` | Listeners. Missing nodes are skipped so `/ui2/` can load the same bundle. |
-| `scripts/03-persistence.js` | Debounced saves, revisions, dirty map/problem drafts. |
-| `scripts/03-z-conflict.js` | 409 field-level diff when a save is stale. |
-| `scripts/04-views.js` | Show/hide screens, mobile menu. |
-| `scripts/05-map-crud.js` | Create, rename, delete maps. |
-| `scripts/06-painting.js` | Cell paint, including touch-versus-scroll. |
-| `scripts/07-map-rendering.js` | Grid drawing, pinch zoom. |
-| `scripts/08-place-type.js` | Math / OI / Science / Puzzle while painting. |
-| `scripts/09-problems.js` | Problem list, editor, bulk edit, KaTeX and HTML. |
-| `scripts/10-problem-preview.js` | Admin preview of problem HTML. |
-| `scripts/11-helpers.js` | Shared small helpers. |
-| `scripts/12-session.js` | Admin versus student, team membership. |
-| `scripts/13-contests.js` | Contest schedule, teams, spawn agreement, student play, countdown. |
-| `scripts/14-session-storage.js` | JWT in `localStorage` key `territory-game-session`. |
-| `scripts/15-bootstrap.js` | Old bundle first load. The live split pages call `page-*` actions instead of `bootstrap`. |
-| `login.html`, `login.js` | Sign-in page. |
-| `answer.html`, `answer.js` | One problem in a new tab: `?contest=&cell=`. |
-| `ui2/*.html` | Split admin pages. They load `/script.js` and `/style.css`. Contests is still a dead link. Tutorial is `/ui2/editusers.html#tutorial`. |
+| `admin/*.html`, `index.html`, `play.html`, `answer.html`, `login.html`, `settings.html` | One page each. |
+| `app/*.js` | The module for that page. |
+| `shared/*.js` | API client, session, map drawing, statements, contest data. |
+| `style.css` | Shared styles. |
 | `api/login.js` | `POST /api/login`. |
 | `api/territory.js` | Every other action. |
 | `api/logic.js` | Sandboxed grader. |
@@ -47,7 +23,6 @@ Local site: `npm run dev` (`dev-server.mjs`). It loads `.env`, serves the projec
 | `api/backup.js` | Admin backup tree, manual backup, and full restore. |
 | `api/cron.js` | Vercel Cron full backup endpoint; `CRON_SECRET` required. |
 | `lib/github-backup.js` | GitHub snapshot storage, EJSON round-trip, lock, and restore. |
-| `admin/*.html`, `app/*.js`, `shared/*.js` | Split admin pages and their ES modules. |
 | `tools/seed-map-64spawns.mjs` | Builds a 30×30 practice map. See `tools/README.md`. |
 
 ## Auth and roles

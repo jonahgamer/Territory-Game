@@ -420,12 +420,8 @@ export async function openSaveConflict(options) {
   modal.hidden = false;
 
   try {
-    const remote = options.loadRemote
-      ? await options.loadRemote()
-      : await options.api.bootstrap().then((data) => ({
-        items: data?.[options.collection] || [],
-        revision: data?.revisions?.[options.collection],
-      }));
+    if (!options.loadRemote) throw new Error("This page cannot reload that collection.");
+    const remote = await options.loadRemote();
     const remoteItems = clone(remote.items || []);
     const remoteRevision = remote.revision;
     if (!Number.isInteger(remoteRevision)) throw new Error("The server did not return a revision.");
