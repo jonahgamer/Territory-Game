@@ -33,6 +33,7 @@ import { MAX_PROBLEM_SCORE } from '../shared/constants.js';
 import {
   contestMapIds, primaryMapId, placeKey, cleanTeleports, teleportPairAt, teleportOtherEnd,
 } from '../shared/contest-board.js';
+import { shiftedCell } from '../shared/map-render.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -2231,6 +2232,66 @@ async function handlePageMap(req, res, db, user) {
   });
 }
 
+function remapPlaceList(items, contest, mapId, oldCols, oldRows, newCols, newRows) {
+  if (!Array.isArray(items)) return items || [];
+  const fallback = contestMapIds(contest)[0] || '';
+  return items.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const itemMap = typeof item.mapId === 'string' && item.mapId ? item.mapId : fallback;
+    if (itemMap !== mapId) return [item];
+    const cell = shiftedCell(item.cell, oldCols, oldRows, newCols, newRows);
+    if (cell === null) return [];
+    return [{ ...item, mapId, cell }];
+  });
+}
+
+function remapTeleportEnd(end, mapId, oldCols, oldRows, newCols, newRows) {
+  if (!end || end.mapId !== mapId) return end || null;
+  const cell = shiftedCell(end.cell, oldCols, oldRows, newCols, newRows);
+  if (cell === null) return null;
+  return { ...end, cell };
+}
+
+function remapTeleports(pairs, mapId, oldCols, oldRows, newCols, newRows) {
+  if (!Array.isArray(pairs)) return [];
+  return pairs.flatMap((pair) => {
+    if (!pair || typeof pair !== 'object') return [];
+    const a = remapTeleportEnd(pair.a, mapId, oldCols, oldRows, newCols, newRows);
+    const b = remapTeleportEnd(pair.b, mapId, oldCols, oldRows, newCols, newRows);
+    if (!a || !b || (a.mapId === b.mapId && a.cell === b.cell)) return [];
+    return [{ ...pair, a, b }];
+  });
+}
+
+async function remapContestPlaces(db, session, mapId, oldCols, oldRows, newCols, newRows) {
+  const contests = await db.collection('contests').find({
+    $or: [
+      { mapIds: mapId },
+      { mapId },
+      { 'claims.mapId': mapId },
+      { 'spawns.mapId': mapId },
+      { 'spawnVotes.mapId': mapId },
+      { 'spawnChoices.mapId': mapId },
+      { 'teleports.a.mapId': mapId },
+      { 'teleports.b.mapId': mapId },
+    ],
+  }, { session }).toArray();
+  for (const contest of contests) {
+    await db.collection('contests').updateOne(
+      { _id: contest._id },
+      { $set: {
+        claims: remapPlaceList(contest.claims, contest, mapId, oldCols, oldRows, newCols, newRows),
+        spawns: remapPlaceList(contest.spawns, contest, mapId, oldCols, oldRows, newCols, newRows),
+        spawnVotes: remapPlaceList(contest.spawnVotes, contest, mapId, oldCols, oldRows, newCols, newRows),
+        spawnChoices: remapPlaceList(contest.spawnChoices, contest, mapId, oldCols, oldRows, newCols, newRows),
+        teleports: remapTeleports(contest.teleports, mapId, oldCols, oldRows, newCols, newRows),
+        updatedAt: new Date(),
+      } },
+      { session }
+    );
+  }
+}
+
 async function handleSaveMap(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const map = normalizeMap(body.map);
@@ -2244,11 +2305,15 @@ async function handleSaveMap(req, res, db, user, body) {
     await session.withTransaction(async () => {
       const current = await readRevision(db, 'maps', session);
       assertRevision(current, body.revision);
+      const previous = await db.collection('maps').findOne({ id: map.id }, { session });
       await db.collection('maps').updateOne(
         { id: map.id },
         { $set: { ...map, updatedAt: new Date() } },
         { upsert: true, session }
       );
+      if (previous && (previous.cols !== map.cols || previous.rows !== map.rows)) {
+        await remapContestPlaces(db, session, map.id, previous.cols, previous.rows, map.cols, map.rows);
+      }
       revision = await bumpRevision(db, 'maps', session);
     });
   } catch (err) {

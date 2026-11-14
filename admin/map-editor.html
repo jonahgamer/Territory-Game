@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=map-name" />
+  <link rel="stylesheet" href="/style.css?v=map-size" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -49,7 +49,11 @@
       </div>
       <p class="eyebrow">Map editor</p>
       <h1 id="editor-title"></h1>
-      <p class="lead" id="editor-size"></p>
+      <div class="map-size-controls">
+        <label>Width <input id="map-cols-input" type="number" min="1" max="40" /></label>
+        <label>Height <input id="map-rows-input" type="number" min="1" max="40" /></label>
+        <button class="save-changes" id="apply-map-size" type="button">Apply size</button>
+      </div>
 
       <div class="map-counts" id="map-counts"></div>
 
@@ -138,6 +142,6 @@
         : 'map-difficulty-visualise.html';
     })();
   </script>
-  <script type="module" src="/app/admin-map-editor.js?v=mem"></script>
+  <script type="module" src="/app/admin-map-editor.js?v=map-size"></script>
 </body>
 </html>

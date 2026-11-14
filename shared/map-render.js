@@ -161,6 +161,44 @@ export function emptyCells(count) {
   return Array.from({ length: count }, () => ({ kind: "empty" }));
 }
 
+export function shiftedCell(index, oldCols, oldRows, newCols, newRows) {
+  if (!Number.isInteger(index) || index < 0) return null;
+  if (!Number.isInteger(oldCols) || oldCols < 1 || !Number.isInteger(oldRows) || oldRows < 1) return null;
+  if (!Number.isInteger(newCols) || newCols < 1 || !Number.isInteger(newRows) || newRows < 1) return null;
+  const row = Math.floor(index / oldCols);
+  const column = index % oldCols;
+  if (row >= oldRows || row >= newRows || column >= newCols) return null;
+  return row * newCols + column;
+}
+
+export function resizeMapCells(cells, oldCols, oldRows, newCols, newRows) {
+  const next = emptyCells(newCols * newRows);
+  const source = Array.isArray(cells) ? cells : [];
+  for (let row = 0; row < oldRows; row += 1) {
+    for (let column = 0; column < oldCols; column += 1) {
+      const moved = shiftedCell(row * oldCols + column, oldCols, oldRows, newCols, newRows);
+      if (moved === null) continue;
+      const cell = source[row * oldCols + column];
+      next[moved] = cell && typeof cell === "object" ? cell : { kind: "empty" };
+    }
+  }
+  return next;
+}
+
+export function cellsOutsideResize(cells, oldCols, oldRows, newCols, newRows) {
+  const lost = [];
+  const source = Array.isArray(cells) ? cells : [];
+  for (let row = 0; row < oldRows; row += 1) {
+    for (let column = 0; column < oldCols; column += 1) {
+      if (shiftedCell(row * oldCols + column, oldCols, oldRows, newCols, newRows) !== null) continue;
+      const cell = source[row * oldCols + column];
+      if (!cell || cell.kind === "empty") continue;
+      lost.push({ row: row + 1, column: column + 1, cell });
+    }
+  }
+  return lost;
+}
+
 export function mapBackdrop(map) {
   return map?.backdrop === "photo" && typeof map.photo === "string" && map.photo.startsWith("data:image/")
     ? "photo"

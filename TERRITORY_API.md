@@ -60,7 +60,7 @@ The old single-page bundle still uses this. The split pages do not. Each of thos
 | `page-answer&contest=&map=&cell=` | Answer tab | That problem's prompt and the contest clock and energy |
 | `page-credits` | Credits | Version notes |
 
-`save-map`, `delete-map`, `save-problem`, `add-problems`, `delete-problems`, `move-problem`, `save-contest`, and `delete-contest` write one record, or the listed problems, and leave the rest of the collection in place. `delete-problems` and `move-problem` also update the map cells that use those problems. A stale `revision` is still a 409.
+`save-map`, `delete-map`, `save-problem`, `add-problems`, `delete-problems`, `move-problem`, `save-contest`, and `delete-contest` write one record, or the listed problems, and leave the rest of the collection in place. `delete-problems` and `move-problem` also update the map cells that use those problems. When `save-map` changes the width or height, contest claims, spawns, spawn votes, spawn choices, and teleport ends on that map stay on the same row and column. Places that fall outside the new size are removed. A stale `revision` is still a 409.
 
 `bootstrap` returns the signed-in user, maps, problems, and contests.
 

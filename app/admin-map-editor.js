@@ -4,9 +4,9 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
-import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto } from "../shared/map-render.js?v=mem";
+import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, paintPhotoGrid, readMapPhoto, resizeMapCells, cellsOutsideResize } from "../shared/map-render.js?v=map-size";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js?v=page-data";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -15,7 +15,8 @@ const mapId = params.get("map");
 
 const mapEl = document.querySelector("#editor-grid");
 const titleEl = document.querySelector("#editor-title");
-const sizeEl = document.querySelector("#editor-size");
+const colsInput = document.querySelector("#map-cols-input");
+const rowsInput = document.querySelector("#map-rows-input");
 const countsEl = document.querySelector("#map-counts");
 const nameInput = document.querySelector("#map-name-input");
 const saveButton = document.querySelector("#save-map-button");
@@ -46,7 +47,7 @@ async function run() {
 
   nameInput.value = state.current.name;
   titleEl.textContent = state.current.name;
-  sizeEl.textContent = `${state.current.cols} × ${state.current.rows}`;
+  syncSizeInputs();
   renderMapCounts(countsEl, state.current);
   renderMode();
   renderBackdrop();
@@ -147,6 +148,7 @@ function bindEvents() {
     state.placePickSource = s;
     renderPlaceMode();
   });
+  document.querySelector("#apply-map-size")?.addEventListener("click", applySize);
   nameInput?.addEventListener("input", () => {
     const name = nameInput.value.trim();
     if (!name || name.length > 60) return;
@@ -225,6 +227,48 @@ function applyCellFace(button, cell) {
     return;
   }
   fillCellLabel(button, cell);
+}
+
+function syncSizeInputs() {
+  if (!state.current) return;
+  if (colsInput) colsInput.value = String(state.current.cols);
+  if (rowsInput) rowsInput.value = String(state.current.rows);
+}
+
+function readSize(input) {
+  const value = Number(input?.value);
+  if (!Number.isInteger(value) || value < MIN_SIZE || value > MAX_SIZE) return null;
+  return value;
+}
+
+function applySize() {
+  const map = state.current;
+  if (!map) return;
+  const cols = readSize(colsInput);
+  const rows = readSize(rowsInput);
+  if (cols === null || rows === null) {
+    showPageToast(`Width and height must be whole numbers from ${MIN_SIZE} to ${MAX_SIZE}.`, "warn");
+    syncSizeInputs();
+    return;
+  }
+  if (cols === map.cols && rows === map.rows) return;
+  const lost = cellsOutsideResize(map.cells, map.cols, map.rows, cols, rows);
+  if (lost.length) {
+    const lines = lost.slice(0, 8).map((item) => cellLabel(item.cell, item.row, item.column));
+    const extra = lost.length - lines.length;
+    const more = extra > 0 ? `\n…and ${extra} more.` : "";
+    const noun = lost.length === 1 ? "cell" : "cells";
+    const ok = window.confirm(`Shrinking removes ${lost.length} ${noun}:\n${lines.join("\n")}${more}\n\nShrink anyway?`);
+    if (!ok) {
+      syncSizeInputs();
+      return;
+    }
+  }
+  map.cells = resizeMapCells(map.cells, map.cols, map.rows, cols, rows);
+  map.cols = cols;
+  map.rows = rows;
+  markDirty();
+  renderGrid();
 }
 
 function renderGrid() {
@@ -470,6 +514,7 @@ async function save() {
           updateSaveButton();
           titleEl.textContent = state.current.name;
           nameInput.value = state.current.name;
+          syncSizeInputs();
           renderBackdrop();
           renderGrid();
         },
