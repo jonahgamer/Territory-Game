@@ -258,10 +258,6 @@ main {
   overflow-x: auto;
 }
 
-main:has(.editor-layout) {
-  overflow-x: hidden;
-}
-
 main > section {
   min-width: 0;
   max-width: 100%;
@@ -648,65 +644,38 @@ a.create-map-link {
   color: var(--muted);
 }
 
-.editor-layout {
+.editor-toolbar-stack {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
-  gap: 28px;
-  align-items: start;
-  width: 100%;
-  max-width: 100%;
+  justify-items: end;
+  gap: 10px;
+  margin-left: auto;
 }
 
-.editor-board {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.editor-board h1,
-.editor-board .map-counts {
-  max-width: 100%;
-}
-
-.map-settings {
-  position: sticky;
-  top: 16px;
-  z-index: 3;
-  width: 22rem;
-  max-width: 100%;
-  box-sizing: border-box;
-  justify-self: end;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: #071018;
-}
-
-.map-settings h2 {
-  margin: 0 0 14px;
+.map-toolbar-name {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
   font-family: var(--font-ui);
-  font-size: 14px;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--cyan);
 }
 
-.map-settings .map-name-field,
-.map-settings .map-name-field input,
-.map-settings .map-size-controls,
-.map-settings .map-size-controls input {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
+.map-toolbar-name input {
+  width: min(28rem, 46vw);
   box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.map-settings .map-name-field {
+.map-size-toolbar {
   margin-top: 0;
-}
-
-.map-settings .map-size-controls {
-  display: grid;
-  margin-top: 16px;
 }
 
 .editor-toolbar #save-map-button,
@@ -1130,12 +1099,6 @@ a.create-map-link {
 .grid-scroll {
   margin-top: 28px;
   overflow: visible;
-}
-
-.editor-board .grid-scroll {
-  width: 100%;
-  max-width: 100%;
-  overflow: auto;
 }
 
 .editor-grid {
@@ -2567,7 +2530,7 @@ a.create-map-link {
 .editor-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
 }
 
@@ -2931,15 +2894,6 @@ a.create-map-link {
 }
 
 @media (max-width: 1100px) {
-  .editor-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .map-settings {
-    position: static;
-    order: -1;
-  }
-
   .account-field input,
   .account-search input,
   .problem-search input {
@@ -3563,7 +3517,7 @@ a.create-map-link {
 /* Toolbar needs to lay out the back link + button side by side */
 .editor-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
 }
