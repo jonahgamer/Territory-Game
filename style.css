@@ -644,6 +644,95 @@ a.create-map-link {
   color: var(--muted);
 }
 
+.editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 28px;
+  align-items: start;
+}
+
+.map-settings {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.72);
+}
+
+.map-settings h2 {
+  margin: 0 0 14px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.map-settings .map-name-field {
+  width: 100%;
+  margin-top: 0;
+}
+
+.map-settings .map-size-controls {
+  display: grid;
+  margin-top: 16px;
+}
+
+.editor-toolbar #save-map-button,
+.editor-toolbar .delete-map {
+  margin-top: 0;
+}
+
+.map-toolbar-field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-toolbar-field select,
+.map-photo-toggle,
+.map-photo-change,
+.map-photo-hint {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.map-photo-hint {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.map-photo-toggle[aria-pressed="true"] {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #041018;
+}
+
+.edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#editor-grid:not(.is-editing) .grid-cell {
+  cursor: default;
+}
+
 .map-size-controls input {
   width: 7rem;
   box-sizing: border-box;
@@ -1709,7 +1798,9 @@ a.create-map-link {
 }
 
 #problem-no {
-  width: 7rem;
+  width: 9rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
   padding: 8px 10px;
   border: 1px solid var(--line);
   background: rgba(4, 12, 22, 0.85);
@@ -2803,6 +2894,15 @@ a.create-map-link {
 }
 
 @media (max-width: 1100px) {
+  .editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .map-settings {
+    position: static;
+    order: -1;
+  }
+
   .account-field input,
   .account-search input,
   .problem-search input {

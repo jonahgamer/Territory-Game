@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=map-views" />
+  <link rel="stylesheet" href="/style.css?v=map-tools" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -35,23 +35,29 @@
         <a class="back-button" href="/admin/maps.html">Back to maps</a>
         <div class="editor-toolbar-actions">
           <input id="map-photo-input" type="file" accept="image/*" hidden />
+          <label class="map-toolbar-field">View
+            <select id="map-view-select">
+              <option value="basic">Basic</option>
+              <option value="difficulty">Difficulty</option>
+            </select>
+          </label>
+          <button class="map-photo-hint" id="map-photo-empty" type="button">No photo yet</button>
+          <button class="map-photo-toggle" id="map-photo-toggle" type="button" aria-pressed="false" hidden>Photo</button>
+          <button class="map-photo-change" id="map-photo-change" type="button" hidden>Change</button>
+          <label class="edit-toggle"><input id="map-editing" type="checkbox" /> Editing</label>
           <span id="problem-save-state" class="problem-save-state"></span>
           <button class="save-changes" id="save-map-button" type="button" disabled>Save map</button>
           <button class="delete-map" id="delete-open-map" type="button">Delete map</button>
         </div>
       </div>
+      <div class="editor-layout">
+      <div class="editor-board">
       <p class="eyebrow">Map editor</p>
       <h1 id="editor-title"></h1>
-      <div class="map-size-controls">
-        <label>Width <input id="map-cols-input" type="number" min="1" max="40" /></label>
-        <label>Height <input id="map-rows-input" type="number" min="1" max="40" /></label>
-        <button class="save-changes" id="apply-map-size" type="button">Apply size</button>
-      </div>
 
       <div class="map-counts" id="map-counts"></div>
 
-      <label class="map-name-field">Name <input id="map-name-input" type="text" maxlength="60" /></label>
-
+      <div id="map-edit-panel" hidden>
       <div class="kind-choices" id="map-mode-choices" role="group" aria-label="Map mode">
         <button type="button" data-map-mode="official">Official</button>
         <button type="button" data-map-mode="testing">Testing</button>
@@ -73,15 +79,8 @@
           </div>
 
           <div id="place-manual" class="place-types">
-            <div class="kind-choices" id="place-type-choices" role="group" aria-label="Problem type">
-              <button type="button" data-place-type="math" aria-pressed="true">Math</button>
-              <button type="button" data-place-type="oi" aria-pressed="false">OI</button>
-              <button type="button" data-place-type="science" aria-pressed="false">Science</button>
-              <button type="button" data-place-type="puzzle" aria-pressed="false">Puzzle</button>
-              <button type="button" data-place-type="testing" aria-pressed="false" hidden>Testing</button>
-            </div>
             <label id="problem-no-field">Problem no.
-              <input id="problem-no" type="number" min="1" max="99999" />
+              <input id="problem-no" type="text" maxlength="8" placeholder="M26001" spellcheck="false" autocomplete="off" />
             </label>
             <label class="next-number">
               <input id="next-number" type="checkbox" checked /> Increment after each placement
@@ -116,26 +115,28 @@
           </div>
         </div>
       </div>
-
-      <div class="map-view-bar">
-        <div class="kind-choices" id="map-view-choices" role="group" aria-label="Cell view">
-          <button type="button" data-map-view="basic" aria-pressed="true">Basic</button>
-          <button type="button" data-map-view="difficulty" aria-pressed="false">Difficulty</button>
-        </div>
-        <div class="kind-choices" id="map-photo-choices" role="group" aria-label="Photo mode">
-          <button type="button" id="map-photo-toggle" aria-pressed="false">Photo</button>
-        </div>
-        <button class="terrain-view-button" id="map-photo-change" type="button" hidden>Change photo</button>
       </div>
+
       <div id="difficulty-legend" class="difficulty-legend" hidden></div>
 
       <div class="grid-scroll"><div id="editor-grid" class="editor-grid"></div></div>
+      </div>
+      <aside class="map-settings">
+        <h2>Settings</h2>
+        <label class="map-name-field">Name <input id="map-name-input" type="text" maxlength="60" /></label>
+        <div class="map-size-controls">
+          <label>Width <input id="map-cols-input" type="number" min="1" max="40" /></label>
+          <label>Height <input id="map-rows-input" type="number" min="1" max="40" /></label>
+          <button class="save-changes" id="apply-map-size" type="button">Apply size</button>
+        </div>
+      </aside>
+      </div>
     </main>
   </div>
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-map-editor.js?v=map-views"></script>
+  <script type="module" src="/app/admin-map-editor.js?v=map-tools"></script>
 </body>
 </html>

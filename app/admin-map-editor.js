@@ -4,8 +4,8 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE, CELL_SIZE } from "../shared/constants.js";
-import { typeInfo, problemDifficulty } from "../shared/difficulty.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE, CELL_SIZE, PROBLEM_TYPES } from "../shared/constants.js";
+import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";
 import { layoutMapGrid, mapMode, mapBackdrop, cellClassName, fillCellLabel, cellLabel, renderMapCounts, photoCover, readMapPhoto, resizeMapCells, cellsOutsideResize } from "../shared/map-render.js?v=map-views";
 import { DIFFICULTY_LEGEND, difficultyCellPaint, difficultyTierValues, rgbCss } from "../shared/map-difficulty.js?v=map-views";
 import { isSaveConflictActive, openSaveConflict } from "../shared/conflict.js?v=page-data";
@@ -28,8 +28,8 @@ const state = {
   maps: [], problems: [], reserved: [], revisions: { maps: 0, problems: 0 },
   current: null, dirty: false,
   view: params.get("view") === "difficulty" ? "difficulty" : "basic",
+  editing: false,
   paintKind: "problem",
-  placeType: "math",
   placeMode: "manual",
   placePickSource: "random",
   placePickTypes: new Set(["math"]),
@@ -53,11 +53,9 @@ async function run() {
   renderMapCounts(countsEl, state.current);
   renderMode();
   renderView();
+  renderEditing();
   chooseTool("problem");
   renderGrid();
-  if (state.current.mode === "testing") {
-    document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']").forEach((b) => { b.hidden = false; });
-  }
   bindEvents();
   updateSaveButton();
 }
@@ -67,15 +65,20 @@ function bindEvents() {
     const btn = event.target.closest("[data-tool]");
     if (btn) chooseTool(btn.dataset.tool);
   });
-  document.querySelector("#map-view-choices")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-map-view]");
-    if (!btn) return;
-    state.view = btn.dataset.mapView === "difficulty" ? "difficulty" : "basic";
+  document.querySelector("#map-view-select")?.addEventListener("change", (event) => {
+    state.view = event.target.value === "difficulty" ? "difficulty" : "basic";
     const next = new URLSearchParams(location.search);
     next.set("view", state.view);
     history.replaceState(null, "", `${location.pathname}?${next.toString()}`);
     renderView();
     renderGrid();
+  });
+  document.querySelector("#map-editing")?.addEventListener("change", (event) => {
+    state.editing = event.target.checked;
+    renderEditing();
+  });
+  document.querySelector("#map-photo-empty")?.addEventListener("click", () => {
+    document.querySelector("#map-photo-input")?.click();
   });
   document.querySelector("#map-photo-toggle")?.addEventListener("click", () => {
     if (!state.current) return;
@@ -132,17 +135,6 @@ function bindEvents() {
     state.placeMode = btn.dataset.placeMode === "pick" ? "pick" : "manual";
     renderPlaceMode();
   });
-  document.querySelector("#place-type-choices")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-place-type]");
-    if (!btn || !typeInfo(btn.dataset.placeType)) return;
-    if (btn.dataset.placeType === "testing" && mapMode(state.current) !== "testing") return;
-    state.placeType = btn.dataset.placeType;
-    syncPlaceType();
-    const nextInput = document.querySelector("#problem-no");
-    if (nextInput && document.querySelector("#next-number")?.checked) {
-      nextInput.value = String(nextProblemNo(state.placeType) ?? "");
-    }
-  });
   document.querySelector("#place-pick-types")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-pick-type]");
     if (!btn || !typeInfo(btn.dataset.pickType)) return;
@@ -198,17 +190,17 @@ function renderMode() {
 
 function syncPlaceType() {
   const testingMap = mapMode(state.current) === "testing";
-  for (const btn of document.querySelectorAll("[data-place-type='testing'], [data-pick-type='testing']")) {
+  for (const btn of document.querySelectorAll("[data-pick-type='testing']")) {
     btn.hidden = !testingMap;
   }
-  if (!testingMap) {
-    state.placePickTypes.delete("testing");
-    if (state.placeType === "testing") state.placeType = "math";
-  }
-  for (const btn of document.querySelectorAll("[data-place-type]")) {
-    btn.setAttribute("aria-pressed", String(btn.dataset.placeType === state.placeType));
-  }
+  if (!testingMap) state.placePickTypes.delete("testing");
   renderPlaceMode();
+}
+
+function renderEditing() {
+  const panel = document.querySelector("#map-edit-panel");
+  if (panel) panel.hidden = !state.editing;
+  mapEl?.classList.toggle("is-editing", state.editing);
 }
 
 function renderPlaceMode() {
@@ -231,13 +223,19 @@ function renderPlaceMode() {
 }
 
 function renderView() {
-  for (const btn of document.querySelectorAll("[data-map-view]")) {
-    btn.setAttribute("aria-pressed", String(btn.dataset.mapView === state.view));
-  }
+  const viewSelect = document.querySelector("#map-view-select");
+  if (viewSelect) viewSelect.value = state.view;
+  const hasPhoto = Boolean(state.current?.photo);
   const photoOn = mapBackdrop(state.current) === "photo";
-  document.querySelector("#map-photo-toggle")?.setAttribute("aria-pressed", String(photoOn));
+  const empty = document.querySelector("#map-photo-empty");
+  const toggle = document.querySelector("#map-photo-toggle");
+  if (empty) empty.hidden = hasPhoto;
+  if (toggle) {
+    toggle.hidden = !hasPhoto;
+    toggle.setAttribute("aria-pressed", String(photoOn));
+  }
   const change = document.querySelector("#map-photo-change");
-  if (change) change.hidden = !state.current?.photo;
+  if (change) change.hidden = !hasPhoto;
   const legend = document.querySelector("#difficulty-legend");
   if (!legend) return;
   legend.hidden = state.view !== "difficulty";
@@ -431,6 +429,15 @@ function readProblemNo(value) {
   return n;
 }
 
+function readProblemCode(value) {
+  const match = String(value || "").trim().match(/^([MOSPT])(\d+)$/i);
+  if (!match) return null;
+  const type = PROBLEM_TYPES.find((item) => item.tag === match[1].toUpperCase());
+  const index = Number(match[2]);
+  if (!type || !Number.isInteger(index) || index < MIN_PROBLEM_NO || index > MAX_PROBLEM_NO) return null;
+  return { type: type.id, index };
+}
+
 function pickProblemForMap(map) {
   if (state.placePickTypes.size === 0 || state.placePickDifficulties.size === 0) {
     return { error: "Choose at least one type and one difficulty." };
@@ -476,6 +483,7 @@ let strokeCount = 0;
 let pendingProblemOpen = null;
 
 function startPaint(event) {
+  if (!state.editing) return;
   const cell = event.target.closest?.("[data-index]");
   if (!cell) return;
   const index = Number(cell.dataset.index);
@@ -539,8 +547,9 @@ function applyTool(index, mode) {
   }
   if (state.paintKind === "problem") {
     const picked = state.placeMode === "pick" ? pickProblemForMap(map) : null;
-    const problemNo = state.placeMode === "pick" ? picked?.index : readProblemNo(document.querySelector("#problem-no")?.value);
-    const type = state.placeMode === "pick" ? picked?.type : state.placeType;
+    const coded = state.placeMode === "pick" ? null : readProblemCode(document.querySelector("#problem-no")?.value);
+    const problemNo = state.placeMode === "pick" ? picked?.index : coded?.index ?? null;
+    const type = state.placeMode === "pick" ? picked?.type : coded?.type;
     const errorEl = document.querySelector("#problem-no-error");
     if (type === "testing" && mapMode(map) !== "testing") {
       if (errorEl) { errorEl.hidden = false; errorEl.textContent = "Testing problems can only be placed on a testing map."; }
@@ -553,7 +562,7 @@ function applyTool(index, mode) {
       return;
     }
     if (problemNo === null || !type) {
-      if (errorEl) { errorEl.hidden = false; errorEl.textContent = `Problem no. must be ${MIN_PROBLEM_NO}–${MAX_PROBLEM_NO}.`; }
+      if (errorEl) { errorEl.hidden = false; errorEl.textContent = "Type a full problem number, such as M26001."; }
       stopPaint();
       return;
     }
@@ -565,7 +574,7 @@ function applyTool(index, mode) {
     markDirty();
     if (state.placeMode !== "pick" && document.querySelector("#next-number")?.checked && problemNo < MAX_PROBLEM_NO) {
       const nextInput = document.querySelector("#problem-no");
-      if (nextInput) nextInput.value = String(problemNo + 1);
+      if (nextInput) nextInput.value = problemTag(problemNo + 1, type);
     }
     return;
   }
