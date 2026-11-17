@@ -169,6 +169,7 @@ function bindEvents() {
   saveButton?.addEventListener("click", save);
   deleteButton?.addEventListener("click", deleteMap);
   mapEl?.addEventListener("pointerdown", startPaint);
+  mapEl?.addEventListener("contextmenu", eraseProblem);
 }
 
 function chooseTool(kind) {
@@ -484,11 +485,35 @@ let pendingProblemOpen = null;
 
 function startPaint(event) {
   if (!state.editing) return;
+  if (event.button !== 0) return;
   const cell = event.target.closest?.("[data-index]");
-  if (!cell) return;
+  if (!cell || !mapEl.contains(cell)) return;
   const index = Number(cell.dataset.index);
   if (!Number.isInteger(index)) return;
-  if (window.matchMedia("(pointer: coarse)").matches && event.pointerType === "touch") return;
+  if (event.pointerType === "touch") {
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const finish = (up) => {
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+      const dx = up.clientX - startX;
+      const dy = up.clientY - startY;
+      if (dx * dx + dy * dy > 144) return;
+      painting = true;
+      strokeCount = 0;
+      pendingProblemOpen = null;
+      paintedThisStroke = new Set();
+      applyTool(index, "toggle");
+      stopPaint();
+    };
+    const cancel = () => {
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", cancel);
+    return;
+  }
   event.preventDefault();
   painting = true;
   strokeCount = 0;
@@ -498,6 +523,19 @@ function startPaint(event) {
   window.addEventListener("pointerup", stopPaint);
   window.addEventListener("pointercancel", stopPaint);
   applyTool(index, "toggle");
+}
+
+function eraseProblem(event) {
+  if (!state.editing || state.paintKind !== "problem") return;
+  const cell = event.target.closest?.("[data-index]");
+  if (!cell || !mapEl.contains(cell)) return;
+  const index = Number(cell.dataset.index);
+  const stored = state.current?.cells?.[index];
+  if (!stored || stored.kind !== "problem") return;
+  event.preventDefault();
+  state.current.cells[index] = { kind: "empty" };
+  paintCell(index);
+  markDirty();
 }
 
 function continuePaint(event) {

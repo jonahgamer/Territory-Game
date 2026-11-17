@@ -1135,6 +1135,10 @@ a.create-map-link {
   }
 }
 
+#editor-grid.is-editing .grid-cell {
+  touch-action: manipulation;
+}
+
 .grid-cell.student-cell.territory-dot {
   display: grid;
   place-items: center;
