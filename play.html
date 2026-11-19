@@ -91,7 +91,6 @@
             
             <button id="student-problem-close" class="student-problem-close" type="button">Close</button>
             <h2 id="student-problem-tag"></h2>
-
             <form id="student-answer-form" hidden>
               <div id="student-answer-parts" hidden></div>
               <label id="single-answer-field">Answer <input id="student-answer" type="text" maxlength="5000" /></label>
@@ -101,6 +100,7 @@
             </form>
             <p id="student-answer-success" class="status-note" hidden></p>
             <br>
+            <p id="choice-lock-note" class="field-note" hidden></p>
             <div id="student-problem-prompt"></div>
             
           </div>
@@ -114,6 +114,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/student-play.js?v=part-tail"></script>
+  <script type="module" src="/app/student-play.js?v=choice-lock"></script>
 </body>
 </html>

@@ -9,6 +9,7 @@ export function publishContestPatch(contestId, contest, serverNow) {
       serverNow: Number.isFinite(serverNow) ? serverNow : Date.now(),
       energy: contest.energy,
       claims: contest.claims,
+      locks: contest.locks,
       spawns: contest.spawns,
       spawnResolved: contest.spawnResolved,
       resolvedTeams: contest.resolvedTeams,

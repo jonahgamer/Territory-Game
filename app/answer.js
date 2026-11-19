@@ -1,7 +1,8 @@
 import { readStoredSession } from "../shared/session.js";
 import { api } from "../shared/api.js?v=parts";
 import { loadPage } from "../shared/data.js?v=part-score";
-import { noteServerTime } from "../shared/contest-time.js";
+import { noteServerTime, serverNow } from "../shared/contest-time.js";
+import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
@@ -24,6 +25,7 @@ const errorEl = document.querySelector("#student-answer-error");
 
 let contest = null;
 let problemParts = [];
+let choiceProblem = false;
 
 function solvedPartSet() {
   const team = contest && teamForUser(contest);
@@ -91,6 +93,7 @@ function paintEnergy() {
   const settings = readEnergySettings(contest);
   const value = teamEnergy(contest, team.id);
   const blocked = value < settings.attemptMin;
+  const locked = paintChoiceLock();
   node.hidden = false;
   track.hidden = false;
   node.textContent = blocked
@@ -99,13 +102,26 @@ function paintEnergy() {
   fill.style.width = `${value}%`;
   fill.classList.toggle("low", blocked);
   const submit = form.querySelector("button");
-  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked;
+  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked || locked;
+}
+
+function paintChoiceLock() {
+  const team = contest && teamForUser(contest);
+  const lock = team ? activeChoiceLock(contest.locks, team.id, openMapId, cellIndex, serverNow()) : null;
+  return paintChoiceLockControl({
+    form,
+    note: document.querySelector("#choice-lock-note"),
+    lock,
+    now: serverNow(),
+    warnBefore: choiceProblem,
+  });
 }
 
 function takeServerContest(next, serverNow) {
   if (!contest || !next) return;
   if (Array.isArray(next.energy)) contest.energy = next.energy;
   if (Array.isArray(next.claims)) contest.claims = next.claims;
+  if (Array.isArray(next.locks)) contest.locks = next.locks;
   noteServerTime(serverNow);
   paintEnergy();
   publishContestPatch(contestId, next, serverNow);
@@ -146,6 +162,7 @@ async function loadProblem() {
     title.textContent = `${DIFFICULTY_NAME[difficulty]} · ${points} point${points === 1 ? "" : "s"}`;
     const parts = Array.isArray(problem?.parts) ? problem.parts : [];
     renderParts(parts);
+    choiceProblem = problem?.multipleChoice === true;
     const promptText = problem?.prompt?.trim()
       ? problem.prompt
       : (parts.length ? "" : "This problem has no text yet.");
@@ -163,7 +180,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorEl.hidden = true;
   const submit = form.querySelector("button");
-  if (submit.disabled) return;
+  if (submit.disabled || paintChoiceLock()) return;
   const label = submit.textContent;
   submit.dataset.busy = "1";
   submit.disabled = true;

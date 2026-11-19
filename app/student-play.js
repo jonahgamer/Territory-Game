@@ -5,7 +5,7 @@ import { loadPage } from "../shared/data.js?v=part-score";
 import { api } from "../shared/api.js?v=parts";
 import { el, renderList } from "../shared/dom.js";
 import {
-  contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime,
+  contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
 } from "../shared/contest-time.js";
 import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js?v=part-score";
 import { readEnergySettings } from "../shared/energy.js";
@@ -16,6 +16,7 @@ import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../s
 import { drawTeleportLinks } from "../shared/teleport-link.js";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
 import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
+import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -1098,6 +1099,7 @@ async function showProblem(contest, map, phase) {
         problem.prompt = prompt;
         problem.parts = parts;
         problem.opened = true;
+        problem.openedChoice = data.problem?.multipleChoice === true;
       }
     } catch (err) {
       if (request !== promptRequest) return;
@@ -1114,7 +1116,8 @@ async function showProblem(contest, map, phase) {
   const focus = (parts && parts.length)
     ? document.querySelector("#student-answer-parts [data-part-answer]")
     : input;
-  if (focus && !focus.readOnly) focus.focus();
+  if (focus && !focus.readOnly && !focus.disabled) focus.focus();
+  paintOpenChoiceLock();
 }
 
 function renderPlayParts(parts, solved = new Set()) {
@@ -1229,6 +1232,7 @@ async function submitAnswer(event) {
     errorEl.textContent = `The team has ${energy} energy. An attempt needs at least ${settings.attemptMin}.`;
     return;
   }
+  if (paintOpenChoiceLock()) return;
   if (submit.disabled) return;
   const label = submit.textContent;
   submit.dataset.busy = "1";
@@ -1392,6 +1396,7 @@ function applyPlayState(data) {
   if (Array.isArray(next.spawnVotes)) c.spawnVotes = normalizeSpawnVotes(next.spawnVotes, primaryMapId(c));
   if (Array.isArray(next.spawns)) c.spawns = normalizeTeamCells(next.spawns, primaryMapId(c));
   if (Array.isArray(next.claims)) c.claims = normalizeClaims(next.claims, primaryMapId(c));
+  if (Array.isArray(next.locks)) c.locks = next.locks;
   if (typeof next.mapId === "string" && next.mapId) c.mapId = next.mapId;
   if (Array.isArray(next.mapIds)) c.mapIds = next.mapIds;
   if (Array.isArray(next.teleports)) c.teleports = next.teleports;
@@ -1424,7 +1429,8 @@ function paintEnergy() {
   const submit = document.querySelector("#student-answer-form button");
   const block = document.querySelector("#student-energy-block");
   const blocked = value < settings.attemptMin;
-  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked;
+  const locked = paintOpenChoiceLock();
+  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked || locked;
   if (block) {
     block.hidden = !blocked;
     block.textContent = `The team has ${value} energy. An attempt needs at least ${settings.attemptMin}.`;
@@ -1437,6 +1443,24 @@ function paintClock() {
   const text = phaseClock(state.contest);
   node.hidden = !text;
   node.textContent = text;
+}
+
+function paintOpenChoiceLock() {
+  const contest = state.contest;
+  const team = contest && teamForUser(contest);
+  const mapId = state.selectedMapId || (contest && primaryMapId(contest));
+  const cell = state.selectedCell;
+  const problem = contest && mapId != null && cell != null
+    ? findProblem(state.maps.find((map) => map.id === mapId)?.cells?.[cell]?.problemNo, state.maps.find((map) => map.id === mapId)?.cells?.[cell]?.type)
+    : null;
+  const lock = team && cell != null ? activeChoiceLock(contest.locks, team.id, mapId, cell, serverNow()) : null;
+  return paintChoiceLockControl({
+    form: document.querySelector("#student-answer-form"),
+    note: document.querySelector("#choice-lock-note"),
+    lock,
+    now: serverNow(),
+    warnBefore: problem?.multipleChoice === true || problem?.openedChoice === true,
+  });
 }
 
 function startClock() {

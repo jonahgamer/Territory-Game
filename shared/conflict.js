@@ -24,6 +24,7 @@ const CONFLICT_FIELDS = {
     { key: "score", label: "Score" },
     { key: "logic", label: "Logic" },
     { key: "difficulty", label: "Difficulty" },
+    { key: "multipleChoice", label: "Multiple choice" },
   ],
   contests: [
     { key: "name", label: "Name" },

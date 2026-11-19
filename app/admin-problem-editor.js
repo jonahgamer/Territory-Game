@@ -6,6 +6,7 @@ import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, DIFFICULTIES, DIFFICULTY_NAME, MAX_PROBLEM_SCORE } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag, problemScore, difficultyScore } from "../shared/difficulty.js";
+import { detectedMultipleChoice } from "../shared/choice-lock.js?v=choice-lock";
 import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 
 // ── 顶层常量 ─────────────────────────────────────────────
@@ -115,6 +116,7 @@ function render() {
     scoreEl.readOnly = partsMode;
     scoreEl.value = partsMode ? String(partTotal(draft.parts)) : String(problemScore(draft));
   }
+  renderChoice();
 
   const usage = problemUsage(draft.index, draft.type);
   usageEl.textContent = usage.cells > 0
@@ -122,6 +124,29 @@ function render() {
     : "This problem is not placed on any map yet.";
 
   updateSaveState();
+}
+
+function choiceModeOf(draft) {
+  if (draft?.multipleChoice === true) return "on";
+  if (draft?.multipleChoice === false) return "off";
+  return "auto";
+}
+
+function renderChoice() {
+  const draft = state.draft;
+  if (!draft) return;
+  const mode = choiceModeOf(draft);
+  for (const btn of document.querySelectorAll("[data-choice-mode]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.choiceMode === mode));
+  }
+  const note = document.querySelector("#problem-choice-note");
+  if (!note) return;
+  const sample = draft.answerMode === "parts" ? { parts: collectPartsFromDom() } : { answer: answerEl.value };
+  const detected = detectedMultipleChoice(sample);
+  if (mode === "on") note.textContent = "Marked as multiple choice. A wrong contest attempt locks it for 3 minutes.";
+  else if (mode === "off") note.textContent = "Not treated as multiple choice, even when the answer is A, B, C, or D.";
+  else if (detected) note.textContent = "Detected as multiple choice because the answer is A, B, C, or D. A wrong contest attempt locks it for 3 minutes.";
+  else note.textContent = "Not detected as multiple choice. An answer of A, B, C, or D turns this on.";
 }
 
 function bindEvents() {
@@ -142,6 +167,15 @@ function bindEvents() {
     const btn = event.target.closest("[data-answer-mode]");
     if (!btn || btn.dataset.answerMode === state.draft.answerMode) return;
     setAnswerMode(btn.dataset.answerMode);
+  });
+  document.querySelector("#problem-choice-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-choice-mode]");
+    if (!btn || !state.draft) return;
+    const mode = btn.dataset.choiceMode;
+    state.draft.multipleChoice = mode === "on" ? true : mode === "off" ? false : null;
+    state.dirty = true;
+    renderChoice();
+    updateSaveState();
   });
   partCountEl?.addEventListener("change", () => {
     const count = clampPartCount(partCountEl.value);
@@ -194,6 +228,7 @@ function bindEvents() {
     state.draft.answer = answerEl.value;
     state.dirty = true;
     updateSaveState();
+    renderChoice();
     requestAnimationFrame(renderPreview);
   });
   solutionEl?.addEventListener("input", () => {
@@ -409,6 +444,7 @@ function renderPartFields() {
       if (scoreEl) scoreEl.value = String(state.draft.score);
       state.dirty = true;
       updateSaveState();
+      renderChoice();
       requestAnimationFrame(renderPreview);
     };
     prompt.addEventListener("input", onInput);
@@ -554,6 +590,7 @@ async function save() {
     logic,
     difficulty: draft.difficulty,
     score,
+    ...(draft.multipleChoice === true || draft.multipleChoice === false ? { multipleChoice: draft.multipleChoice } : {}),
   };
   draft.isNew = false;
   state.dirty = false;
@@ -610,6 +647,7 @@ async function duplicateProblem() {
     logic: draft.logic,
     difficulty: draft.difficulty,
     score: draft.score,
+    ...(draft.multipleChoice === true || draft.multipleChoice === false ? { multipleChoice: draft.multipleChoice } : {}),
   };
   try {
     await api.saveProblem(copy, state.revisions.problems);

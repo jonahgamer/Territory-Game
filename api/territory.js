@@ -29,6 +29,7 @@ import { applyCors, connectToDatabase, getMongoClient } from './_db.js';
 import { runProblemLogic } from './logic.js';
 import { cleanEnergyLedger, energyAfterAttempt, energyState, readEnergySettings } from '../shared/energy.js';
 import { problemScore } from '../shared/difficulty.js';
+import { CHOICE_LOCK_MS, problemIsMultipleChoice } from '../shared/choice-lock.js';
 import { MAX_PROBLEM_SCORE } from '../shared/constants.js';
 import {
   contestMapIds, primaryMapId, placeKey, cleanTeleports, teleportPairAt, teleportOtherEnd,
@@ -199,7 +200,7 @@ function normalizeProblem(v) {
     if (!Number.isInteger(n) || n < 0 || n > MAX_PROBLEM_SCORE) return null;
     score = n;
   }
-  return {
+  const problem = {
     index: v.index,
     type: v.type,
     prompt: v.prompt,
@@ -210,6 +211,8 @@ function normalizeProblem(v) {
     difficulty,
     score,
   };
+  if (v.multipleChoice === true || v.multipleChoice === false) problem.multipleChoice = v.multipleChoice;
+  return problem;
 }
 
 function cleanId(value) {
@@ -313,6 +316,31 @@ function cleanClaims(value, fallbackMapId = '') {
     claims.push(stored);
   }
   return claims;
+}
+
+function cleanChoiceLocks(value, fallbackMapId = '') {
+  if (!Array.isArray(value)) return [];
+  const locks = [];
+  const seen = new Set();
+  for (const lock of value) {
+    if (!lock || typeof lock !== 'object') continue;
+    const teamId = cleanId(lock.teamId);
+    const mapId = typeof lock.mapId === 'string' && lock.mapId ? lock.mapId : fallbackMapId;
+    const until = Number(lock.until);
+    if (!teamId || !mapId || !Number.isInteger(lock.cell) || lock.cell < 0 || !Number.isFinite(until)) continue;
+    const key = `${mapId}:${lock.cell}:${teamId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    locks.push({ mapId, cell: lock.cell, teamId, until });
+  }
+  return locks;
+}
+
+function lockWaitMessage(until, now) {
+  const seconds = Math.max(0, Math.ceil((until - now) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, '0');
+  return `This problem is locked for ${minutes}:${rest}. You can still read it.`;
 }
 
 function sameName(a, b) {
@@ -570,6 +598,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
   const own = (item) => !testing || admin || (team && item.teamId === team.id);
   const visibleTeams = testing && !admin ? teams.filter((item) => team && item.id === team.id) : teams;
   const visibleClaims = claims.filter(own);
+  const locks = cleanChoiceLocks(contest?.locks, fallback).filter((lock) => admin || (team && lock.teamId === team.id));
   const ended = Date.now() >= (contestWindow(contest)?.endAt ?? Infinity);
   const frozen = maps.length > 0 && (ended || (Boolean(team) && !admin && teamSolvedAll(maps, claims, team.id, fallback)));
   const visibleVotes = testing && !admin
@@ -597,6 +626,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
         ? spawns.filter((spawn) => team && spawn.teamId === team.id)
         : spawns.filter(own),
       claims: visibleClaims,
+      locks,
       leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, maps, problems || []),
       frozen,
       ...energyFields(contest, admin ? null : team?.id, Date.now()),
@@ -1472,6 +1502,18 @@ async function handleSolve(req, res, db, user, body) {
 
   const mapCell = map.cells[cell];
   const problem = await findStoredProblem(db.collection('problems'), mapCell.type, mapCell.problemNo);
+  const choiceProblem = problemIsMultipleChoice(problem);
+  const activeLock = cleanChoiceLocks(contest.locks, primaryMapId(contest))
+    .find((lock) => lock.teamId === team.id && lock.mapId === map.id && lock.cell === cell && lock.until > now);
+  if (choiceProblem && activeLock) {
+    return res.status(400).json({
+      success: false,
+      message: lockWaitMessage(activeLock.until, now),
+      lockUntil: activeLock.until,
+      serverNow: now,
+      contest: contestPayload(contest, maps, problems, user).contest,
+    });
+  }
   const difficulty = problemDifficulty(problem);
   const graded = gradeProblemAnswers(problem, body);
   if (graded.error) return res.status(400).json({ success: false, message: graded.error, serverNow: now });
@@ -1507,11 +1549,27 @@ async function handleSolve(req, res, db, user, body) {
     });
   }
   if (!correct) {
+    let latest = spent.contest;
+    let lockUntil = 0;
+    if (choiceProblem) {
+      lockUntil = now + CHOICE_LOCK_MS;
+      await col.updateOne(
+        { id: contestId },
+        { $pull: { locks: { mapId: map.id, cell, teamId: team.id } } }
+      );
+      await col.updateOne(
+        { id: contestId },
+        { $push: { locks: { mapId: map.id, cell, teamId: team.id, until: lockUntil } }, $set: { updatedAt: new Date() } }
+      );
+      latest = await col.findOne({ id: contestId });
+    }
+    const wrong = graded.wrong || 'That answer is not right.';
     return res.status(400).json({
       success: false,
-      message: graded.wrong || 'That answer is not right.',
+      message: lockUntil ? `${wrong} ${lockWaitMessage(lockUntil, now)}` : wrong,
+      ...(lockUntil ? { lockUntil } : {}),
       serverNow: now,
-      contest: contestPayload(spent.contest, maps, problems, user).contest,
+      contest: contestPayload(latest, maps, problems, user).contest,
     });
   }
 
@@ -2073,6 +2131,7 @@ function pageProblem(problem, admin) {
     view.answer = problem.answer;
     view.solution = typeof problem.solution === 'string' ? problem.solution : '';
     view.logic = typeof problem.logic === 'string' ? problem.logic : '';
+    if (problem.multipleChoice === true || problem.multipleChoice === false) view.multipleChoice = problem.multipleChoice;
   }
   return view;
 }
@@ -2275,6 +2334,7 @@ async function remapContestPlaces(db, session, mapId, oldCols, oldRows, newCols,
       { 'spawnChoices.mapId': mapId },
       { 'teleports.a.mapId': mapId },
       { 'teleports.b.mapId': mapId },
+      { 'locks.mapId': mapId },
     ],
   }, { session }).toArray();
   for (const contest of contests) {
@@ -2286,6 +2346,7 @@ async function remapContestPlaces(db, session, mapId, oldCols, oldRows, newCols,
         spawnVotes: remapPlaceList(contest.spawnVotes, contest, mapId, oldCols, oldRows, newCols, newRows),
         spawnChoices: remapPlaceList(contest.spawnChoices, contest, mapId, oldCols, oldRows, newCols, newRows),
         teleports: remapTeleports(contest.teleports, mapId, oldCols, oldRows, newCols, newRows),
+        locks: remapPlaceList(contest.locks, contest, mapId, oldCols, oldRows, newCols, newRows),
         updatedAt: new Date(),
       } },
       { session }
@@ -2472,10 +2533,16 @@ async function handleSaveProblem(req, res, db, user, body) {
       assertRevision(current, body.revision);
       const id = problemIdentity(problem.type, problem.index);
       const existing = await findStoredProblem(db.collection('problems'), problem.type, problem.index, session);
+      const fields = { ...problem, id, updatedAt: new Date() };
+      const update = { $set: fields };
+      if (problem.multipleChoice !== true && problem.multipleChoice !== false) {
+        delete fields.multipleChoice;
+        update.$unset = { multipleChoice: '' };
+      }
       if (existing) {
-        await db.collection('problems').updateOne({ _id: existing._id }, { $set: { ...problem, id, updatedAt: new Date() } }, { session });
+        await db.collection('problems').updateOne({ _id: existing._id }, update, { session });
       } else {
-        await db.collection('problems').insertOne({ ...problem, id, updatedAt: new Date() }, { session });
+        await db.collection('problems').insertOne(fields, { session });
       }
       revision = await bumpRevision(db, 'problems', session);
     });
@@ -2814,7 +2881,7 @@ async function handlePageAnswer(req, res, db, user) {
   }
   const stored = await db.collection('problems').findOne(
     { type: mapCell.type, index: mapCell.problemNo },
-    { projection: { index: 1, type: 1, prompt: 1, difficulty: 1, score: 1, parts: 1 } }
+    { projection: { index: 1, type: 1, prompt: 1, answer: 1, multipleChoice: 1, difficulty: 1, score: 1, parts: 1 } }
   );
   const problem = stored ? pageProblem(stored, false) : {
     index: mapCell.problemNo,
@@ -2822,7 +2889,9 @@ async function handlePageAnswer(req, res, db, user) {
     prompt: '',
     difficulty: 'normal',
     score: problemScore(null),
+    multipleChoice: false,
   };
+  if (stored) problem.multipleChoice = problemIsMultipleChoice(stored);
   return res.status(200).json({
     success: true,
     contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest),

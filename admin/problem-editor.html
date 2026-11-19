@@ -80,6 +80,12 @@
           <button type="button" data-answer-mode="single" aria-pressed="true">Single answer</button>
           <button type="button" data-answer-mode="parts" aria-pressed="false">Multiple parts</button>
         </div>
+        <div class="kind-choices" id="problem-choice-mode" role="group" aria-label="Multiple choice">
+          <button type="button" data-choice-mode="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-choice-mode="on" aria-pressed="false">Multiple choice</button>
+          <button type="button" data-choice-mode="off" aria-pressed="false">Not multiple choice</button>
+        </div>
+        <p id="problem-choice-note" class="field-note"></p>
 
         <label id="problem-answer-field">Answer
           <textarea id="problem-answer" rows="4"></textarea>
@@ -109,6 +115,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/admin-problem-editor.js?v=part-tail"></script>
+  <script type="module" src="/app/admin-problem-editor.js?v=choice-lock"></script>
 </body>
 </html>
