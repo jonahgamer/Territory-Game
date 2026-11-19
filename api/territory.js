@@ -1789,6 +1789,7 @@ async function handleListAccounts(req, res, db, user) {
   const memberships = contestMemberships(contests);
   const accounts = records
     .filter((record) => typeof record.username === 'string' && record.username)
+    .filter((record) => isRoot(user) || accountRole(record) !== 'root')
     .map((record) => publicAccount(record, memberships.get(record.username.toLowerCase()) || []))
     .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.username.localeCompare(b.username));
   return res.status(200).json({ success: true, accounts });

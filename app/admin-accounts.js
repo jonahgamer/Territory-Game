@@ -63,7 +63,7 @@ function render() {
       ["Accounts", counts.all],
       ["Students", counts.student],
       ["Admins", counts.admin],
-      ["Root", counts.root],
+      ...(isRoot() ? [["Root", counts.root]] : []),
       ["Suspended", counts.suspended],
     ];
     for (const [label, value] of stats) {
@@ -74,6 +74,7 @@ function render() {
   }
 
   for (const btn of document.querySelectorAll("[data-account-filter]")) {
+    btn.hidden = btn.dataset.accountFilter === "root" && !isRoot();
     btn.setAttribute("aria-pressed", String(btn.dataset.accountFilter === state.filter));
   }
 
