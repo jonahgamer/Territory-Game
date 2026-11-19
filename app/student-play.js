@@ -1,7 +1,7 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=roles";
+import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=roles";
+import { loadPage } from "../shared/data.js?v=hidden-rules";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
@@ -487,6 +487,7 @@ function render() {
   summary.hidden = false;
   summary.textContent = `Members: ${team.members.join(", ")} · Score: ${row?.score ?? 0} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
   paintEnergy();
+  paintRevealedRules();
 
   writeStatus(contest, phase, map, frozen);
   renderRoster(contest, map, phase);
@@ -1407,7 +1408,42 @@ function applyPlayState(data) {
   if (Number.isInteger(next.energyAttemptMin)) c.energyAttemptMin = next.energyAttemptMin;
   if (Number.isInteger(next.energySolveBelow)) c.energySolveBelow = next.energySolveBelow;
   if (next.energySolve) c.energySolve = next.energySolve;
+  if (Array.isArray(next.revealedRules)) c.revealedRules = next.revealedRules.map(publicRevealedRule).filter(Boolean);
   noteServerTime(data.serverNow);
+}
+
+function publicRevealedRule(rule) {
+  if (!rule || typeof rule.id !== "string" || typeof rule.title !== "string" || typeof rule.text !== "string") return null;
+  return {
+    id: rule.id,
+    title: rule.title,
+    text: rule.text,
+    minute: Number.isInteger(rule.minute) ? rule.minute : null,
+  };
+}
+
+function paintRevealedRules() {
+  const section = document.querySelector("#revealed-rules");
+  const list = document.querySelector("#revealed-rules-list");
+  if (!section || !list) return;
+  const rules = Array.isArray(state.contest?.revealedRules) ? state.contest.revealedRules : [];
+  section.hidden = rules.length === 0;
+  list.replaceChildren();
+  for (const rule of rules) {
+    const item = document.createElement("li");
+    const title = document.createElement("h3");
+    title.textContent = rule.title;
+    const body = document.createElement("p");
+    body.textContent = rule.text;
+    item.append(title, body);
+    if (Number.isInteger(rule.minute)) {
+      const when = document.createElement("p");
+      when.className = "version-time";
+      when.textContent = rule.minute === 0 ? "Revealed at the start." : `Revealed at minute ${rule.minute}.`;
+      item.append(when);
+    }
+    list.append(item);
+  }
 }
 
 function paintEnergy() {

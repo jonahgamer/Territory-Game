@@ -3587,3 +3587,52 @@ main:has(.editor-head) .grid-scroll {
     display: inline-flex;
   }
 }
+
+.hidden-rule-panel {
+  flex-basis: 100%;
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.hidden-rule-panel legend {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+.hidden-rule-list,
+.revealed-rule-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hidden-rule-row,
+.revealed-rule-list li {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.hidden-rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.revealed-rule-list h3,
+.hidden-rule-row h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.revealed-rule-list p,
+.hidden-rule-text {
+  margin: 0;
+  white-space: pre-wrap;
+}

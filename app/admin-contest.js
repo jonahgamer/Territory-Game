@@ -1,14 +1,14 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=roles";
+import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=roles";
+import { loadPage } from "../shared/data.js?v=hidden-rules";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js?v=part-score";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js?v=hidden-rules";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
@@ -34,6 +34,7 @@ async function run() {
   state.maps = data.maps || [];
   state.catalog = data.catalog || [];
   state.problems = data.problems || [];
+  state.hiddenCatalog = Array.isArray(data.hiddenRuleCatalog) ? data.hiddenRuleCatalog : [];
   state.revisions = data.revisions;
   if (!state.current) throw new Error("Contest not found.");
   state.mapsForContest = contestMaps();
@@ -46,6 +47,7 @@ async function run() {
 
   bindEvents();
   render();
+  renderHiddenRules();
   startClock();
   watchContestPatch(contestId, (patch) => {
     if (!Array.isArray(patch.energy)) return;
@@ -119,6 +121,28 @@ function bindEvents() {
     state.current.claims = []; state.current.spawnResolved = false; state.current.resolvedTeams = [];
     state.adminViewTeamId = null;
     render(); persistContests();
+  });
+  document.querySelector("#hidden-reveal-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-hidden-reveal]");
+    if (!btn) return;
+    for (const item of document.querySelectorAll("[data-hidden-reveal]")) {
+      item.setAttribute("aria-pressed", String(item === btn));
+    }
+    commitHidden(true);
+  });
+  document.querySelector("#hidden-order-mode")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-hidden-order]");
+    if (!btn) return;
+    for (const item of document.querySelectorAll("[data-hidden-order]")) {
+      item.setAttribute("aria-pressed", String(item === btn));
+    }
+    commitHidden(true);
+  });
+  document.querySelector("#hidden-period")?.addEventListener("change", () => commitHidden(false));
+  document.querySelector("#hidden-rule-add")?.addEventListener("change", addHiddenRule);
+  document.querySelector("#hidden-rule-list")?.addEventListener("click", onHiddenRuleClick);
+  document.querySelector("#hidden-rule-list")?.addEventListener("change", (event) => {
+    commitHidden(event.target?.dataset?.keepHidden === "true");
   });
   document.querySelector("#testing-team-view")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-view-team]");
@@ -340,6 +364,192 @@ function renderSpawnMode() {
   const note = document.querySelector("#contest-spawn-mode-note");
   if (field) field.hidden = random;
   if (note) note.hidden = !random;
+}
+
+function hiddenSettings() {
+  const raw = state.current.hiddenRules || {};
+  const period = Number(raw.periodMinutes);
+  const items = [];
+  const seen = new Set();
+  for (const item of Array.isArray(raw.items) ? raw.items : []) {
+    const id = typeof item?.id === "string" ? item.id : "";
+    if (!id || seen.has(id) || !state.hiddenCatalog.some((rule) => rule.id === id)) continue;
+    seen.add(id);
+    const minute = item.revealMinute === null || item.revealMinute === "" ? null : Number(item.revealMinute);
+    items.push({
+      id,
+      revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
+      hidden: item.hidden === true,
+    });
+  }
+  return {
+    reveal: raw.reveal === "periodic" ? "periodic" : "minutes",
+    order: raw.order === "random" ? "random" : "designated",
+    periodMinutes: Number.isInteger(period) && period >= 1 && period <= 10080 ? period : 10,
+    items,
+  };
+}
+
+function readHiddenFromDom() {
+  const reveal = document.querySelector("[data-hidden-reveal][aria-pressed='true']")?.dataset.hiddenReveal === "periodic" ? "periodic" : "minutes";
+  const order = document.querySelector("[data-hidden-order][aria-pressed='true']")?.dataset.hiddenOrder === "random" ? "random" : "designated";
+  const period = Number(document.querySelector("#hidden-period")?.value);
+  const items = [];
+  for (const row of document.querySelectorAll("#hidden-rule-list [data-rule-id]")) {
+    const rawMinute = row.querySelector("[data-reveal-minute]")?.value ?? "";
+    const minute = rawMinute === "" ? null : Number(rawMinute);
+    items.push({
+      id: row.dataset.ruleId,
+      revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
+      hidden: row.querySelector("[data-keep-hidden]")?.checked === true,
+    });
+  }
+  return {
+    reveal,
+    order,
+    periodMinutes: Number.isInteger(period) && period >= 1 && period <= 10080 ? period : hiddenSettings().periodMinutes,
+    items,
+  };
+}
+
+function commitHidden(rebuild) {
+  const error = document.querySelector("#hidden-rule-error");
+  const reveal = document.querySelector("[data-hidden-reveal][aria-pressed='true']")?.dataset.hiddenReveal;
+  const period = Number(document.querySelector("#hidden-period")?.value);
+  if (reveal === "periodic" && (!Number.isInteger(period) || period < 1 || period > 10080)) {
+    if (error) {
+      error.hidden = false;
+      error.textContent = "The reveal interval must be a whole number of minutes.";
+    }
+    return;
+  }
+  if (error) error.hidden = true;
+  state.current.hiddenRules = readHiddenFromDom();
+  if (rebuild) renderHiddenRules();
+  persistContests();
+}
+
+function renderHiddenRules() {
+  const settings = hiddenSettings();
+  state.current.hiddenRules = settings;
+  const periodic = settings.reveal === "periodic";
+  for (const btn of document.querySelectorAll("[data-hidden-reveal]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.hiddenReveal === settings.reveal));
+  }
+  for (const btn of document.querySelectorAll("[data-hidden-order]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.hiddenOrder === settings.order));
+  }
+  const periodField = document.querySelector("#hidden-period-field");
+  const orderMode = document.querySelector("#hidden-order-mode");
+  const period = document.querySelector("#hidden-period");
+  if (periodField) periodField.hidden = !periodic;
+  if (orderMode) orderMode.hidden = !periodic;
+  if (period) period.value = String(settings.periodMinutes);
+  const note = document.querySelector("#hidden-rule-note");
+  if (note) {
+    note.textContent = periodic
+      ? (settings.order === "random"
+        ? "One rule is revealed each interval, in an order chosen once for this contest. The same order is used for every contestant. A rule marked “Do not reveal” stays hidden. Adding or removing a rule changes the random order. The first rule appears when the first interval has passed."
+        : "One rule is revealed each interval, from top to bottom. A rule marked “Do not reveal” stays hidden. The first rule appears when the first interval has passed.")
+      : "Each rule is revealed when that many minutes have passed since the start. Leave the minute empty, or mark “Do not reveal”, and the rule stays hidden. Minute 0 reveals it as the contest starts.";
+  }
+  const empty = document.querySelector("#hidden-rules-empty");
+  const addField = document.querySelector("#hidden-rule-add-field");
+  const add = document.querySelector("#hidden-rule-add");
+  const catalog = state.hiddenCatalog || [];
+  if (empty) empty.hidden = catalog.length > 0;
+  if (addField) addField.hidden = catalog.length === 0;
+  if (add) {
+    const used = new Set(settings.items.map((item) => item.id));
+    add.replaceChildren(el("option", null, "Choose a rule…"));
+    add.firstChild.value = "";
+    for (const rule of catalog) {
+      if (used.has(rule.id)) continue;
+      const option = el("option", null, rule.title);
+      option.value = rule.id;
+      add.append(option);
+    }
+    add.hidden = add.options.length <= 1;
+    if (addField) addField.hidden = catalog.length === 0 || add.options.length <= 1;
+  }
+  const list = document.querySelector("#hidden-rule-list");
+  if (!list) return;
+  list.replaceChildren();
+  settings.items.forEach((item, index) => {
+    const rule = catalog.find((entry) => entry.id === item.id);
+    if (!rule) return;
+    const row = el("li", "hidden-rule-row");
+    row.dataset.ruleId = item.id;
+    row.append(el("h3", null, rule.title));
+    const text = el("p", "hidden-rule-text", rule.text);
+    row.append(text);
+    const actions = el("div", "hidden-rule-actions");
+    const minuteLabel = el("label", null, "Reveal at minute ");
+    const minute = document.createElement("input");
+    minute.type = "number";
+    minute.min = "0";
+    minute.max = "10080";
+    minute.dataset.revealMinute = "true";
+    minute.value = item.revealMinute === null ? "" : String(item.revealMinute);
+    minute.disabled = periodic || item.hidden;
+    minuteLabel.hidden = periodic;
+    minuteLabel.append(minute);
+    const keep = el("label", null, " Do not reveal");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.dataset.keepHidden = "true";
+    box.checked = item.hidden === true;
+    keep.prepend(box);
+    const up = el("button", "account-action", "Up");
+    up.type = "button";
+    up.dataset.hiddenMove = "up";
+    up.disabled = index === 0;
+    const down = el("button", "account-action", "Down");
+    down.type = "button";
+    down.dataset.hiddenMove = "down";
+    down.disabled = index === settings.items.length - 1;
+    const remove = el("button", "account-action", "Remove");
+    remove.type = "button";
+    remove.dataset.hiddenRemove = item.id;
+    actions.append(minuteLabel, keep, up, down, remove);
+    if (periodic) up.hidden = settings.order === "random";
+    if (periodic) down.hidden = settings.order === "random";
+    row.append(actions);
+    list.append(row);
+  });
+}
+
+function addHiddenRule() {
+  const select = document.querySelector("#hidden-rule-add");
+  const id = select?.value || "";
+  if (!id) return;
+  const settings = readHiddenFromDom();
+  if (settings.items.some((item) => item.id === id)) return;
+  settings.items.push({ id, revealMinute: null, hidden: false });
+  state.current.hiddenRules = settings;
+  if (select) select.value = "";
+  renderHiddenRules();
+  persistContests();
+}
+
+function onHiddenRuleClick(event) {
+  const remove = event.target.closest("[data-hidden-remove]");
+  const move = event.target.closest("[data-hidden-move]");
+  if (!remove && !move) return;
+  const settings = readHiddenFromDom();
+  if (remove) {
+    settings.items = settings.items.filter((item) => item.id !== remove.dataset.hiddenRemove);
+  } else {
+    const row = move.closest("[data-rule-id]");
+    const index = settings.items.findIndex((item) => item.id === row?.dataset.ruleId);
+    const next = move.dataset.hiddenMove === "up" ? index - 1 : index + 1;
+    if (index < 0 || next < 0 || next >= settings.items.length) return;
+    const [item] = settings.items.splice(index, 1);
+    settings.items.splice(next, 0, item);
+  }
+  state.current.hiddenRules = settings;
+  renderHiddenRules();
+  persistContests();
 }
 
 function commitSchedule() {

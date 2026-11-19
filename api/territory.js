@@ -35,6 +35,7 @@ import {
   contestMapIds, primaryMapId, placeKey, cleanTeleports, teleportPairAt, teleportOtherEnd,
 } from '../shared/contest-board.js';
 import { shiftedCell } from '../shared/map-render.js';
+import { cleanHiddenRuleSettings, hiddenRuleCatalog, revealedHiddenRules } from './hidden-rules-catalog.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -629,6 +630,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
       locks,
       leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, maps, problems || []),
       frozen,
+      revealedRules: revealedHiddenRules(contest, Date.now()),
       ...energyFields(contest, admin ? null : team?.id, Date.now()),
     },
   };
@@ -741,6 +743,7 @@ function contestStoredUpdate(contest, stored) {
     energyAttemptMin: contest.energyAttemptMin,
     energySolveBelow: contest.energySolveBelow,
     energySolve: contest.energySolve,
+    hiddenRules: contest.hiddenRules,
     updatedAt: new Date(),
   };
   const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
@@ -826,6 +829,7 @@ function normalizeContest(v) {
     energyAttemptMin: energy.attemptMin,
     energySolveBelow: energy.solveBelow,
     energySolve: energy.solve,
+    hiddenRules: cleanHiddenRuleSettings(v.hiddenRules),
   };
 }
 
@@ -1991,6 +1995,15 @@ async function listRules(db) {
   })).filter((item) => item.title && item.message);
 }
 
+function handlePageHiddenRules(req, res, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    rules: hiddenRuleCatalog(),
+  });
+}
+
 async function handlePageRules(req, res, db, user) {
   return res.status(200).json({
     success: true,
@@ -2147,14 +2160,16 @@ async function handlePublicCheck(req, res, db, body) {
   });
 }
 
-function withSchedule(contest, view) {
-  return {
+function withSchedule(contest, view, user) {
+  const next = {
     ...view,
     startAt: Number.isInteger(contest.startAt) ? contest.startAt : null,
     durationMinutes: Number.isInteger(contest.durationMinutes) ? contest.durationMinutes : null,
     spawnMinutes: Number.isInteger(contest.spawnMinutes) ? contest.spawnMinutes : null,
     readyMinutes: Number.isInteger(contest.readyMinutes) ? contest.readyMinutes : null,
   };
+  if (isAdmin(user)) next.hiddenRules = cleanHiddenRuleSettings(contest.hiddenRules);
+  return next;
 }
 
 function pageUser(user) {
@@ -2894,12 +2909,13 @@ async function handlePageContest(req, res, db, user) {
     success: true,
     user: pageUser(user),
     contest: {
-      ...withSchedule(contest, contestPayload(contest, maps, problems, user).contest),
+      ...withSchedule(contest, contestPayload(contest, maps, problems, user).contest, user),
       contestantIds: Array.isArray(contest.contestantIds) ? contest.contestantIds : [],
     },
     maps: maps.map((map) => pageMap(map, true)),
     catalog: catalogDocs.map((map) => pageMap(map, false)),
     problems: problems.map(problemStub),
+    hiddenRuleCatalog: hiddenRuleCatalog(),
     revisions,
     serverNow: Date.now(),
   });
@@ -2920,7 +2936,7 @@ async function handlePagePlay(req, res, db, user) {
   return res.status(200).json({
     success: true,
     user: pageUser(user),
-    contest: withSchedule(contest, contestPayload(contest, maps, storedProblems, user).contest),
+    contest: withSchedule(contest, contestPayload(contest, maps, storedProblems, user).contest, user),
     maps: maps.map((map) => pageMap(map, true)),
     problems: storedProblems.map(problemStub),
     serverNow: Date.now(),
@@ -2988,7 +3004,7 @@ async function handlePageAnswer(req, res, db, user) {
   if (stored) problem.multipleChoice = problemIsMultipleChoice(stored);
   return res.status(200).json({
     success: true,
-    contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest),
+    contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest, user),
     mapId,
     problem,
     serverNow: Date.now(),
@@ -3098,6 +3114,7 @@ export default async function handler(req, res) {
       case 'page-answer':   return await handlePageAnswer(req, res, db, user);
       case 'page-credits':  return await handlePageCredits(req, res, db, user);
       case 'page-rules':    return await handlePageRules(req, res, db, user);
+      case 'page-hidden-rules': return handlePageHiddenRules(req, res, user);
       case 'add-rule':      return await handleAddRule(req, res, db, user, body);
       case 'delete-rule':   return await handleDeleteRule(req, res, db, user, body);
       case 'save-maps':     return await handleSaveMaps(req, res, db, user, body);

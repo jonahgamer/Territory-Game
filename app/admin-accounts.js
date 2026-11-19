@@ -1,5 +1,5 @@
 import { requireAdmin, getSession, isRoot } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=roles";
+import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList, formatAccountDate, confirmTwice } from "../shared/dom.js";

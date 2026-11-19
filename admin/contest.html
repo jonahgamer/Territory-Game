@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=teleport-links" />
+  <link rel="stylesheet" href="/style.css?v=hidden-rules" />
 </head>
 <body>
   <div class="app">
@@ -75,6 +75,26 @@
         </fieldset>
         <p id="contest-schedule-error" class="form-error" hidden></p>
         <p id="contest-energy-error" class="form-error" hidden></p>
+        <fieldset class="hidden-rule-panel" id="hidden-rules">
+          <legend>Hidden rules</legend>
+          <p class="field-note">Contestants do not see a hidden rule until its reveal time. A rule can stay hidden for the whole contest. The rules themselves are written in the program. This page only chooses which ones this contest uses. <a href="/admin/hidden-rules.html">Open the hidden rule list</a></p>
+          <div class="kind-choices" id="hidden-reveal-mode" role="group" aria-label="Hidden rule reveal">
+            <button type="button" data-hidden-reveal="minutes" aria-pressed="true">At a set minute</button>
+            <button type="button" data-hidden-reveal="periodic" aria-pressed="false">Every few minutes</button>
+          </div>
+          <div class="kind-choices" id="hidden-order-mode" role="group" aria-label="Hidden rule order">
+            <button type="button" data-hidden-order="designated" aria-pressed="true">Designated order</button>
+            <button type="button" data-hidden-order="random" aria-pressed="false">Random order</button>
+          </div>
+          <p id="hidden-rule-note" class="field-note"></p>
+          <label id="hidden-period-field">Every (min) <input id="hidden-period" type="number" min="1" max="10080" /></label>
+          <label id="hidden-rule-add-field">Add a hidden rule
+            <select id="hidden-rule-add"><option value="">Choose a rule…</option></select>
+          </label>
+          <p id="hidden-rules-empty" class="field-note">No hidden rules have been written yet.</p>
+          <ul id="hidden-rule-list" class="hidden-rule-list"></ul>
+          <p id="hidden-rule-error" class="form-error" hidden></p>
+        </fieldset>
       </form>
 
       <div class="kind-choices" id="contest-mode-choices" role="group" aria-label="Contest mode">
@@ -129,6 +149,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-contest.js?v=roles"></script>
+  <script type="module" src="/app/admin-contest.js?v=hidden-rules"></script>
 </body>
 </html>

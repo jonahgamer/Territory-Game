@@ -1,6 +1,6 @@
 import { api } from "./api.js?v=roles";
 import { noteServerTime } from "./contest-time.js";
-import { normalizeContest } from "./contest-data.js?v=part-score";
+import { normalizeContest } from "./contest-data.js?v=hidden-rules";
 
 export async function loadPage(action, params = {}) {
   const data = await api.page(action, params);

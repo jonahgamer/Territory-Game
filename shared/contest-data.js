@@ -74,6 +74,47 @@ export function normalizeClaims(value, fallbackMapId = "") {
   return claims;
 }
 
+function cleanHiddenRuleSettings(value) {
+  const reveal = value?.reveal === "periodic" ? "periodic" : "minutes";
+  const order = value?.order === "random" ? "random" : "designated";
+  const period = Number(value?.periodMinutes);
+  const items = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(value?.items) ? value.items : []) {
+    const id = typeof raw?.id === "string" ? raw.id.trim() : "";
+    if (!id || id.length > 40 || seen.has(id)) continue;
+    seen.add(id);
+    const minute = raw?.revealMinute === null || raw?.revealMinute === "" ? null : Number(raw?.revealMinute);
+    items.push({
+      id,
+      revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
+      hidden: raw?.hidden === true,
+    });
+    if (items.length >= 40) break;
+  }
+  return {
+    reveal,
+    order,
+    periodMinutes: Number.isInteger(period) && period >= 1 && period <= 10080 ? period : 10,
+    items,
+  };
+}
+
+function cleanRevealedRules(value) {
+  if (!Array.isArray(value)) return [];
+  const rules = [];
+  for (const rule of value) {
+    if (!rule || typeof rule.id !== "string" || typeof rule.title !== "string" || typeof rule.text !== "string") continue;
+    rules.push({
+      id: rule.id,
+      title: rule.title,
+      text: rule.text,
+      minute: Number.isInteger(rule.minute) ? rule.minute : null,
+    });
+  }
+  return rules;
+}
+
 export function normalizeContest(raw) {
   const teams = normalizeTeams(raw.teams);
   const energy = readEnergySettings(raw);
@@ -100,6 +141,8 @@ export function normalizeContest(raw) {
     energySolveBelow: energy.solveBelow,
     energySolve: energy.solve,
     energy: cleanEnergyLedger(raw.energy),
+    hiddenRules: cleanHiddenRuleSettings(raw.hiddenRules),
+    revealedRules: cleanRevealedRules(raw.revealedRules),
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices, fallback),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes, fallback),
