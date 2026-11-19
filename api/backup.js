@@ -87,8 +87,8 @@ async function requireAdmin(req, db) {
   if (!account || account.banned === true) {
     return { status: 401, message: "Unauthorized" };
   }
-  if (account.role !== "admin" && account.role !== "root") {
-    return { status: 403, message: "Admin only" };
+  if (account.role !== "root") {
+    return { status: 403, message: "Root only" };
   }
   return {
     user: {

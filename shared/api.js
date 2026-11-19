@@ -1,5 +1,5 @@
 import { API_BASE, LOGIN_URL } from "./constants.js";
-import { getSession, logOut } from "./session.js";
+import { getSession, logOut, setSession } from "./session.js?v=roles";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 
@@ -27,6 +27,7 @@ async function request(url, options = {}) {
       }
       throw error;
     }
+    adoptLiveRole(data);
     return data;
   } catch (err) {
     if (err.name === "AbortError") {
@@ -38,6 +39,16 @@ async function request(url, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function adoptLiveRole(data) {
+  const next = data?.user;
+  if (!next || (next.role !== "root" && next.role !== "admin" && next.role !== "student")) return;
+  const session = getSession();
+  if (!session || session.user.username !== next.username || session.user.role === next.role) return;
+  session.user.role = next.role;
+  setSession(session);
+  location.reload();
 }
 
 export async function apiCall(action, body) {
@@ -112,5 +123,7 @@ export const api = {
   deleteAccount: (username) => apiCall("delete-account", { username }),
   addVersion: (version, message) => apiCall("add-version", { version, message }),
   deleteVersion: (id) => apiCall("delete-version", { id }),
+  addRule: (title, message) => apiCall("add-rule", { title, message }),
+  deleteRule: (id) => apiCall("delete-rule", { id }),
   testProblem: (logic, expected, answer) => apiCall("test-problem", { logic, expected, answer }),
 };

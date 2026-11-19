@@ -1,11 +1,11 @@
 // app/admin-problem-upload.js
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=page-data";
-import { api } from "../shared/api.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=roles";
+import { api } from "../shared/api.js?v=roles";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, PROBLEM_TYPES } from "../shared/constants.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, PROBLEM_TYPES, DIFFICULTIES } from "../shared/constants.js";
 import { typeInfo, difficultyScore, problemTag } from "../shared/difficulty.js";
 
 const params = new URLSearchParams(location.search);
@@ -13,7 +13,7 @@ const backType = typeInfo(params.get("type")) ? params.get("type") : "math";
 
 const TYPE_BY_TAG = new Map(PROBLEM_TYPES.map((item) => [item.tag, item.id]));
 const TYPE_ORDER = new Map(PROBLEM_TYPES.map((item, index) => [item.id, index]));
-const FILE_RE = /^([MOSPT])(\d+)\.(pro|ans|gra)$/i;
+const FILE_RE = /^([MOSPT])(\d+)\.(pro|ans|gra|dif)$/i;
 const EXTS = ["pro", "ans", "gra"];
 
 const state = {
@@ -193,6 +193,7 @@ async function addFiles(fileList) {
     const key = groupKey(typeId, index);
     const group = state.groups.get(key) || { type: typeId, index };
     group[ext] = file;
+    if (ext === "dif") group.difficulty = (await file.text()).trim().toLowerCase();
     state.groups.set(key, group);
     added += 1;
   }
@@ -228,7 +229,7 @@ function render() {
     const row = el("div", "upload-row");
     row.dataset.key = key;
 
-    row.append(el("span", "upload-tag", tag));
+    row.append(el("span", "upload-tag", group.difficulty ? `${tag} · ${group.difficulty}` : tag));
 
     const filesEl = el("div", "upload-files");
     for (const ext of EXTS) {
@@ -279,6 +280,26 @@ async function readText(file) {
   });
 }
 
+function readParts(prompt, answer) {
+  const sections = [...prompt.matchAll(/<section data-part="([a-z])" data-marks="(\d+)">([\s\S]*?)<\/section>/gi)];
+  if (!sections.length) return null;
+  const answers = new Map();
+  for (const line of answer.split(/\r?\n/)) {
+    const match = line.trim().match(/^([a-z]):\s*(.*)$/i);
+    if (match) answers.set(match[1].toLowerCase(), match[2].trim());
+  }
+  const shared = prompt.replace(/<section\b[^>]*data-part=[\s\S]*?<\/section>/gi, "").trim();
+  return {
+    prompt: shared,
+    parts: sections.map((section) => ({
+      letter: section[1].toLowerCase(),
+      score: Number(section[2]),
+      prompt: section[3].trim(),
+      answer: answers.get(section[1].toLowerCase()) || "",
+    })),
+  };
+}
+
 async function saveAll() {
   errorEl.hidden = true;
   const keys = [...state.groups.keys()];
@@ -320,14 +341,39 @@ async function saveAll() {
     }
     if (!prompt.trim()) { showError(`${label}: statement file is empty.`); return; }
     if (!answer.trim()) { showError(`${label}: answer file is empty.`); return; }
+    let difficulty = group.difficulty || "normal";
+    if (group.dif && !group.difficulty) difficulty = (await readText(group.dif)).trim().toLowerCase();
+    if (!DIFFICULTIES.includes(difficulty)) {
+      showError(`${label}: difficulty must be easy, normal, hard, or insane.`);
+      return;
+    }
+    const split = readParts(prompt, answer);
+    if (split) {
+      if (split.parts.some((part) => !part.answer || !Number.isInteger(part.score))) {
+        showError(`${label}: each part needs a mark and an answer such as a:5.`);
+        return;
+      }
+      const score = split.parts.reduce((sum, part) => sum + part.score, 0);
+      entries.push({
+        index: group.index,
+        type: group.type,
+        prompt: split.prompt,
+        answer: split.parts.map((part) => part.answer).join("\n"),
+        parts: split.parts.map((part) => ({ prompt: part.prompt, answer: part.answer, score: part.score })),
+        logic,
+        difficulty,
+        score,
+      });
+      continue;
+    }
     entries.push({
       index: group.index,
       type: group.type,
       prompt,
-      answer,
+      answer: answer.trim(),
       logic,
-      difficulty: "normal",
-      score: difficultyScore("normal"),
+      difficulty,
+      score: difficultyScore(difficulty),
     });
   }
 

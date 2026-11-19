@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=roles" />
 </head>
 <body>
   <div class="app">
@@ -32,12 +32,13 @@
       <p id="load-error" class="form-error" hidden></p>
       <p class="eyebrow">Admin</p>
       <h1>Accounts</h1>
-      <p class="lead">Create student accounts, reset passwords, suspend accounts.</p>
+      <p class="lead">Create accounts, grant admin status, reset passwords, and suspend accounts. A root account can only be changed by a root.</p>
 
       <form id="account-form" class="create-map">
         <label>Username <input id="account-username" type="text" maxlength="64" required /></label>
         <label>Display name <input id="account-display-name" type="text" maxlength="60" /></label>
         <label>Password <input id="account-password" type="password" minlength="4" maxlength="256" required /></label>
+        <label class="account-admin-toggle"><input id="account-admin" type="checkbox" /> Admin status</label>
         <button type="submit">Create account</button>
         <p id="account-form-error" class="form-error" hidden></p>
       </form>
@@ -50,6 +51,7 @@
           <button type="button" data-account-filter="all" aria-pressed="true">All</button>
           <button type="button" data-account-filter="student" aria-pressed="false">Students</button>
           <button type="button" data-account-filter="admin" aria-pressed="false">Admins</button>
+          <button type="button" data-account-filter="root" aria-pressed="false">Root</button>
           <button type="button" data-account-filter="suspended" aria-pressed="false">Suspended</button>
         </div>
       </div>
@@ -64,6 +66,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-accounts.js"></script>
+  <script type="module" src="/app/admin-accounts.js?v=roles"></script>
 </body>
 </html>

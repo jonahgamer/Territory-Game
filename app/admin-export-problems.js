@@ -1,7 +1,7 @@
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { api } from "../shared/api.js?v=page-data";
+import { api } from "../shared/api.js?v=roles";
 import { problemTag, typeInfo } from "../shared/difficulty.js";
 
 const STORAGE_KEY = "territory-problem-export";

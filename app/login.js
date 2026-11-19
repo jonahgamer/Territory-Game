@@ -1,5 +1,5 @@
-import { login, api } from "../shared/api.js?v=login-error";
-import { readStoredSession, setSession, tokenExpired } from "../shared/session.js";
+import { login, api } from "../shared/api.js?v=roles";
+import { readStoredSession, setSession, storedRole, tokenExpired } from "../shared/session.js?v=roles";
 
 const form = document.querySelector("#login-form");
 const usernameInput = document.querySelector("#login-username");
@@ -33,7 +33,7 @@ async function onSubmit(event) {
     const user = {
       username: String(data.user.username),
       displayName: String(data.user.displayName || data.user.username),
-      role: data.user.role === "admin" ? "admin" : "student",
+      role: storedRole(data.user.role),
       pfp: String(data.user.pfp || ""),
     };
     setSession({ token: data.token, user });

@@ -1287,7 +1287,7 @@ async function findStudent(db, raw) {
     if (named.length > 1) return { error: `More than one student is named ${name}. Use the username.` };
     record = named[0] || null;
   }
-  if (!record || accountIsProtected(record)) return { error: `No student account named ${name}.` };
+  if (!record || accountRole(record) !== 'student') return { error: `No student account named ${name}.` };
   if (record.banned === true) return { error: `${record.username} is suspended.` };
   return { username: String(record.username) };
 }
@@ -1722,8 +1722,20 @@ function cleanUsername(value) {
   return username;
 }
 
-function accountIsProtected(record) {
-  return record?.role === 'admin' || record?.role === 'root';
+function isRoot(user) {
+  return user?.role === 'root';
+}
+
+function accountRole(record) {
+  if (record?.role === 'root') return 'root';
+  if (record?.role === 'admin') return 'admin';
+  return 'student';
+}
+
+function roleRank(role) {
+  if (role === 'root') return 0;
+  if (role === 'admin') return 1;
+  return 2;
 }
 
 function timestampValue(value) {
@@ -1736,7 +1748,7 @@ function publicAccount(record, memberships = []) {
   return {
     username: String(record.username || ''),
     displayName: String(record.displayName || record.username || ''),
-    role: accountIsProtected(record) ? 'admin' : 'student',
+    role: accountRole(record),
     banned: record.banned === true,
     pfp: typeof record.pfp === 'string' ? record.pfp : '',
     createdAt: timestampValue(record.createdAt),
@@ -1778,7 +1790,7 @@ async function handleListAccounts(req, res, db, user) {
   const accounts = records
     .filter((record) => typeof record.username === 'string' && record.username)
     .map((record) => publicAccount(record, memberships.get(record.username.toLowerCase()) || []))
-    .sort((a, b) => Number(b.role === 'admin') - Number(a.role === 'admin') || a.username.localeCompare(b.username));
+    .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.username.localeCompare(b.username));
   return res.status(200).json({ success: true, accounts });
 }
 
@@ -1804,7 +1816,7 @@ async function handleCreateAccount(req, res, db, user, body) {
     username,
     displayName,
     password: passwordHash,
-    role: 'student',
+    role: body.admin === true ? 'admin' : 'student',
     banned: false,
     pfp: '',
     createdAt: new Date(),
@@ -1863,8 +1875,8 @@ async function handleUpdateAccount(req, res, db, user, body) {
   const users = db.collection('users');
   const record = await users.findOne({ username });
   if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
-  if (accountIsProtected(record)) {
-    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
+  if (accountRole(record) === 'root' && !isRoot(user)) {
+    return res.status(403).json({ success: false, message: 'Only a root can change a root account.' });
   }
   const update = {};
   if (body.displayName !== undefined) {
@@ -1889,6 +1901,18 @@ async function handleUpdateAccount(req, res, db, user, body) {
       return res.status(400).json({ success: false, message: 'You cannot suspend your own account.' });
     }
     update.banned = body.banned;
+  }
+  if (body.admin !== undefined) {
+    if (typeof body.admin !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Missing account' });
+    }
+    if (accountRole(record) === 'root') {
+      return res.status(400).json({ success: false, message: 'A root account keeps root access.' });
+    }
+    if (username === user.username) {
+      return res.status(400).json({ success: false, message: 'You cannot change your own admin status.' });
+    }
+    update.role = body.admin ? 'admin' : 'student';
   }
   if (Object.keys(update).length === 0) {
     return res.status(400).json({ success: false, message: 'Nothing to change.' });
@@ -1955,6 +1979,54 @@ async function handleDeleteVersion(req, res, db, user, body) {
   return res.status(200).json({ success: true, versions: await listVersions(db) });
 }
 
+async function listRules(db) {
+  const docs = await db.collection('rules').find({}).sort({ createdAt: -1 }).limit(100).toArray();
+  return docs.map((doc) => ({
+    id: String(doc.id || doc._id || ''),
+    title: String(doc.title || '').slice(0, 80),
+    message: String(doc.message || '').slice(0, 4000),
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.getTime() : Number(doc.createdAt) || 0,
+    createdBy: String(doc.createdBy || '').slice(0, 80),
+  })).filter((item) => item.title && item.message);
+}
+
+async function handlePageRules(req, res, db, user) {
+  return res.status(200).json({
+    success: true,
+    user: pageUser(user),
+    rules: await listRules(db),
+    serverNow: Date.now(),
+  });
+}
+
+async function handleAddRule(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  if (!title || title.length > 80 || !message || message.length > 4000) {
+    return res.status(400).json({ success: false, message: 'Add a title of up to 80 characters and the rule text.' });
+  }
+  await db.collection('rules').insertOne({
+    id: crypto.randomUUID(),
+    title,
+    message,
+    createdAt: new Date(),
+    createdBy: String(user.username || ''),
+  });
+  return res.status(200).json({ success: true, rules: await listRules(db) });
+}
+
+async function handleDeleteRule(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  if (!id || id.length > 80) return res.status(400).json({ success: false, message: 'Missing rule' });
+  const query = [{ id }];
+  if (ObjectId.isValid(id) && String(new ObjectId(id)) === id) query.push({ _id: new ObjectId(id) });
+  const result = await db.collection('rules').deleteOne({ $or: query });
+  if (!result.deletedCount) return res.status(404).json({ success: false, message: 'That rule was not found.' });
+  return res.status(200).json({ success: true, rules: await listRules(db) });
+}
+
 async function handleDeleteAccount(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const username = cleanUsername(body.username);
@@ -1965,8 +2037,14 @@ async function handleDeleteAccount(req, res, db, user, body) {
   const users = db.collection('users');
   const record = await users.findOne({ username });
   if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
-  if (accountIsProtected(record)) {
-    return res.status(400).json({ success: false, message: 'Admin accounts stay as they are.' });
+  if (accountRole(record) === 'root') {
+    if (!isRoot(user)) {
+      return res.status(403).json({ success: false, message: 'Only a root can change a root account.' });
+    }
+    const otherRoots = await users.countDocuments({ role: 'root', username: { $ne: username } });
+    if (otherRoots < 1) {
+      return res.status(400).json({ success: false, message: 'Keep at least one root account.' });
+    }
   }
   let teamsChanged = 0;
   const session = getMongoClient().startSession();
@@ -2956,10 +3034,14 @@ export default async function handler(req, res) {
   try {
     const account = await db.collection('users').findOne(
       { username: user.username },
-      { projection: { banned: 1 } }
+      { projection: { banned: 1, role: 1, displayName: 1 } }
     );
     if (!account || account.banned === true) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    user.role = accountRole(account);
+    if (typeof account.displayName === 'string' && account.displayName.trim()) {
+      user.displayName = account.displayName.trim();
     }
   } catch (err) {
     console.error('[territory] account check failed:', err.message);
@@ -2999,6 +3081,9 @@ export default async function handler(req, res) {
       case 'page-student-contests': return await handlePageStudentContests(req, res, db, user);
       case 'page-answer':   return await handlePageAnswer(req, res, db, user);
       case 'page-credits':  return await handlePageCredits(req, res, db, user);
+      case 'page-rules':    return await handlePageRules(req, res, db, user);
+      case 'add-rule':      return await handleAddRule(req, res, db, user, body);
+      case 'delete-rule':   return await handleDeleteRule(req, res, db, user, body);
       case 'save-maps':     return await handleSaveMaps(req, res, db, user, body);
       case 'save-problems': return await handleSaveProblems(req, res, db, user, body);
       case 'test-problem': return await handleTestProblem(req, res, db, user, body);

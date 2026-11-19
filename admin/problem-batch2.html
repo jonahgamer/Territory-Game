@@ -98,19 +98,20 @@
       <h1 id="upload-title">Upload problems</h1>
       <p class="lead">
         Drop files named <code>X&lt;number&gt;.pro</code> (statement), <code>X&lt;number&gt;.ans</code> (answer)
-        and optionally <code>X&lt;number&gt;.gra</code> (grader). X is the type: M math, O OI, S science, P puzzle, T testing.
-        Files that share a code, such as <code>P26100</code>, are grouped into one problem.
+        and optionally <code>X&lt;number&gt;.dif</code> (easy, normal, hard, or insane) and <code>X&lt;number&gt;.gra</code> (grader).
+        X is the type: M math, O OI, S science, P puzzle, T testing.
+        Files that share a code, such as <code>O26100</code>, are grouped into one problem.
       </p>
       <p id="upload-error" class="form-error" hidden></p>
 
       <div class="drop-zone" id="drop-zone">
         <p class="drop-zone-title">Drop files here</p>
-        <p class="drop-zone-hint">.pro · .ans · .gra</p>
+        <p class="drop-zone-hint">.pro · .ans · .dif · .gra</p>
         <div class="drop-zone-actions">
           <button class="account-action" id="pick-files" type="button">Choose files</button>
           <button class="account-action" id="pick-folder" type="button">Choose folder</button>
         </div>
-        <input id="file-input" type="file" multiple accept=".pro,.ans,.gra" hidden />
+        <input id="file-input" type="file" multiple accept=".pro,.ans,.gra,.dif" hidden />
         <input id="folder-input" type="file" webkitdirectory multiple hidden />
       </div>
 
@@ -122,6 +123,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-problem-upload.js?v=upload-code"></script>
+  <script type="module" src="/app/admin-problem-upload.js?v=roles"></script>
 </body>
 </html>

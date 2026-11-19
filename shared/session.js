@@ -15,7 +15,7 @@ export function readStoredSession() {
       user: {
         username,
         displayName: String(stored.user.displayName || username),
-        role: stored.user.role === "admin" ? "admin" : "student",
+        role: storedRole(stored.user.role),
         pfp: safePfp(stored.user.pfp),
       },
     };
@@ -63,11 +63,19 @@ export function setSession(session) { _session = session; saveSession(session); 
 export function isSignedIn() {
   return Boolean(_session?.user?.username && _session.token);
 }
+export function storedRole(role) {
+  if (role === "root" || role === "admin") return role;
+  return "student";
+}
+export function isRoot() {
+  return _session?.user?.role === "root";
+}
 export function isAdmin() {
-  return _session?.user?.role === "admin";
+  const role = _session?.user?.role;
+  return role === "admin" || role === "root";
 }
 export function isContestant() {
-  return isSignedIn() && !isAdmin();
+  return isSignedIn() && _session?.user?.role === "student";
 }
 export function contestantId() {
   return _session?.user?.username || "";
@@ -85,6 +93,12 @@ export function requireSession(redirectTo = "/login.html") {
 export function requireAdmin(redirectTo = "/login.html") {
   if (!isSignedIn()) { location.replace(redirectTo); return false; }
   if (!isAdmin()) { location.replace("/index.html"); return false; }
+  return true;
+}
+
+export function requireRoot(redirectTo = "/login.html") {
+  if (!isSignedIn()) { location.replace(redirectTo); return false; }
+  if (!isRoot()) { location.replace(isAdmin() ? "/admin/maps.html" : "/index.html"); return false; }
   return true;
 }
 

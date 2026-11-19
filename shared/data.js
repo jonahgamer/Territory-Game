@@ -1,4 +1,4 @@
-import { api } from "./api.js?v=page-data";
+import { api } from "./api.js?v=roles";
 import { noteServerTime } from "./contest-time.js";
 import { normalizeContest } from "./contest-data.js?v=part-score";
 

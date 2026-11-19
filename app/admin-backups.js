@@ -1,6 +1,6 @@
-import { requireAdmin } from "../shared/session.js";
-import { getSession, logOut } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireRoot } from "../shared/session.js?v=roles";
+import { getSession, logOut } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { el } from "../shared/dom.js";
 
@@ -665,7 +665,7 @@ function showLog(lines) {
   node.textContent = lines.join("\n");
 }
 
-if (requireAdmin()) {
+if (requireRoot()) {
   initNav("backups");
   bindToastClose();
   run();

@@ -1,8 +1,8 @@
-import { requireContestant, getSession, sameContestant } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=part-score";
-import { api } from "../shared/api.js?v=parts";
+import { loadPage } from "../shared/data.js?v=roles";
+import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,

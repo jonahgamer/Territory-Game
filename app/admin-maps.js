@@ -1,7 +1,7 @@
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import { mapMode } from "../shared/map-render.js";
 

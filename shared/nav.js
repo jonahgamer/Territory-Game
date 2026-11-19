@@ -1,4 +1,4 @@
-import { getSession, isContestant, logOut, safePfp } from "./session.js";
+import { getSession, isContestant, logOut, safePfp } from "./session.js?v=roles";
 
 export function initNav(activePage) {
   const session = getSession();
@@ -14,6 +14,7 @@ export function initNav(activePage) {
   const items = contestant ? [
     { href: "/index.html", label: "Contests", key: "contests" },
     { href: "/admin/credits.html", label: "Credits", key: "credits" },
+    { href: "/admin/rules.html", label: "Rules", key: "rules" },
     { href: "/settings.html", label: "Settings", key: "settings" },
   ] : [
     { href: "/admin/maps.html", label: "Maps", key: "maps" },
@@ -21,8 +22,9 @@ export function initNav(activePage) {
     { href: "/admin/contests.html", label: "Contests", key: "contests" },
     { href: "/admin/tutorial.html", label: "Tutorial", key: "tutorial" },
     { href: "/admin/credits.html", label: "Credits", key: "credits" },
+    { href: "/admin/rules.html", label: "Rules", key: "rules" },
     { href: "/admin/accounts.html", label: "Accounts", key: "accounts" },
-    { href: "/admin/backups.html", label: "Backups", key: "backups" },
+    ...(session.user.role === "root" ? [{ href: "/admin/backups.html", label: "Backups", key: "backups" }] : []),
   ];
 
   const list = document.querySelector("#nav-list");
@@ -44,7 +46,7 @@ export function initNav(activePage) {
   const pfp = document.querySelector("#account-pfp");
   const user = session.user;
   const shownName = user.displayName || user.username;
-  const roleLabel = user.role === "admin" ? "Admin" : "Student";
+  const roleLabel = user.role === "root" ? "Root" : user.role === "admin" ? "Admin" : "Student";
   if (name) { name.hidden = false; name.textContent = shownName; }
   if (role) {
     const same = shownName.trim().toLowerCase() === roleLabel.toLowerCase();

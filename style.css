@@ -2758,9 +2758,19 @@ main:has(.editor-head) .grid-scroll {
   text-transform: uppercase;
 }
 
-.account-badge.role-admin {
-  border-color: #ff9a1a;
-  color: #ff9a1a;
+.account-badge.role-root {
+  border-color: #f2d27a;
+  color: #f2d27a;
+}
+
+.account-admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: none;
 }
 
 .account-badge.role-student {

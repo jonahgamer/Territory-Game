@@ -1,8 +1,8 @@
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=page-data";
-import { api } from "../shared/api.js?v=page-data";
+import { loadPage } from "../shared/data.js?v=roles";
+import { api } from "../shared/api.js?v=roles";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END, MIN_SIZE, MAX_SIZE, CELL_SIZE, PROBLEM_TYPES } from "../shared/constants.js";
 import { typeInfo, problemDifficulty, problemTag } from "../shared/difficulty.js";

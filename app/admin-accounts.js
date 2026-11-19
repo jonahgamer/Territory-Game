@@ -1,7 +1,7 @@
-import { requireAdmin } from "../shared/session.js";
-import { initNav } from "../shared/nav.js";
+import { requireAdmin, getSession, isRoot } from "../shared/session.js?v=roles";
+import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { api } from "../shared/api.js";
+import { api } from "../shared/api.js?v=roles";
 import { el, renderList, formatAccountDate, confirmTwice } from "../shared/dom.js";
 
 // ── 状态 ────────────────────────────────────────────────
@@ -42,6 +42,7 @@ function matches(account) {
   }
   if (state.filter === "admin") return account.role === "admin";
   if (state.filter === "student") return account.role === "student";
+  if (state.filter === "root") return account.role === "root";
   if (state.filter === "suspended") return account.banned === true;
   return true;
 }
@@ -53,6 +54,7 @@ function render() {
     const counts = {
       all: state.accounts.length,
       admin: state.accounts.filter((a) => a.role === "admin").length,
+      root: state.accounts.filter((a) => a.role === "root").length,
       student: state.accounts.filter((a) => a.role === "student").length,
       suspended: state.accounts.filter((a) => a.banned).length,
     };
@@ -61,6 +63,7 @@ function render() {
       ["Accounts", counts.all],
       ["Students", counts.student],
       ["Admins", counts.admin],
+      ["Root", counts.root],
       ["Suspended", counts.suspended],
     ];
     for (const [label, value] of stats) {
@@ -87,17 +90,21 @@ function render() {
   renderList(list, visible, createCard);
 }
 
+function roleBadge(role) {
+  if (role === "root") return ["role-root", "Root"];
+  if (role === "admin") return ["role-admin", "Admin"];
+  return ["role-student", "Student"];
+}
+
 function createCard(account) {
   const item = el("li", account.banned ? "account-card suspended" : "account-card");
   item.dataset.username = account.username;
+  const [badgeClass, badgeLabel] = roleBadge(account.role);
+  const mine = account.username === getSession()?.user?.username;
 
   const head = el("div", "account-card-head");
   head.append(el("span", "account-card-name", account.username));
-  head.append(el(
-    "span",
-    `account-badge ${account.role === "admin" ? "role-admin" : "role-student"}`,
-    account.role === "admin" ? "Admin" : "Student"
-  ));
+  head.append(el("span", `account-badge ${badgeClass}`, badgeLabel));
   if (account.banned) head.append(el("span", "account-badge status-banned", "Suspended"));
 
   const displayName = account.displayName && account.displayName !== account.username
@@ -124,8 +131,8 @@ function createCard(account) {
 
   item.append(head, meta, teams);
 
-  if (account.role === "admin") {
-    item.append(el("p", "account-protected", "Administrator account — protected from edits, suspension, and deletion here."));
+  if (account.role === "root" && !isRoot()) {
+    item.append(el("p", "account-protected", "Root account. Only a root can change it."));
     return item;
   }
 
@@ -165,17 +172,25 @@ function createCard(account) {
 
   // 操作区
   const actions = el("div", "account-actions");
-  const suspend = el("button", "account-action", account.banned ? "Restore account" : "Suspend account");
-  suspend.type = "button";
-  suspend.dataset.accountSuspend = account.username;
-  suspend.dataset.banned = String(account.banned);
+  if (account.role !== "root" && !mine) {
+    const adminStatus = el("button", "account-action", account.role === "admin" ? "Remove admin status" : "Give admin status");
+    adminStatus.type = "button";
+    adminStatus.dataset.accountAdmin = account.username;
+    adminStatus.dataset.admin = account.role === "admin" ? "true" : "false";
+    actions.append(adminStatus);
+  }
+  if (!mine) {
+    const suspend = el("button", "account-action", account.banned ? "Restore account" : "Suspend account");
+    suspend.type = "button";
+    suspend.dataset.accountSuspend = account.username;
+    suspend.dataset.banned = String(account.banned);
 
-  const remove = el("button", "account-action danger", "Delete account");
-  remove.type = "button";
-  remove.dataset.accountDelete = account.username;
-  remove.setAttribute("aria-label", `Delete ${account.username}`);
-
-  actions.append(suspend, remove);
+    const remove = el("button", "account-action danger", "Delete account");
+    remove.type = "button";
+    remove.dataset.accountDelete = account.username;
+    remove.setAttribute("aria-label", `Delete ${account.username}`);
+    actions.append(suspend, remove);
+  }
   item.append(fields, actions);
   return item;
 }
@@ -186,6 +201,7 @@ async function onCreate(event) {
   const username = document.querySelector("#account-username").value.trim();
   const displayName = document.querySelector("#account-display-name").value.trim();
   const password = document.querySelector("#account-password").value;
+  const admin = document.querySelector("#account-admin").checked;
   const formError = document.querySelector("#account-form-error");
 
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(username)) {
@@ -201,11 +217,12 @@ async function onCreate(event) {
   formError.hidden = true;
 
   try {
-    await api.createAccount({ username, displayName, password });
+    await api.createAccount({ username, displayName, password, admin });
     document.querySelector("#account-username").value = "";
     document.querySelector("#account-display-name").value = "";
     document.querySelector("#account-password").value = "";
-    showStatus(`Student ${username} created.`);
+    document.querySelector("#account-admin").checked = false;
+    showStatus(`${admin ? "Admin" : "Student"} ${username} created.`);
     await load();
   } catch (err) {
     formError.hidden = false;
@@ -217,7 +234,7 @@ function onFilter(event) {
   const btn = event.target.closest("[data-account-filter]");
   if (!btn) return;
   const f = btn.dataset.accountFilter;
-  if (!["all", "student", "admin", "suspended"].includes(f)) return;
+  if (!["all", "student", "admin", "root", "suspended"].includes(f)) return;
   state.filter = f;
   render();
 }
@@ -248,6 +265,19 @@ async function onListClick(event) {
   }
 
   // 暂停/恢复
+  const adminStatus = event.target.closest("[data-account-admin]");
+  if (adminStatus) {
+    const username = adminStatus.dataset.accountAdmin;
+    const nextAdmin = adminStatus.dataset.admin !== "true";
+    if (!nextAdmin && !window.confirm(`Remove admin status from ${username}? They will sign in as a student.`)) return;
+    await updateAccount(
+      username,
+      { admin: nextAdmin },
+      nextAdmin ? `${username} is now an admin.` : `${username} is now a student.`
+    );
+    return;
+  }
+
   const suspend = event.target.closest("[data-account-suspend]");
   if (suspend) {
     const username = suspend.dataset.accountSuspend;
@@ -268,7 +298,7 @@ async function onListClick(event) {
   if (!del) return;
   const username = del.dataset.accountDelete;
   if (!confirmTwice(
-    `Delete the student account ${username}?`,
+    `Delete the account ${username}?`,
     `Delete ${username} now? This removes them from contest teams and they will no longer be able to sign in.`
   )) return;
 

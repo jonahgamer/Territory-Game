@@ -1,6 +1,6 @@
-import { readStoredSession } from "../shared/session.js";
-import { api } from "../shared/api.js?v=parts";
-import { loadPage } from "../shared/data.js?v=part-score";
+import { readStoredSession } from "../shared/session.js?v=roles";
+import { api } from "../shared/api.js?v=roles";
+import { loadPage } from "../shared/data.js?v=roles";
 import { noteServerTime, serverNow } from "../shared/contest-time.js";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
