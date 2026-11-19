@@ -978,6 +978,58 @@ a.create-map-link {
   letter-spacing: 0;
 }
 
+.home-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 12px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+
+.home-links a {
+  display: grid;
+  gap: 6px;
+  min-height: 7rem;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.home-links a:hover {
+  border-color: var(--cyan);
+}
+
+.home-links strong {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+.home-links span {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.home-note {
+  margin: 0 0 28px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 18, 32, 0.72);
+}
+
+.home-note p {
+  margin: 0;
+}
+
+.home-note .version-name {
+  margin-bottom: 6px;
+}
+
 .contest-map-block {
   margin-top: 18px;
 }

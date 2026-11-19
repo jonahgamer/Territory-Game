@@ -92,19 +92,19 @@ export function requireSession(redirectTo = "/login.html") {
 
 export function requireAdmin(redirectTo = "/login.html") {
   if (!isSignedIn()) { location.replace(redirectTo); return false; }
-  if (!isAdmin()) { location.replace("/index.html"); return false; }
+  if (!isAdmin()) { location.replace("/home.html"); return false; }
   return true;
 }
 
 export function requireRoot(redirectTo = "/login.html") {
   if (!isSignedIn()) { location.replace(redirectTo); return false; }
-  if (!isRoot()) { location.replace(isAdmin() ? "/admin/maps.html" : "/index.html"); return false; }
+  if (!isRoot()) { location.replace("/home.html"); return false; }
   return true;
 }
 
 export function requireContestant(redirectTo = "/login.html") {
   if (!isSignedIn()) { location.replace(redirectTo); return false; }
-  if (!isContestant()) { location.replace("/admin/maps.html"); return false; }
+  if (!isContestant()) { location.replace("/home.html"); return false; }
   return true;
 }
 

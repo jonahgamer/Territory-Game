@@ -1,5 +1,5 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=hidden-rules";
+import { initNav } from "../shared/nav.js?v=home";
 import { bindToastClose } from "../shared/toast.js";
 
 if (requireAdmin()) {

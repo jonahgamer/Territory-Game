@@ -7,16 +7,18 @@ export function initNav(activePage) {
   const contestant = isContestant();
   const home = document.querySelector("#home-button");
   const mobileHome = document.querySelector("#mobile-home");
-  const homeHref = contestant ? "/index.html" : "/admin/maps.html";
+  const homeHref = "/home.html";
   if (home) home.href = homeHref;
   if (mobileHome) mobileHome.href = homeHref;
 
   const items = contestant ? [
+    { href: "/home.html", label: "Home", key: "home" },
     { href: "/index.html", label: "Contests", key: "contests" },
     { href: "/admin/credits.html", label: "Credits", key: "credits" },
     { href: "/admin/rules.html", label: "Rules", key: "rules" },
     { href: "/settings.html", label: "Settings", key: "settings" },
   ] : [
+    { href: "/home.html", label: "Home", key: "home" },
     { href: "/admin/maps.html", label: "Maps", key: "maps" },
     { href: "/admin/problems.html", label: "Problems", key: "problems" },
     { href: "/admin/contests.html", label: "Contests", key: "contests" },

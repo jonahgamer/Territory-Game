@@ -1,6 +1,6 @@
 import { requireRoot } from "../shared/session.js?v=roles";
 import { getSession, logOut } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=hidden-rules";
+import { initNav } from "../shared/nav.js?v=home";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { el } from "../shared/dom.js";
 

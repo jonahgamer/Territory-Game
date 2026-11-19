@@ -82,12 +82,19 @@
       </div>
       <p id="teleport-empty" class="field-note">No teleport paths yet.</p>
       <ul id="teleport-pairs" class="teleport-pairs" hidden></ul>
+      <h2>Maps</h2>
+      <p class="field-note">These are the maps in this contest. Teleport lines show which cells are connected. Shown lines stay transparent.</p>
+      <div class="kind-choices" id="teleport-line-choices" role="group" aria-label="Teleport lines">
+        <button type="button" data-teleport-lines="shown" aria-pressed="true">Transparent lines</button>
+        <button type="button" data-teleport-lines="hidden" aria-pressed="false">Hide lines</button>
+      </div>
+      <div id="contest-boards"></div>
     </main>
   </div>
   <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-contest.js?v=contest-lines"></script>
+  <script type="module" src="/app/admin-contest.js?v=home"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import { login, api } from "../shared/api.js?v=roles";
-import { readStoredSession, setSession, storedRole, tokenExpired } from "../shared/session.js?v=roles";
+import { readStoredSession, setSession, storedRole, tokenExpired } from "../shared/session.js?v=home";
 
 const form = document.querySelector("#login-form");
 const usernameInput = document.querySelector("#login-username");
@@ -8,7 +8,7 @@ const errorEl = document.querySelector("#login-error");
 const submit = document.querySelector("#login-submit");
 
 if (readStoredSession()) {
-  location.replace("index.html");
+  location.replace("home.html");
 } else {
   form.addEventListener("submit", onSubmit);
   usernameInput.focus();
@@ -38,7 +38,7 @@ async function onSubmit(event) {
     };
     setSession({ token: data.token, user });
     passwordInput.value = "";
-    location.replace("index.html");
+    location.replace("home.html");
   } catch (err) {
     showError(err.status === 401 ? "Invalid username or password" : (err.message || "Could not reach the server."));
   } finally {
