@@ -2900,9 +2900,9 @@ main:has(.editor-head) .grid-scroll {
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 4rem minmax(10rem, 1fr) 7rem 7rem 8rem;
+  grid-template-columns: 4rem minmax(10rem, 1fr) minmax(14rem, 20rem) 7rem 8rem;
   align-items: stretch;
-  min-width: 38rem;
+  min-width: 50rem;
   border-bottom: 1px solid rgba(62, 224, 255, 0.22);
 }
 
@@ -3527,6 +3527,27 @@ main:has(.editor-head) .grid-scroll {
   color: var(--muted);
 }
 
+.score-part {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.score-tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 18rem;
+  padding: 8px 10px;
+  border: 1px solid rgba(62, 224, 255, 0.45);
+  background: rgba(6, 12, 22, 0.96);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
 /* Brand row: logo + back-to-top button (sidebar / desktop only) */
 .brand-row {
   display: flex;
@@ -3635,4 +3656,11 @@ main:has(.editor-head) .grid-scroll {
 .hidden-rule-text {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.rule-points {
+  margin: 0;
+  color: var(--cyan);
+  font-family: var(--font-ui);
+  font-size: 13px;
 }

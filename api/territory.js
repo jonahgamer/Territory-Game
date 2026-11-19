@@ -35,7 +35,7 @@ import {
   contestMapIds, primaryMapId, placeKey, cleanTeleports, teleportPairAt, teleportOtherEnd,
 } from '../shared/contest-board.js';
 import { shiftedCell } from '../shared/map-render.js';
-import { cleanHiddenRuleSettings, hiddenRuleCatalog, revealedHiddenRules } from './hidden-rules-catalog.js';
+import { cleanHiddenRuleSettings, hiddenRuleCatalog, hiddenRuleEffectMessage, hiddenRuleEnabled, largestRectangleInTerritory, revealedHiddenRules, roundMark, sameTypeRunBonus, solveBurstBonus } from './hidden-rules-catalog.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -313,7 +313,12 @@ function cleanClaims(value, fallbackMapId = '') {
       complete: claim.complete !== false,
     };
     if (solvedParts.length) stored.solvedParts = solvedParts;
-    if (Number.isInteger(claim.score) && claim.score >= 0 && claim.score <= MAX_PROBLEM_SCORE * MAX_PROBLEM_PARTS) stored.score = claim.score;
+    if (Number.isFinite(Number(claim.score))) {
+      const score = roundMark(claim.score);
+      if (score >= 0 && score <= MAX_PROBLEM_SCORE * MAX_PROBLEM_PARTS * 10) stored.score = score;
+    }
+    const awards = cleanClaimAwards(claim.awards);
+    if (awards.length) stored.awards = awards;
     claims.push(stored);
   }
   return claims;
@@ -442,17 +447,315 @@ function territoryCells(contest, teamId, mapId) {
   return owned;
 }
 
-function adjacentToTeam(map, contest, teamId, cell) {
+function orthogonalNeighbors(map, cell) {
   const cols = map.cols;
   const row = Math.floor(cell / cols);
   const column = cell % cols;
-  const owned = territoryCells(contest, teamId, map.id);
   const neighbors = [];
   if (column > 0) neighbors.push(cell - 1);
   if (column + 1 < cols) neighbors.push(cell + 1);
   if (row > 0) neighbors.push(cell - cols);
   if (row + 1 < map.rows) neighbors.push(cell + cols);
-  return neighbors.some((index) => owned.has(index));
+  return neighbors;
+}
+
+function adjacentToTeam(map, contest, teamId, cell) {
+  const owned = territoryCells(contest, teamId, map.id);
+  return orthogonalNeighbors(map, cell).some((index) => owned.has(index));
+}
+
+function spawnGuardBlocks(contest, map, teamId, cell) {
+  if (!hiddenRuleEnabled(contest, 'spawn-guard')) return false;
+  if (map?.cells?.[cell]?.kind !== 'problem') return false;
+  const owners = new Set();
+  for (const spawn of cleanTeamCells(contest?.spawns, primaryMapId(contest))) {
+    if (spawn.mapId !== map.id) continue;
+    if (orthogonalNeighbors(map, spawn.cell).includes(cell)) owners.add(spawn.teamId);
+  }
+  return owners.size > 0 && !owners.has(teamId);
+}
+
+function hiddenAttemptBlocks(contest, maps, teamId) {
+  if (!teamId) return [];
+  const blocks = [];
+  for (const map of maps) {
+    for (let cell = 0; cell < (map.cells || []).length; cell += 1) {
+      if (!spawnGuardBlocks(contest, map, teamId, cell)) continue;
+      if (!adjacentToTeam(map, contest, teamId, cell)) continue;
+      blocks.push({ mapId: map.id, cell });
+    }
+  }
+  return blocks;
+}
+
+const SCORING_RULES = ['same-type-run', 'map-multiplier', 'cell-steal', 'touch-bonus', 'territory-rectangle', 'solve-burst'];
+
+function cleanClaimAwards(value) {
+  if (!Array.isArray(value)) return [];
+  const awards = [];
+  const seen = new Set();
+  for (const award of value) {
+    const id = typeof award?.id === 'string' ? award.id : '';
+    const points = roundMark(award?.points);
+    if (!SCORING_RULES.includes(id) || !points || seen.has(id) || Math.abs(points) > 1000) continue;
+    seen.add(id);
+    awards.push({ id, points });
+  }
+  return awards;
+}
+
+function cleanRuleLedger(value) {
+  if (!Array.isArray(value)) return [];
+  const rows = [];
+  for (const row of value) {
+    const teamId = typeof row?.teamId === 'string' ? row.teamId : '';
+    const points = roundMark(row?.points);
+    const at = Number(row?.at);
+    if (!teamId || row?.ruleId !== 'cell-steal' || !Number.isFinite(at)) continue;
+    rows.push({ teamId, ruleId: 'cell-steal', points, at });
+  }
+  return rows.slice(-200);
+}
+
+function addAward(awards, id, points) {
+  const amount = roundMark(points);
+  if (!amount) return awards;
+  const next = awards.slice();
+  const found = next.find((award) => award.id === id);
+  if (found) found.points = roundMark(found.points + amount);
+  else next.push({ id, points: amount });
+  return cleanClaimAwards(next);
+}
+
+function awardSentences(contest, awards, now) {
+  const lines = [];
+  let hiddenGain = 0;
+  let hiddenLoss = 0;
+  const revealed = new Set(revealedHiddenRules(contest, now).map((rule) => rule.id));
+  for (const award of awards) {
+    if (!award.points) continue;
+    if (revealed.has(award.id)) {
+      const line = hiddenRuleEffectMessage(contest, award.id, now, { points: award.points });
+      if (line) lines.push(line);
+    } else if (award.points > 0) hiddenGain = roundMark(hiddenGain + award.points);
+    else hiddenLoss = roundMark(hiddenLoss + award.points);
+  }
+  if (hiddenGain) lines.push(hiddenRuleEffectMessage(contest, '', now, { points: hiddenGain }));
+  if (hiddenLoss) lines.push(hiddenRuleEffectMessage(contest, '', now, { points: hiddenLoss }));
+  return lines;
+}
+
+function sameTypeBonusFor(contest, maps, teamId, map, cell, solvedAt) {
+  if (!hiddenRuleEnabled(contest, 'same-type-run')) return 0;
+  const typeAt = (claim) => {
+    const board = maps.find((item) => item.id === claim.mapId);
+    const boardCell = board?.cells?.[claim.cell];
+    return boardCell?.kind === 'problem' ? boardCell.type : '';
+  };
+  const prior = cleanClaims(contest?.claims, primaryMapId(contest))
+    .filter((claim) => claim.teamId === teamId && claim.complete !== false && !(claim.mapId === map.id && claim.cell === cell))
+    .sort((a, b) => a.solvedAt - b.solvedAt || a.cell - b.cell);
+  return sameTypeRunBonus([...prior, { mapId: map.id, cell, solvedAt }].map(typeAt));
+}
+
+const STEAL_MS = 45 * 1000;
+
+function burstBonusFor(contest, teamId, map, cell, solvedAt) {
+  if (!hiddenRuleEnabled(contest, 'solve-burst')) return 0;
+  const item = cleanHiddenRuleSettings(contest?.hiddenRules).items.find((entry) => entry.id === 'solve-burst');
+  if (!item) return 0;
+  const times = cleanClaims(contest?.claims, primaryMapId(contest))
+    .filter((claim) => claim.teamId === teamId && claim.complete !== false && !(claim.mapId === map.id && claim.cell === cell))
+    .map((claim) => claim.solvedAt)
+    .concat(solvedAt)
+    .sort((a, b) => a - b);
+  return solveBurstBonus(times, item.count, item.seconds, item.points);
+}
+
+function mapMultiplier(contest, mapId) {
+  if (!hiddenRuleEnabled(contest, 'map-multiplier')) return 1;
+  const item = cleanHiddenRuleSettings(contest?.hiddenRules).items.find((entry) => entry.id === 'map-multiplier');
+  if (!item || item.mapId !== mapId) return 1;
+  return item.multiplier;
+}
+
+function touchSignature(contest) {
+  const settings = cleanHiddenRuleSettings(contest?.hiddenRules);
+  const item = settings.items.find((entry) => entry.id === 'touch-bonus');
+  if (!item) return '';
+  return [
+    contest?.startAt ?? '',
+    settings.reveal,
+    settings.order,
+    settings.periodMinutes,
+    item.revealMinute ?? '',
+    item.hidden ? 1 : 0,
+  ].join('|');
+}
+
+function touchAwards(contest, now) {
+  if (!hiddenRuleEnabled(contest, 'touch-bonus')) return null;
+  if (!revealedHiddenRules(contest, now).some((rule) => rule.id === 'touch-bonus')) return null;
+  const stored = contest?.touchBonus;
+  if (!stored || stored.signature !== touchSignature(contest) || !Array.isArray(stored.awards)) return null;
+  const awards = new Map();
+  for (const award of stored.awards) {
+    if (!award || typeof award.teamId !== 'string' || !Number.isInteger(award.bonus) || award.bonus < 0) continue;
+    awards.set(award.teamId, award.bonus);
+  }
+  return awards;
+}
+
+function touchAwardList(contest, now) {
+  const awards = touchAwards(contest, now);
+  if (!awards) return null;
+  return [...awards].map(([teamId, bonus]) => ({ teamId, bonus }));
+}
+
+function rectangleAwardList(contest, maps, now) {
+  if (!hiddenRuleEnabled(contest, 'territory-rectangle')) return null;
+  const end = contestWindow(contest)?.endAt;
+  if (!Number.isFinite(end) || now < end) return null;
+  const teams = cleanTeams(contest?.teams);
+  const fallback = primaryMapId(contest);
+  const owned = new Map(teams.map((team) => [team.id, new Map()]));
+  const add = (teamId, mapId, cell) => {
+    const byMap = owned.get(teamId);
+    if (!byMap) return;
+    const cells = byMap.get(mapId) || new Set();
+    cells.add(cell);
+    byMap.set(mapId, cells);
+  };
+  for (const spawn of cleanTeamCells(contest?.spawns, fallback)) add(spawn.teamId, spawn.mapId, spawn.cell);
+  for (const claim of cleanClaims(contest?.claims, fallback)) add(claim.teamId, claim.mapId, claim.cell);
+  return teams.map((team) => {
+    const grids = maps.map((map) => {
+      const cells = owned.get(team.id)?.get(map.id) || new Set();
+      const grid = [];
+      for (let row = 0; row < map.rows; row += 1) {
+        const line = [];
+        for (let column = 0; column < map.cols; column += 1) line.push(cells.has(row * map.cols + column));
+        grid.push(line);
+      }
+      return grid;
+    });
+    return { teamId: team.id, ...largestRectangleInTerritory(grids) };
+  });
+}
+
+function rulePointList(contest, maps, now, onlyTeam) {
+  const enabled = new Set(cleanHiddenRuleSettings(contest?.hiddenRules).items.map((item) => item.id));
+  const revealed = new Set(revealedHiddenRules(contest, now).map((rule) => rule.id));
+  const teams = cleanTeams(contest?.teams).filter((team) => !onlyTeam || team.id === onlyTeam.id);
+  const claims = cleanClaims(contest?.claims, primaryMapId(contest));
+  const touch = touchAwards(contest, now);
+  const rectangles = rectangleAwardList(contest, maps, now);
+  const rows = [];
+  for (const team of teams) {
+    const totals = new Map();
+    for (const claim of claims) {
+      if (claim.teamId !== team.id) continue;
+      for (const award of claim.awards || []) {
+        if (!enabled.has(award.id)) continue;
+        totals.set(award.id, roundMark((totals.get(award.id) || 0) + award.points));
+      }
+    }
+    for (const entry of cleanRuleLedger(contest?.ruleLedger)) {
+      if (entry.teamId !== team.id || !enabled.has(entry.ruleId)) continue;
+      totals.set(entry.ruleId, roundMark((totals.get(entry.ruleId) || 0) + entry.points));
+    }
+    if (touch && enabled.has('touch-bonus')) totals.set('touch-bonus', touch.get(team.id) || 0);
+    if (rectangles && enabled.has('territory-rectangle')) {
+      const found = rectangles.find((item) => item.teamId === team.id);
+      totals.set('territory-rectangle', found ? found.bonus : 0);
+    }
+    for (const [id, points] of totals) {
+      if (onlyTeam && !revealed.has(id)) continue;
+      if (!points) continue;
+      rows.push({ teamId: team.id, id, points });
+    }
+  }
+  return rows;
+}
+
+function ruleNotices(contest, maps, now, onlyTeam) {
+  const notices = [];
+  const teams = cleanTeams(contest?.teams).filter((team) => team.id === onlyTeam?.id);
+  const teamIds = new Set(teams.map((team) => team.id));
+  cleanRuleLedger(contest?.ruleLedger).forEach((entry, index) => {
+    if (!teamIds.has(entry.teamId)) return;
+    const text = entry.points
+      ? hiddenRuleEffectMessage(contest, 'cell-steal', now, { points: entry.points })
+      : hiddenRuleEffectMessage(contest, 'cell-steal', now, { action: 'lost-cell' });
+    if (text) notices.push({ id: `steal:${entry.teamId}:${entry.at}:${index}`, teamId: entry.teamId, text });
+  });
+  const touch = touchAwards(contest, now);
+  if (touch) {
+    for (const team of teams) {
+      const points = touch.get(team.id) || 0;
+      if (!points) continue;
+      notices.push({
+        id: `touch:${team.id}:${points}`,
+        teamId: team.id,
+        text: hiddenRuleEffectMessage(contest, 'touch-bonus', now, { points }),
+      });
+    }
+  }
+  const rectangles = rectangleAwardList(contest, maps, now);
+  if (rectangles) {
+    for (const award of rectangles) {
+      if (!teamIds.has(award.teamId) || !award.bonus) continue;
+      notices.push({
+        id: `rect:${award.teamId}:${award.bonus}`,
+        teamId: award.teamId,
+        text: hiddenRuleEffectMessage(contest, 'territory-rectangle', now, { points: award.bonus }),
+      });
+    }
+  }
+  return notices.slice(-40);
+}
+
+function countTouchingTeams(contest, maps) {
+  const teams = cleanTeams(contest?.teams);
+  const fallback = primaryMapId(contest);
+  const owned = new Map(teams.map((team) => [team.id, new Map()]));
+  const add = (teamId, mapId, cell) => {
+    const byMap = owned.get(teamId);
+    if (!byMap) return;
+    const cells = byMap.get(mapId) || new Set();
+    cells.add(cell);
+    byMap.set(mapId, cells);
+  };
+  for (const spawn of cleanTeamCells(contest?.spawns, fallback)) add(spawn.teamId, spawn.mapId, spawn.cell);
+  for (const claim of cleanClaims(contest?.claims, fallback)) add(claim.teamId, claim.mapId, claim.cell);
+  const touches = (leftId, rightId) => {
+    for (const map of maps) {
+      const left = owned.get(leftId)?.get(map.id);
+      const right = owned.get(rightId)?.get(map.id);
+      if (!left || !right) continue;
+      for (const cell of left) {
+        if (orthogonalNeighbors(map, cell).some((index) => right.has(index))) return true;
+      }
+    }
+    return false;
+  };
+  return teams.map((team) => ({
+    teamId: team.id,
+    bonus: teams.filter((other) => other.id !== team.id && touches(team.id, other.id)).length,
+  }));
+}
+
+async function settleTouchBonus(db, contest, maps, now) {
+  if (!contest || !hiddenRuleEnabled(contest, 'touch-bonus')) return contest;
+  if (!revealedHiddenRules(contest, now).some((rule) => rule.id === 'touch-bonus')) return contest;
+  const signature = touchSignature(contest);
+  if (contest.touchBonus?.signature === signature && Array.isArray(contest.touchBonus.awards)) return contest;
+  const awards = countTouchingTeams(contest, maps);
+  await db.collection('contests').updateOne(
+    { id: contest.id },
+    { $set: { touchBonus: { signature, at: now, awards }, updatedAt: new Date() } }
+  );
+  return { ...contest, touchBonus: { signature, at: now, awards } };
 }
 
 function teamSolvedAll(maps, claims, teamId, fallbackMapId) {
@@ -529,12 +832,14 @@ function marksFor(problem, indexes, single) {
   return indexes.reduce((sum, index) => sum + partMark(parts[index]), 0);
 }
 
-function buildLeaderboard(contest, maps, problems) {
+function buildLeaderboard(contest, maps, problems, now = Date.now()) {
   const fallback = primaryMapId(contest);
   const claims = cleanClaims(contest?.claims, fallback);
   const spawns = cleanTeamCells(contest?.spawns, fallback);
   const list = (Array.isArray(maps) ? maps : [maps]).filter(Boolean);
   const mapById = new Map(list.map((map) => [map.id, map]));
+  const awards = touchAwards(contest, now);
+  const rectangles = rectangleAwardList(contest, list, now);
   return cleanTeams(contest?.teams).map((team) => {
     let score = 0;
     let solved = 0;
@@ -545,11 +850,15 @@ function buildLeaderboard(contest, maps, problems) {
       const cell = mapById.get(claim.mapId)?.cells?.[claim.cell];
       if (!cell || cell.kind !== 'problem') continue;
       const problem = (problems || []).find((item) => item.index === cell.problemNo && item.type === cell.type);
-      score += Number.isInteger(claim.score) ? claim.score : problemScore(problem);
+      score = roundMark(score + (Number.isFinite(claim.score) ? claim.score : problemScore(problem)));
       solved += 1;
     }
-    return { teamId: team.id, name: team.name, score, solved, territory };
-  }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
+    const touchBonus = awards ? (awards.get(team.id) || 0) : null;
+    const rectangle = rectangles ? (rectangles.find((item) => item.teamId === team.id) || { area: 0, bonus: 0 }) : null;
+    const extra = (touchBonus !== null ? touchBonus : 0) + (rectangle ? rectangle.bonus : 0);
+    const rankScore = roundMark(score + extra);
+    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore };
+  }).sort((a, b) => b.rankScore - a.rankScore || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
 function isTestingContest(contest) {
@@ -630,7 +939,15 @@ function contestPayload(contest, mapOrMaps, problems, user) {
       locks,
       leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, maps, problems || []),
       frozen,
-      revealedRules: revealedHiddenRules(contest, Date.now()),
+      revealedRules: revealedHiddenRules({
+        ...contest,
+        mapNames: Object.fromEntries(maps.map((map) => [map.id, map.name])),
+      }, Date.now()),
+      touchBonus: touchAwardList(contest, Date.now()),
+      rectangleBonus: rectangleAwardList(contest, maps, Date.now()),
+      rulePoints: rulePointList(contest, maps, Date.now(), admin ? null : (team || { id: '' })),
+      notices: admin || !team ? [] : ruleNotices(contest, maps, Date.now(), team),
+      ruleBlocks: admin || !team ? [] : hiddenAttemptBlocks(contest, maps, team.id),
       ...energyFields(contest, admin ? null : team?.id, Date.now()),
     },
   };
@@ -755,6 +1072,7 @@ function contestStoredUpdate(contest, stored) {
     update.spawnVotes = [];
     update.spawns = [];
     update.claims = [];
+    update.ruleLedger = [];
     update.spawnResolved = false;
     update.resolvedTeams = [];
     update.energy = [];
@@ -763,6 +1081,7 @@ function contestStoredUpdate(contest, stored) {
     update.spawnVotes = [];
     update.spawns = [];
     update.claims = [];
+    update.ruleLedger = [];
     update.spawnResolved = false;
     update.resolvedTeams = [];
     update.energy = [];
@@ -829,7 +1148,7 @@ function normalizeContest(v) {
     energyAttemptMin: energy.attemptMin,
     energySolveBelow: energy.solveBelow,
     energySolve: energy.solve,
-    hiddenRules: cleanHiddenRuleSettings(v.hiddenRules),
+    hiddenRules: cleanHiddenRuleSettings(v.hiddenRules, mapIds),
   };
 }
 
@@ -1503,6 +1822,9 @@ async function handleSolve(req, res, db, user, body) {
   if (!myClaim && !adjacentToTeam(map, contest, team.id, cell)) {
     return res.status(400).json({ success: false, message: 'That cell is not next to your territory.', serverNow: now });
   }
+  if (spawnGuardBlocks(contest, map, team.id, cell)) {
+    return res.status(400).json({ success: false, message: hiddenRuleEffectMessage(contest, 'spawn-guard', now, { action: 'attempting this problem' }), serverNow: now });
+  }
 
   const mapCell = map.cells[cell];
   const problem = await findStoredProblem(db.collection('problems'), mapCell.type, mapCell.problemNo);
@@ -1580,8 +1902,24 @@ async function handleSolve(req, res, db, user, body) {
   const parts = Array.isArray(problem?.parts) ? problem.parts : [];
   const solvedParts = graded.single ? [] : [...already, ...fresh].sort((a, b) => a - b);
   const complete = Boolean(graded.single) || solvedParts.length === parts.length;
-  const gained = marksFor(problem, fresh, graded.single);
-  const score = (Number.isInteger(myClaim?.score) ? myClaim.score : 0) + gained;
+  const rawMarks = marksFor(problem, fresh, graded.single);
+  const gained = roundMark(rawMarks * mapMultiplier(contest, map.id));
+  const multiplierExtra = roundMark(gained - rawMarks);
+  const bonus = complete && myClaim?.complete !== true
+    ? sameTypeBonusFor(contest, maps, team.id, map, cell, now)
+    : 0;
+  const burst = complete && myClaim?.complete !== true
+    ? burstBonusFor(contest, team.id, map, cell, now)
+    : 0;
+  const previousScore = Number.isFinite(Number(myClaim?.score)) ? roundMark(myClaim.score) : 0;
+  const score = roundMark(previousScore + gained + bonus + burst);
+  const gainedAwards = [
+    { id: 'same-type-run', points: bonus },
+    { id: 'solve-burst', points: burst },
+    { id: 'map-multiplier', points: multiplierExtra },
+  ].filter((award) => award.points);
+  let awards = cleanClaimAwards(myClaim?.awards);
+  for (const award of gainedAwards) awards = addAward(awards, award.id, award.points);
   const claim = {
     mapId: map.id,
     cell,
@@ -1590,6 +1928,7 @@ async function handleSolve(req, res, db, user, body) {
     solvedAt: now,
     score,
     complete,
+    ...(awards.length ? { awards } : {}),
     ...(solvedParts.length ? { solvedParts } : {}),
   };
   let result;
@@ -1608,11 +1947,12 @@ async function handleSolve(req, res, db, user, body) {
         'claims.$.solvedParts': solvedParts,
         'claims.$.solvedBy': username,
         'claims.$.solvedAt': now,
+        'claims.$.awards': awards,
         updatedAt: new Date(),
       } }
     );
   }
-  const updated = await col.findOne({ id: contestId });
+  let updated = await col.findOne({ id: contestId });
   if (!result || result.matchedCount === 0) {
     return res.status(400).json({
       success: false,
@@ -1621,16 +1961,50 @@ async function handleSolve(req, res, db, user, body) {
       contest: contestPayload(updated, maps, problems, user).contest,
     });
   }
+  let victims = [];
+  if (!testing && complete && hiddenRuleEnabled(updated, 'cell-steal')) {
+    victims = cleanClaims(updated.claims, primaryMapId(updated)).filter((claim) => (
+      claim.teamId !== team.id
+      && claim.mapId === map.id
+      && claim.cell === cell
+      && claim.complete !== false
+      && Number.isFinite(claim.solvedAt)
+      && now >= claim.solvedAt
+      && now - claim.solvedAt <= STEAL_MS
+    ));
+    if (victims.length) {
+      const ledger = cleanRuleLedger(updated.ruleLedger);
+      for (const victim of victims) {
+        ledger.push({
+          teamId: victim.teamId,
+          ruleId: 'cell-steal',
+          points: -roundMark(victim.score || 0),
+          at: now,
+        });
+      }
+      await col.updateOne(
+        { id: contestId },
+        {
+          $pull: { claims: { mapId: map.id, cell, teamId: { $in: victims.map((victim) => victim.teamId) } } },
+          $set: { ruleLedger: cleanRuleLedger(ledger), updatedAt: new Date() },
+        }
+      );
+      updated = await col.findOne({ id: contestId });
+    }
+  }
+  updated = await settleTouchBonus(db, updated, maps, now);
   const names = fresh.map((index) => `(${String.fromCharCode(97 + index)})`).join(', ');
-  const message = graded.single
-    ? 'Answer accepted.'
-    : (complete
-      ? `Correct: ${names}.`
-      : `Correct: ${names}. The other parts are still open.`);
+  const message = [
+    graded.single
+      ? 'Answer accepted.'
+      : (complete ? `Correct: ${names}.` : `Correct: ${names}. The other parts are still open.`),
+    ...awardSentences(updated, gainedAwards, now),
+    ...(victims?.length ? [hiddenRuleEffectMessage(updated, 'cell-steal', now, { action: 'cell' })] : []),
+  ].filter(Boolean).join(' ');
   return res.status(200).json({
     ...contestPayload(updated, maps, problems, user),
     complete,
-    awarded: gained,
+    awarded: gained + bonus + burst,
     message,
   });
 }
@@ -1716,7 +2090,8 @@ async function handleClaimTeleport(req, res, db, user, body) {
       serverNow: Date.now(),
     });
   }
-  const updated = await col.findOne({ id: contestId });
+  let updated = await col.findOne({ id: contestId });
+  updated = await settleTouchBonus(db, updated, maps, now);
   return res.status(200).json(contestPayload(updated, maps, problems, user));
 }
 
@@ -2085,6 +2460,7 @@ async function handleContestState(req, res, db, user, body) {
   }
   const maps = await loadContestMaps(db, contest, { photo: false });
   contest = await maybeResolveSpawns(db, contest, maps, Date.now());
+  contest = await settleTouchBonus(db, contest, maps, Date.now());
   const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json(contestPayload(contest, maps, problems, user));
 }
@@ -2904,6 +3280,7 @@ async function handlePageContest(req, res, db, user) {
   const idSet = new Set(ids);
   contest = await maybeResolveSpawns(db, contest, boardDocs.filter((map) => idSet.has(map.id)), Date.now());
   const maps = boardDocs.filter((map) => new Set(contestMapIds(contest)).has(map.id));
+  contest = await settleTouchBonus(db, contest, maps, Date.now());
   const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json({
     success: true,
@@ -2932,6 +3309,7 @@ async function handlePagePlay(req, res, db, user) {
   let maps = await loadContestMaps(db, contest);
   contest = await maybeResolveSpawns(db, contest, maps, Date.now());
   maps = await loadContestMaps(db, contest);
+  contest = await settleTouchBonus(db, contest, maps, Date.now());
   const storedProblems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json({
     success: true,
@@ -2988,6 +3366,10 @@ async function handlePageAnswer(req, res, db, user) {
   const mapCell = map?.cells?.[cell];
   if (!map || mapCell?.kind !== 'problem') {
     return res.status(404).json({ success: false, message: 'That problem is not available.' });
+  }
+  const answerTeam = teamForUser(contest, user.username);
+  if (!isAdmin(user) && answerTeam && spawnGuardBlocks(contest, map, answerTeam.id, cell)) {
+    return res.status(400).json({ success: false, message: hiddenRuleEffectMessage(contest, 'spawn-guard', Date.now(), { action: 'attempting this problem' }) });
   }
   const stored = await db.collection('problems').findOne(
     { type: mapCell.type, index: mapCell.problemNo },

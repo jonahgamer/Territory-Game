@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=hidden-rules" />
+  <link rel="stylesheet" href="/style.css?v=hidden-burst" />
 </head>
 <body>
   <div class="app">
@@ -131,6 +131,7 @@
       <h2 id="contest-leaderboard-heading">Leaderboard</h2>
       <p id="contest-leaderboard-empty" class="field-note">No scores yet.</p>
       <ol id="contest-leaderboard" class="leaderboard" hidden></ol>
+      <div id="score-tooltip" class="score-tooltip" role="tooltip" hidden></div>
 
       <h2>Teleport paths</h2>
       <p class="field-note">Connect two teleport cells. A pair can stay on one map or join two maps. The link belongs to this contest, so the map itself is unchanged.</p>
@@ -149,6 +150,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-contest.js?v=hidden-rules"></script>
+  <script type="module" src="/app/admin-contest.js?v=hidden-burst"></script>
 </body>
 </html>

@@ -1,14 +1,14 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=hidden-rules";
+import { loadPage } from "../shared/data.js?v=hidden-burst";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
-  contestPhase, contestSchedule, phaseClock, phaseSentence, readSchedule,
+  contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort } from "../shared/contest-data.js?v=hidden-rules";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-burst";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
@@ -193,6 +193,7 @@ function render() {
   document.querySelector("#contest-leaderboard-heading").textContent = isTestingContest() ? "Team scores" : "Leaderboard";
 
   renderTestingTeamView();
+  paintRulePoints();
   renderTeams();
   fillContestantPicker();
   renderLeaderboard();
@@ -376,11 +377,25 @@ function hiddenSettings() {
     if (!id || seen.has(id) || !state.hiddenCatalog.some((rule) => rule.id === id)) continue;
     seen.add(id);
     const minute = item.revealMinute === null || item.revealMinute === "" ? null : Number(item.revealMinute);
-    items.push({
+    const next = {
       id,
       revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
       hidden: item.hidden === true,
-    });
+    };
+    if (id === "map-multiplier") {
+      const factor = Math.round(Number(item.multiplier) * 10) / 10;
+      next.mapId = typeof item.mapId === "string" ? item.mapId : "";
+      next.multiplier = Number.isFinite(factor) && factor >= 0.1 && factor <= 10 ? factor : 1;
+    }
+    if (id === "solve-burst") {
+      const count = Number(item.count);
+      const seconds = Number(item.seconds);
+      const points = Math.round(Number(item.points) * 10) / 10;
+      next.count = Number.isInteger(count) && count >= 2 && count <= 30 ? count : 3;
+      next.seconds = Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : 60;
+      next.points = Number.isFinite(points) && points >= 0.1 && points <= 100 ? points : 1;
+    }
+    items.push(next);
   }
   return {
     reveal: raw.reveal === "periodic" ? "periodic" : "minutes",
@@ -398,11 +413,21 @@ function readHiddenFromDom() {
   for (const row of document.querySelectorAll("#hidden-rule-list [data-rule-id]")) {
     const rawMinute = row.querySelector("[data-reveal-minute]")?.value ?? "";
     const minute = rawMinute === "" ? null : Number(rawMinute);
-    items.push({
+    const next = {
       id: row.dataset.ruleId,
       revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
       hidden: row.querySelector("[data-keep-hidden]")?.checked === true,
-    });
+    };
+    if (row.dataset.ruleId === "map-multiplier") {
+      next.mapId = row.querySelector("[data-multiplier-map]")?.value || "";
+      next.multiplier = Number(row.querySelector("[data-multiplier]")?.value);
+    }
+    if (row.dataset.ruleId === "solve-burst") {
+      next.count = Number(row.querySelector("[data-burst-count]")?.value);
+      next.seconds = Number(row.querySelector("[data-burst-seconds]")?.value);
+      next.points = Number(row.querySelector("[data-burst-points]")?.value);
+    }
+    items.push(next);
   }
   return {
     reveal,
@@ -423,14 +448,57 @@ function commitHidden(rebuild) {
     }
     return;
   }
+  const draft = readHiddenFromDom();
+  const multiplier = draft.items.find((item) => item.id === "map-multiplier");
+  if (multiplier) {
+    const factor = Math.round(Number(multiplier.multiplier) * 10) / 10;
+    const offStep = Math.abs(Number(multiplier.multiplier) * 10 - Math.round(Number(multiplier.multiplier) * 10)) > 0.001;
+    if (!multiplier.mapId || !Number.isFinite(factor) || factor < 0.1 || factor > 10 || offStep) {
+      if (error) {
+        error.hidden = false;
+        error.textContent = "Choose a map, and a multiplier from 0.1 to 10 in steps of 0.1.";
+      }
+      return;
+    }
+    multiplier.multiplier = factor;
+  }
+  const burst = draft.items.find((item) => item.id === "solve-burst");
+  if (burst) {
+    const count = Number(burst.count);
+    const seconds = Number(burst.seconds);
+    const points = Math.round(Number(burst.points) * 10) / 10;
+    const offStep = Math.abs(Number(burst.points) * 10 - Math.round(Number(burst.points) * 10)) > 0.001;
+    if (!Number.isInteger(count) || count < 2 || count > 30 || !Number.isInteger(seconds) || seconds < 1 || seconds > 3600 || !Number.isFinite(points) || points < 0.1 || points > 100 || offStep) {
+      if (error) {
+        error.hidden = false;
+        error.textContent = "Fast solves needs 2 to 30 problems, 1 to 3600 seconds, and 0.1 to 100 points in steps of 0.1.";
+      }
+      return;
+    }
+    burst.count = count;
+    burst.seconds = seconds;
+    burst.points = points;
+  }
   if (error) error.hidden = true;
-  state.current.hiddenRules = readHiddenFromDom();
+  state.current.hiddenRules = draft;
   if (rebuild) renderHiddenRules();
   persistContests();
 }
 
+function paintRulePoints() {
+  for (const row of document.querySelectorAll("#hidden-rule-list [data-rule-id]")) {
+    const note = row.querySelector(".rule-points");
+    if (!note || !scoringRule(row.dataset.ruleId)) continue;
+    note.textContent = (state.current.teams || []).map((team) => `${team.name} ${pointsLabel(rulePointsFor(state.current, team.id, row.dataset.ruleId))}`).join(" · ");
+  }
+}
+
 function renderHiddenRules() {
   const settings = hiddenSettings();
+  const maps = contestMaps();
+  for (const item of settings.items) {
+    if (item.id === "map-multiplier" && !maps.some((map) => map.id === item.mapId)) item.mapId = maps[0]?.id || "";
+  }
   state.current.hiddenRules = settings;
   const periodic = settings.reveal === "periodic";
   for (const btn of document.querySelectorAll("[data-hidden-reveal]")) {
@@ -483,6 +551,10 @@ function renderHiddenRules() {
     row.append(el("h3", null, rule.title));
     const text = el("p", "hidden-rule-text", rule.text);
     row.append(text);
+    if (scoringRule(item.id) && (state.current.teams || []).length) {
+      const points = (state.current.teams || []).map((team) => `${team.name} ${pointsLabel(rulePointsFor(state.current, team.id, item.id))}`).join(" · ");
+      row.append(el("p", "rule-points", points));
+    }
     const actions = el("div", "hidden-rule-actions");
     const minuteLabel = el("label", null, "Reveal at minute ");
     const minute = document.createElement("input");
@@ -511,6 +583,65 @@ function renderHiddenRules() {
     const remove = el("button", "account-action", "Remove");
     remove.type = "button";
     remove.dataset.hiddenRemove = item.id;
+    if (item.id === "map-multiplier") {
+      const mapLabel = el("label", null, "Map ");
+      const mapPick = document.createElement("select");
+      mapPick.dataset.multiplierMap = "true";
+      const maps = contestMaps();
+      if (!maps.length) {
+        const missing = el("option", null, "Add a map first");
+        missing.value = "";
+        mapPick.append(missing);
+      }
+      for (const map of maps) {
+        const option = el("option", null, map.name);
+        option.value = map.id;
+        if (map.id === item.mapId) option.selected = true;
+        mapPick.append(option);
+      }
+      if (maps.length && !maps.some((map) => map.id === item.mapId)) mapPick.value = maps[0].id;
+      mapLabel.append(mapPick);
+      const factorLabel = el("label", null, "Multiplier ");
+      const factor = document.createElement("input");
+      factor.type = "number";
+      factor.min = "0.1";
+      factor.max = "10";
+      factor.step = "0.1";
+      factor.dataset.multiplier = "true";
+      factor.value = String(item.multiplier ?? 1);
+      factorLabel.append(factor);
+      actions.append(mapLabel, factorLabel);
+    }
+    if (item.id === "solve-burst") {
+      const countLabel = el("label", null, "Problems ");
+      const count = document.createElement("input");
+      count.type = "number";
+      count.min = "2";
+      count.max = "30";
+      count.step = "1";
+      count.dataset.burstCount = "true";
+      count.value = String(item.count ?? 3);
+      countLabel.append(count);
+      const secondsLabel = el("label", null, "Seconds ");
+      const seconds = document.createElement("input");
+      seconds.type = "number";
+      seconds.min = "1";
+      seconds.max = "3600";
+      seconds.step = "1";
+      seconds.dataset.burstSeconds = "true";
+      seconds.value = String(item.seconds ?? 60);
+      secondsLabel.append(seconds);
+      const pointsLabelInput = el("label", null, "Points ");
+      const points = document.createElement("input");
+      points.type = "number";
+      points.min = "0.1";
+      points.max = "100";
+      points.step = "0.1";
+      points.dataset.burstPoints = "true";
+      points.value = String(item.points ?? 1);
+      pointsLabelInput.append(points);
+      actions.append(countLabel, secondsLabel, pointsLabelInput);
+    }
     actions.append(minuteLabel, keep, up, down, remove);
     if (periodic) up.hidden = settings.order === "random";
     if (periodic) down.hidden = settings.order === "random";
@@ -525,7 +656,17 @@ function addHiddenRule() {
   if (!id) return;
   const settings = readHiddenFromDom();
   if (settings.items.some((item) => item.id === id)) return;
-  settings.items.push({ id, revealMinute: null, hidden: false });
+  const added = { id, revealMinute: null, hidden: false };
+  if (id === "map-multiplier") {
+    added.mapId = contestMaps()[0]?.id || "";
+    added.multiplier = 1;
+  }
+  if (id === "solve-burst") {
+    added.count = 3;
+    added.seconds = 60;
+    added.points = 1;
+  }
+  settings.items.push(added);
   state.current.hiddenRules = settings;
   if (select) select.value = "";
   renderHiddenRules();
@@ -757,6 +898,11 @@ function applyPlayState(data) {
   state.current.spawns = next.spawns || [];
   state.current.claims = next.claims || [];
   if (Array.isArray(next.energy)) state.current.energy = next.energy;
+  if (Array.isArray(next.touchBonus)) state.current.touchBonus = next.touchBonus;
+  else if (next.touchBonus === null) state.current.touchBonus = null;
+  if (Array.isArray(next.rectangleBonus)) state.current.rectangleBonus = next.rectangleBonus;
+  else if (next.rectangleBonus === null) state.current.rectangleBonus = null;
+  if (Array.isArray(next.rulePoints)) state.current.rulePoints = next.rulePoints;
   if (next.mode) state.current.mode = next.mode;
   noteServerTime(data.serverNow);
 }
@@ -784,7 +930,7 @@ function renderLeaderboard() {
     item.append(
       el("span", "leaderboard-rank", `${rows.indexOf(row) + 1}.`),
       el("span", "leaderboard-team", row.name),
-      el("span", "leaderboard-stat", `${row.score} point${row.score === 1 ? "" : "s"}`),
+      el("span", "leaderboard-stat", pointsLabel(row.rankScore)),
       el("span", "leaderboard-stat", `${row.solved} solved`),
       el("span", "leaderboard-stat", `${row.territory} cell${row.territory === 1 ? "" : "s"}`)
     );
@@ -805,11 +951,19 @@ function buildLeaderboard(contest) {
       const cell = map?.cells?.[claim.cell];
       if (!cell || cell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === cell.problemNo && x.type === cell.type);
-      score += Number.isInteger(claim.score) ? claim.score : problemScore(p);
+      const gained = Number.isFinite(Number(claim.score)) ? Number(claim.score) : problemScore(p);
+      score = Math.round((score + gained) * 10) / 10;
       solved += 1;
     }
-    return { teamId: team.id, name: team.name, score, solved, territory };
-  }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
+    const award = Array.isArray(contest.touchBonus) ? contest.touchBonus.find((item) => item.teamId === team.id) : null;
+    const touchBonus = Array.isArray(contest.touchBonus) ? (award ? award.bonus : 0) : null;
+    const rectangle = Array.isArray(contest.rectangleBonus)
+      ? (contest.rectangleBonus.find((item) => item.teamId === team.id) || { area: 0, bonus: 0 })
+      : null;
+    const extra = (touchBonus !== null ? touchBonus : 0) + (rectangle ? rectangle.bonus : 0);
+    const rankScore = Math.round((score + extra) * 10) / 10;
+    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore };
+  }).sort((a, b) => b.rankScore - a.rankScore || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
 function renderBoard() {

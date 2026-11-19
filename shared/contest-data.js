@@ -68,7 +68,7 @@ export function normalizeClaims(value, fallbackMapId = "") {
     if (Array.isArray(c.solvedParts)) {
       claim.solvedParts = [...new Set(c.solvedParts.filter((index) => Number.isInteger(index) && index >= 0))].sort((a, b) => a - b);
     }
-    if (Number.isInteger(c.score) && c.score >= 0) claim.score = c.score;
+    if (Number.isFinite(Number(c.score)) && Number(c.score) >= 0) claim.score = Math.round(Number(c.score) * 10) / 10;
     claims.push(claim);
   }
   return claims;
@@ -85,11 +85,25 @@ function cleanHiddenRuleSettings(value) {
     if (!id || id.length > 40 || seen.has(id)) continue;
     seen.add(id);
     const minute = raw?.revealMinute === null || raw?.revealMinute === "" ? null : Number(raw?.revealMinute);
-    items.push({
+    const item = {
       id,
       revealMinute: Number.isInteger(minute) && minute >= 0 && minute <= 10080 ? minute : null,
       hidden: raw?.hidden === true,
-    });
+    };
+    if (id === "map-multiplier") {
+      const factor = Math.round(Number(raw?.multiplier) * 10) / 10;
+      item.mapId = typeof raw?.mapId === "string" ? raw.mapId : "";
+      item.multiplier = Number.isFinite(factor) && factor >= 0.1 && factor <= 10 ? factor : 1;
+    }
+    if (id === "solve-burst") {
+      const count = Number(raw?.count);
+      const seconds = Number(raw?.seconds);
+      const points = Math.round(Number(raw?.points) * 10) / 10;
+      item.count = Number.isInteger(count) && count >= 2 && count <= 30 ? count : 3;
+      item.seconds = Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : 60;
+      item.points = Number.isFinite(points) && points >= 0.1 && points <= 100 ? points : 1;
+    }
+    items.push(item);
     if (items.length >= 40) break;
   }
   return {
@@ -98,6 +112,181 @@ function cleanHiddenRuleSettings(value) {
     periodMinutes: Number.isInteger(period) && period >= 1 && period <= 10080 ? period : 10,
     items,
   };
+}
+
+function cleanRectangleBonus(value) {
+  if (!Array.isArray(value)) return null;
+  const awards = [];
+  const seen = new Set();
+  for (const award of value) {
+    if (!award || typeof award.teamId !== "string" || !Number.isInteger(award.bonus) || award.bonus < 0) continue;
+    if (!Number.isInteger(award.area) || award.area < 0 || seen.has(award.teamId)) continue;
+    seen.add(award.teamId);
+    awards.push({ teamId: award.teamId, bonus: award.bonus, area: award.area });
+  }
+  return awards;
+}
+
+function cleanTouchBonus(value) {
+  if (!Array.isArray(value)) return null;
+  const awards = [];
+  const seen = new Set();
+  for (const award of value) {
+    if (!award || typeof award.teamId !== "string" || !Number.isInteger(award.bonus) || award.bonus < 0) continue;
+    if (seen.has(award.teamId)) continue;
+    seen.add(award.teamId);
+    awards.push({ teamId: award.teamId, bonus: award.bonus });
+  }
+  return awards;
+}
+
+export function pointsLabel(points) {
+  const n = Math.round(Number(points) * 10) / 10;
+  if (!Number.isFinite(n)) return "0 points";
+  const shown = Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return `${shown} point${Math.abs(n) === 1 ? "" : "s"}`;
+}
+
+const SCORING_RULES = new Set(["same-type-run", "map-multiplier", "cell-steal", "touch-bonus", "territory-rectangle", "solve-burst"]);
+
+export function scoringRule(id) {
+  return SCORING_RULES.has(id);
+}
+
+export function rulePointsFor(contest, teamId, ruleId) {
+  const found = (contest?.rulePoints || []).find((row) => row.teamId === teamId && row.id === ruleId);
+  return found ? found.points : 0;
+}
+
+function cleanRulePoints(value) {
+  if (!Array.isArray(value)) return [];
+  const rows = [];
+  const seen = new Set();
+  for (const row of value) {
+    if (!row || typeof row.teamId !== "string" || typeof row.id !== "string") continue;
+    const points = Math.round(Number(row.points) * 10) / 10;
+    if (!Number.isFinite(points)) continue;
+    const key = `${row.teamId}:${row.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ teamId: row.teamId, id: row.id, points });
+  }
+  return rows;
+}
+
+function cleanNotices(value) {
+  if (!Array.isArray(value)) return [];
+  const notices = [];
+  for (const notice of value) {
+    if (!notice || typeof notice.id !== "string" || typeof notice.teamId !== "string" || typeof notice.text !== "string") continue;
+    notices.push({ id: notice.id.slice(0, 80), teamId: notice.teamId, text: notice.text.slice(0, 240) });
+  }
+  return notices.slice(0, 40);
+}
+
+export function formatMark(value) {
+  const n = Math.round(Number(value) * 10) / 10;
+  if (!Number.isFinite(n)) return "0";
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export function contestScoreParts(score, touchBonus, rectangle, ended) {
+  const parts = [{ value: score, detail: "Marks from solved problems." }];
+  if (Number.isFinite(touchBonus)) {
+    parts.push({
+      value: touchBonus,
+      detail: "Extra marks for other teams whose territory touched this team when that rule was revealed.",
+    });
+  }
+  if (ended && rectangle && Number.isInteger(rectangle.bonus) && Number.isInteger(rectangle.area)) {
+    const cells = rectangle.area === 1 ? "cell" : "cells";
+    parts.push({
+      value: rectangle.bonus,
+      detail: `The largest rectangle inside this territory covers ${rectangle.area} ${cells}. Half of that, rounded down, is ${rectangle.bonus}.`,
+    });
+  }
+  return parts;
+}
+
+export function formatContestScore(score, touchBonus, rectangle, ended) {
+  const parts = contestScoreParts(score, touchBonus, rectangle, ended);
+  const base = formatMark(parts[0].value);
+  if (parts.length === 1) {
+    const n = Math.round(Number(score) * 10) / 10;
+    return `${base} point${n === 1 ? "" : "s"}`;
+  }
+  if (!ended) return `${base} +${formatMark(parts[1].value)}`;
+  const bits = parts.map((part) => formatMark(part.value));
+  const total = formatMark(bits.reduce((sum, bit) => sum + Number(bit), 0));
+  return `${total} (${bits.join("+")})`;
+}
+
+export function fillContestScore(node, score, touchBonus, rectangle, ended) {
+  if (!node) return;
+  node.replaceChildren();
+  const parts = contestScoreParts(score, touchBonus, rectangle, ended);
+  const mark = (part) => {
+    const span = document.createElement("span");
+    span.className = "score-part";
+    span.textContent = formatMark(part.value);
+    span.dataset.scoreDetail = part.detail;
+    return span;
+  };
+  if (parts.length === 1) {
+    node.append(mark(parts[0]), document.createTextNode(Math.round(Number(score) * 10) / 10 === 1 ? " point" : " points"));
+    return;
+  }
+  if (!ended) {
+    node.append(mark(parts[0]), document.createTextNode(" +"), mark(parts[1]));
+    return;
+  }
+  const bits = parts.map((part) => formatMark(part.value));
+  const total = formatMark(bits.reduce((sum, bit) => sum + Number(bit), 0));
+  const totalPart = document.createElement("span");
+  totalPart.className = "score-part";
+  totalPart.textContent = total;
+  totalPart.dataset.scoreDetail = parts.map((part) => `${formatMark(part.value)}: ${part.detail}`).join(" ");
+  node.append(totalPart, document.createTextNode(" ("));
+  parts.forEach((part, index) => {
+    if (index) node.append(document.createTextNode("+"));
+    node.append(mark(part));
+  });
+  node.append(document.createTextNode(")"));
+}
+
+export function bindScoreTooltip() {
+  if (document.body.dataset.scoreTooltip === "1") return;
+  document.body.dataset.scoreTooltip = "1";
+  const tip = document.querySelector("#score-tooltip");
+  if (!tip) return;
+  document.addEventListener("mouseover", (event) => {
+    const part = event.target.closest?.(".score-part");
+    if (!part) return;
+    tip.textContent = part.dataset.scoreDetail || "";
+    tip.hidden = false;
+    const box = part.getBoundingClientRect();
+    tip.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - 300))}px`;
+    tip.style.top = `${box.bottom + 6}px`;
+  });
+  document.addEventListener("mouseout", (event) => {
+    const part = event.target.closest?.(".score-part");
+    if (!part || part.contains(event.relatedTarget)) return;
+    tip.hidden = true;
+  });
+}
+
+function cleanRuleBlocks(value) {
+  if (!Array.isArray(value)) return [];
+  const blocks = [];
+  const seen = new Set();
+  for (const block of value) {
+    if (!block || typeof block.mapId !== "string" || !block.mapId || !Number.isInteger(block.cell) || block.cell < 0) continue;
+    const key = `${block.mapId}:${block.cell}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    blocks.push({ mapId: block.mapId, cell: block.cell });
+  }
+  return blocks;
 }
 
 function cleanRevealedRules(value) {
@@ -143,6 +332,11 @@ export function normalizeContest(raw) {
     energy: cleanEnergyLedger(raw.energy),
     hiddenRules: cleanHiddenRuleSettings(raw.hiddenRules),
     revealedRules: cleanRevealedRules(raw.revealedRules),
+    ruleBlocks: cleanRuleBlocks(raw.ruleBlocks),
+    touchBonus: cleanTouchBonus(raw.touchBonus),
+    rectangleBonus: cleanRectangleBonus(raw.rectangleBonus),
+    rulePoints: cleanRulePoints(raw.rulePoints),
+    notices: cleanNotices(raw.notices),
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices, fallback),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes, fallback),

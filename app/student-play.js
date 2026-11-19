@@ -1,13 +1,13 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=hidden-rules";
+import { loadPage } from "../shared/data.js?v=hidden-burst";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams } from "../shared/contest-data.js?v=part-score";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-burst";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
@@ -87,6 +87,7 @@ async function run() {
   if (!teamForUser(state.contest)) throw new Error("You are not on a team in this contest.");
   bindEvents();
   render();
+  showRuleNotices(state.contest);
   startClock();
   watchContestPatch(contestId, (patch) => {
     applyPlayState({ contest: patch, serverNow: patch.serverNow });
@@ -485,7 +486,7 @@ function render() {
     + (contest.claims || []).filter((c) => c.teamId === team.id).length;
   const summary = document.querySelector("#student-team-summary");
   summary.hidden = false;
-  summary.textContent = `Members: ${team.members.join(", ")} · Score: ${row?.score ?? 0} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
+  summary.textContent = `Members: ${team.members.join(", ")} · Score: ${pointsLabel(row?.rankScore || 0)} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
   paintEnergy();
   paintRevealedRules();
 
@@ -571,12 +572,23 @@ function renderLeaderboard(rows) {
     item.append(
       el("span", "leaderboard-rank", `${idx}.`),
       el("span", "leaderboard-team", row.name),
-      el("span", "leaderboard-stat", `${row.score} point${row.score === 1 ? "" : "s"}`),
+      el("span", "leaderboard-stat", pointsLabel(row.rankScore)),
       el("span", "leaderboard-stat", `${row.solved} solved`),
       el("span", "leaderboard-stat", `${row.territory} cell${row.territory === 1 ? "" : "s"}`)
     );
     return item;
   });
+}
+
+function touchBonusFor(contest, teamId) {
+  if (!Array.isArray(contest?.touchBonus)) return null;
+  const found = contest.touchBonus.find((award) => award.teamId === teamId);
+  return found ? found.bonus : 0;
+}
+
+function rectangleFor(contest, teamId) {
+  if (!Array.isArray(contest?.rectangleBonus)) return null;
+  return contest.rectangleBonus.find((award) => award.teamId === teamId) || { area: 0, bonus: 0 };
 }
 
 function buildLeaderboard(contest, map) {
@@ -591,11 +603,16 @@ function buildLeaderboard(contest, map) {
       const boardCell = boardMap?.cells?.[claim.cell];
       if (!boardCell || boardCell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === boardCell.problemNo && x.type === boardCell.type);
-      score += Number.isInteger(claim.score) ? claim.score : problemScore(p);
+      const gained = Number.isFinite(Number(claim.score)) ? Number(claim.score) : problemScore(p);
+      score = Math.round((score + gained) * 10) / 10;
       solved += 1;
     }
-    return { teamId: team.id, name: team.name, score, solved, territory };
-  }).sort((a, b) => b.score - a.score || b.solved - a.solved || a.name.localeCompare(b.name));
+    const touchBonus = touchBonusFor(contest, team.id);
+    const rectangle = rectangleFor(contest, team.id);
+    const extra = (touchBonus !== null ? touchBonus : 0) + (rectangle ? rectangle.bonus : 0);
+    const rankScore = Math.round((score + extra) * 10) / 10;
+    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore };
+  }).sort((a, b) => b.rankScore - a.rankScore || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
 function isFrozen(contest, maps) {
@@ -964,6 +981,16 @@ function ownerAt(contest, mapId, index, cell) {
   return spawn ? (contest.teams || []).find((t) => t.id === spawn.teamId) || null : null;
 }
 
+function hiddenRuleBlocksAttempt(contest, mapId, cell) {
+  return (contest?.ruleBlocks || []).some((block) => block.mapId === mapId && block.cell === cell);
+}
+
+function hiddenAttemptMessage(contest) {
+  const rule = (contest?.revealedRules || []).find((item) => item.id === "spawn-guard");
+  if (rule) return `${rule.title} stops your team from attempting this problem.`;
+  return "A hidden rule stops your team from attempting this problem.";
+}
+
 function adjacentToTeam(map, contest, teamId, cell) {
   if (!teamId || !map || !Number.isInteger(cell)) return false;
   const owned = new Set();
@@ -1043,6 +1070,10 @@ async function onGridClick(event) {
   if (cell?.kind === "problem" && phase === "live" && !isFrozen(contest, maps)) {
     const mine = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
     const mineDone = Boolean(mine && mine.complete !== false);
+    if (hiddenRuleBlocksAttempt(contest, map.id, index)) {
+      showPageToast(hiddenAttemptMessage(contest), "warn");
+      return;
+    }
     if (mineDone || (!mine && !adjacentToTeam(map, contest, team.id, index))) return;
     if (answerOpenMode() === "newtab") {
       const url = new URL("/answer.html", location.origin);
@@ -1066,7 +1097,7 @@ async function showProblem(contest, map, phase) {
   const cell = map.cells[state.selectedCell];
   const claim = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
   const mineDone = Boolean(claim && claim.complete !== false);
-  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !mineDone && (Boolean(claim) || adjacentToTeam(map, contest, team.id, state.selectedCell));
+  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !mineDone && !hiddenRuleBlocksAttempt(contest, map.id, state.selectedCell) && (Boolean(claim) || adjacentToTeam(map, contest, team.id, state.selectedCell));
   const panel = document.querySelector("#student-problem");
   const form = document.querySelector("#student-answer-form");
   if (!playable) { panel.hidden = true; form.hidden = true; return; }
@@ -1409,6 +1440,18 @@ function applyPlayState(data) {
   if (Number.isInteger(next.energySolveBelow)) c.energySolveBelow = next.energySolveBelow;
   if (next.energySolve) c.energySolve = next.energySolve;
   if (Array.isArray(next.revealedRules)) c.revealedRules = next.revealedRules.map(publicRevealedRule).filter(Boolean);
+  if (Array.isArray(next.ruleBlocks)) c.ruleBlocks = next.ruleBlocks.filter((block) => block && typeof block.mapId === "string" && Number.isInteger(block.cell));
+  if (Array.isArray(next.touchBonus)) {
+    c.touchBonus = next.touchBonus.filter((award) => award && typeof award.teamId === "string" && Number.isInteger(award.bonus));
+  } else if (next.touchBonus === null) c.touchBonus = null;
+  if (Array.isArray(next.rectangleBonus)) {
+    c.rectangleBonus = next.rectangleBonus.filter((award) => award && typeof award.teamId === "string" && Number.isInteger(award.bonus) && Number.isInteger(award.area));
+  } else if (next.rectangleBonus === null) c.rectangleBonus = null;
+  if (Array.isArray(next.rulePoints)) c.rulePoints = next.rulePoints;
+  if (Array.isArray(next.notices)) {
+    c.notices = next.notices;
+    showRuleNotices(c);
+  }
   noteServerTime(data.serverNow);
 }
 
@@ -1432,7 +1475,10 @@ function paintRevealedRules() {
   for (const rule of rules) {
     const item = document.createElement("li");
     const title = document.createElement("h3");
-    title.textContent = rule.title;
+    const team = teamForUser(state.contest);
+    title.textContent = scoringRule(rule.id) && team
+      ? `${rule.title} · ${pointsLabel(rulePointsFor(state.contest, team.id, rule.id))}`
+      : rule.title;
     const body = document.createElement("p");
     body.textContent = rule.text;
     item.append(title, body);
@@ -1444,6 +1490,21 @@ function paintRevealedRules() {
     }
     list.append(item);
   }
+}
+
+function showRuleNotices(contest) {
+  const team = teamForUser(contest);
+  if (!team || !contest?.id) return;
+  const key = `territory-rule-notices:${contest.id}`;
+  let seen = [];
+  try { seen = JSON.parse(sessionStorage.getItem(key) || "[]"); } catch { seen = []; }
+  const known = new Set(Array.isArray(seen) ? seen : []);
+  for (const notice of contest.notices || []) {
+    if (notice.teamId !== team.id || known.has(notice.id)) continue;
+    known.add(notice.id);
+    showPageToast(notice.text, "ok");
+  }
+  try { sessionStorage.setItem(key, JSON.stringify([...known].slice(-100))); } catch { /* The next poll can show a notice again. */ }
 }
 
 function paintEnergy() {

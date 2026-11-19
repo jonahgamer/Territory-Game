@@ -1,6 +1,6 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=hidden-rules";
-import { loadPage } from "../shared/data.js?v=hidden-rules";
+import { loadPage } from "../shared/data.js?v=hidden-score";
 import { el, renderList } from "../shared/dom.js";
 
 async function run() {
