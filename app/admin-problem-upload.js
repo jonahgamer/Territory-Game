@@ -5,23 +5,29 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=page-data";
 import { api } from "../shared/api.js?v=page-data";
 import { el } from "../shared/dom.js";
-import { MIN_PROBLEM_NO, MAX_PROBLEM_NO } from "../shared/constants.js";
-import { typeInfo, difficultyScore } from "../shared/difficulty.js";
+import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, PROBLEM_TYPES } from "../shared/constants.js";
+import { typeInfo, difficultyScore, problemTag } from "../shared/difficulty.js";
 
 const params = new URLSearchParams(location.search);
-const type = typeInfo(params.get("type")) ? params.get("type") : "math";
+const backType = typeInfo(params.get("type")) ? params.get("type") : "math";
 
-const FILE_RE = /^P(\d+)\.(pro|ans|gra)$/i;
+const TYPE_BY_TAG = new Map(PROBLEM_TYPES.map((item) => [item.tag, item.id]));
+const TYPE_ORDER = new Map(PROBLEM_TYPES.map((item, index) => [item.id, index]));
+const FILE_RE = /^([MOSPT])(\d+)\.(pro|ans|gra)$/i;
 const EXTS = ["pro", "ans", "gra"];
 
 const state = {
   problems: [],
   reserved: [],
   revisions: { problems: 0 },
-  // index -> { pro?: File, ans?: File, gra?: File }
+  // "type:index" -> { type, index, pro?: File, ans?: File, gra?: File }
   groups: new Map(),
   ignored: 0,
 };
+
+function groupKey(typeId, index) {
+  return `${typeId}:${index}`;
+}
 
 const dropZone = document.querySelector("#drop-zone");
 const fileInput = document.querySelector("#file-input");
@@ -40,8 +46,8 @@ async function run() {
   state.problems = data.keys || [];
   state.reserved = data.reserved || [];
   state.revisions = data.revisions || { problems: 0 };
-  titleEl.textContent = `Upload ${typeInfo(type).name} problems`;
-  backEl.href = `/admin/problems.html?type=${encodeURIComponent(type)}`;
+  titleEl.textContent = "Upload problems";
+  backEl.href = `/admin/problems.html?type=${encodeURIComponent(backType)}`;
   render();
 }
 
@@ -78,8 +84,8 @@ function bindEvents() {
   listEl?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-upload-remove]");
     if (!btn) return;
-    const index = Number(btn.closest(".upload-row")?.dataset.index);
-    if (Number.isInteger(index)) state.groups.delete(index);
+    const key = btn.closest(".upload-row")?.dataset.key;
+    if (key) state.groups.delete(key);
     render();
   });
 
@@ -177,15 +183,17 @@ async function addFiles(fileList) {
 
   for (const file of files) {
     const match = FILE_RE.exec((file.name || "").trim());
-    const index = match ? Number(match[1]) : NaN;
-    if (!match || !Number.isInteger(index) || index < 1) {
+    const typeId = match ? TYPE_BY_TAG.get(match[1].toUpperCase()) : null;
+    const index = match ? Number(match[2]) : NaN;
+    if (!typeId || !Number.isInteger(index) || index < 1) {
       ignored += 1;
       continue;
     }
-    const ext = match[2].toLowerCase();
-    const group = state.groups.get(index) || {};
+    const ext = match[3].toLowerCase();
+    const key = groupKey(typeId, index);
+    const group = state.groups.get(key) || { type: typeId, index };
     group[ext] = file;
-    state.groups.set(index, group);
+    state.groups.set(key, group);
     added += 1;
   }
 
@@ -197,7 +205,8 @@ async function addFiles(fileList) {
   }
   if (!added && ignored) {
     showError(
-      `No usable files. Names must look like P<number>.pro, P<number>.ans or P<number>.gra ` +
+      "No usable files. Names must look like P26100.pro, M26001.ans or O26040.gra. " +
+      "The letter is the type: M, O, S, P or T " +
       `(got ${ignored} other file${ignored === 1 ? "" : "s"}).`
     );
   }
@@ -207,20 +216,25 @@ async function addFiles(fileList) {
 
 function render() {
   listEl.innerHTML = "";
-  const indices = [...state.groups.keys()].sort((a, b) => a - b);
+  const keys = [...state.groups.keys()].sort((a, b) => {
+    const left = state.groups.get(a);
+    const right = state.groups.get(b);
+    return (TYPE_ORDER.get(left.type) - TYPE_ORDER.get(right.type)) || (left.index - right.index);
+  });
 
-  for (const index of indices) {
-    const group = state.groups.get(index);
+  for (const key of keys) {
+    const group = state.groups.get(key);
+    const tag = problemTag(group.index, group.type);
     const row = el("div", "upload-row");
-    row.dataset.index = String(index);
+    row.dataset.key = key;
 
-    row.append(el("span", "upload-tag", `${typeInfo(type).tag}${index}`));
+    row.append(el("span", "upload-tag", tag));
 
     const filesEl = el("div", "upload-files");
     for (const ext of EXTS) {
       const file = group[ext];
       const chip = el("span", `upload-file ${file ? "is-ok" : "is-missing"}`, `.${ext}`);
-      chip.title = file ? file.name : `missing P${index}.${ext}`;
+      chip.title = file ? file.name : `missing ${tag}.${ext}`;
       filesEl.append(chip);
     }
     row.append(filesEl);
@@ -233,12 +247,12 @@ function render() {
     listEl.append(row);
   }
 
-  const n = indices.length;
+  const n = keys.length;
   countEl.hidden = n === 0;
   if (n) {
     const parts = [`${n} problem${n === 1 ? "" : "s"} ready`];
-    const incomplete = indices.filter((i) => {
-      const g = state.groups.get(i);
+    const incomplete = keys.filter((key) => {
+      const g = state.groups.get(key);
       return !g.pro || !g.ans;
     }).length;
     if (incomplete) parts.push(`${incomplete} missing .pro/.ans`);
@@ -267,32 +281,32 @@ async function readText(file) {
 
 async function saveAll() {
   errorEl.hidden = true;
-  const indices = [...state.groups.keys()].sort((a, b) => a - b);
-  if (!indices.length) {
+  const keys = [...state.groups.keys()];
+  if (!keys.length) {
     showError("Add at least one problem.");
     return;
   }
 
   // Structure + duplicate checks first, so we fail before reading files.
-  for (const index of indices) {
-    const group = state.groups.get(index);
-    const label = `${typeInfo(type).tag}${index}`;
-    if (index < MIN_PROBLEM_NO || index > MAX_PROBLEM_NO) {
+  for (const key of keys) {
+    const group = state.groups.get(key);
+    const label = problemTag(group.index, group.type);
+    if (group.index < MIN_PROBLEM_NO || group.index > MAX_PROBLEM_NO) {
       showError(`${label}: index must be between ${MIN_PROBLEM_NO} and ${MAX_PROBLEM_NO}.`);
       return;
     }
     if (!group.pro) { showError(`${label}: missing .pro statement file.`); return; }
     if (!group.ans) { showError(`${label}: missing .ans answer file.`); return; }
-    if (state.problems.some((p) => p.type === type && p.index === index)) {
+    if (state.problems.some((p) => p.type === group.type && p.index === group.index)) {
       showError(`${label}: already exists.`);
       return;
     }
   }
 
   const entries = [];
-  for (const index of indices) {
-    const group = state.groups.get(index);
-    const label = `${typeInfo(type).tag}${index}`;
+  for (const key of keys) {
+    const group = state.groups.get(key);
+    const label = problemTag(group.index, group.type);
     let prompt = "";
     let answer = "";
     let logic = "";
@@ -307,8 +321,8 @@ async function saveAll() {
     if (!prompt.trim()) { showError(`${label}: statement file is empty.`); return; }
     if (!answer.trim()) { showError(`${label}: answer file is empty.`); return; }
     entries.push({
-      index,
-      type,
+      index: group.index,
+      type: group.type,
       prompt,
       answer,
       logic,
@@ -322,7 +336,9 @@ async function saveAll() {
     const data = await api.addProblems(entries, state.revisions.problems);
     state.revisions.problems = data.revision;
     showPageToast(`${entries.length} problem${entries.length === 1 ? "" : "s"} added.`, "ok");
-    location.assign(`/admin/problems.html?type=${encodeURIComponent(type)}`);
+    const savedTypes = new Set(entries.map((item) => item.type));
+    const destType = savedTypes.size === 1 ? entries[0].type : backType;
+    location.assign(`/admin/problems.html?type=${encodeURIComponent(destType)}`);
   } catch (err) {
     saveBtn.disabled = false;
     showError(err.message || "Could not save.");

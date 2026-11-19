@@ -646,6 +646,7 @@ a.create-map-link {
 
 .editor-toolbar-stack {
   display: grid;
+  flex: 0 0 auto;
   justify-items: end;
   gap: 10px;
   margin-left: auto;
@@ -1047,7 +1048,47 @@ a.create-map-link {
   line-height: 1;
 }
 
-.editor-toolbar {
+.editor-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 28px;
+  row-gap: 8px;
+  margin-bottom: 8px;
+}
+
+.editor-head-copy {
+  min-width: 0;
+}
+
+.editor-head .map-counts {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  .editor-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.editor-head .eyebrow {
+  margin-top: 8px;
+}
+
+.editor-head h1 {
+  margin-bottom: 4px;
+}
+
+main:has(.editor-head) {
+  padding-top: 24px;
+}
+
+main:has(.editor-head) .grid-scroll {
+  margin-top: 10px;
+}
+
+.editor-toolbar:not(.editor-head) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3518,8 +3559,7 @@ a.create-map-link {
   margin-left: auto;
 }
 
-/* Toolbar needs to lay out the back link + button side by side */
-.editor-toolbar {
+.editor-toolbar:not(.editor-head) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;

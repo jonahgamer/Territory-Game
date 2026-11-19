@@ -97,8 +97,9 @@
       <p class="eyebrow">Batch</p>
       <h1 id="upload-title">Upload problems</h1>
       <p class="lead">
-        Drop files named <code>P&lt;number&gt;.pro</code> (statement), <code>P&lt;number&gt;.ans</code> (answer)
-        and optionally <code>P&lt;number&gt;.gra</code> (grader). Files that share a number are grouped into one problem.
+        Drop files named <code>X&lt;number&gt;.pro</code> (statement), <code>X&lt;number&gt;.ans</code> (answer)
+        and optionally <code>X&lt;number&gt;.gra</code> (grader). X is the type: M math, O OI, S science, P puzzle, T testing.
+        Files that share a code, such as <code>P26100</code>, are grouped into one problem.
       </p>
       <p id="upload-error" class="form-error" hidden></p>
 
@@ -121,6 +122,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-problem-upload.js?v=page-data"></script>
+  <script type="module" src="/app/admin-problem-upload.js?v=upload-code"></script>
 </body>
 </html>
