@@ -89,6 +89,9 @@
         <article id="student-problem" class="student-problem" hidden>
           <div class="student-problem-card" role="dialog" aria-modal="true" aria-labelledby="student-problem-tag">
             
+            <button id="student-problem-close" class="student-problem-close" type="button">Close</button>
+            <h2 id="student-problem-tag"></h2>
+
             <form id="student-answer-form" hidden>
               <div id="student-answer-parts" hidden></div>
               <label id="single-answer-field">Answer <input id="student-answer" type="text" maxlength="5000" /></label>
@@ -97,9 +100,7 @@
               <p id="student-answer-error" class="form-error" hidden></p>
             </form>
             <p id="student-answer-success" class="status-note" hidden></p>
-
-            <button id="student-problem-close" class="student-problem-close" type="button">Close</button>
-            <h2 id="student-problem-tag"></h2>
+            <br>
             <div id="student-problem-prompt"></div>
             
           </div>
