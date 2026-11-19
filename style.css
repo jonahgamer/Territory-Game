@@ -994,6 +994,7 @@ a.create-map-link {
   overflow: visible;
   pointer-events: none;
   z-index: 4;
+  opacity: 0.4;
 }
 
 .contest-map-block h3 {
@@ -1609,12 +1610,14 @@ main:has(.editor-head) .grid-scroll {
   flex-basis: 100%;
 }
 
-#create-contest-form #contest-name {
-  width: min(28rem, 100%);
+#create-contest-form #contest-name,
+#contest-form #contest-name-input {
+  width: min(36rem, 100%);
 }
 
-#create-contest-form #contest-start {
-  width: min(18rem, 100%);
+#create-contest-form #contest-start,
+#contest-form #contest-start-input {
+  width: min(28rem, 100%);
 }
 
 #create-contest-form #create-spawn-mode {

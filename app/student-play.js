@@ -1,19 +1,19 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=hidden-burst";
+import { loadPage } from "../shared/data.js?v=contest-lines";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-burst";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=contest-lines";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
-import { drawTeleportLinks } from "../shared/teleport-link.js";
+import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
 import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
@@ -137,6 +137,12 @@ function bindBackToTop() {
 }
 
 function bindEvents() {
+  document.querySelector("#teleport-line-choices")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-teleport-lines]");
+    if (!btn || !state.contest) return;
+    setTeleportLinesVisible(contestId, btn.dataset.teleportLines !== "hidden");
+    renderMaps(state.contest, playMaps(state.contest), state.phase, state.frozen, teamForUser(state.contest));
+  });
   document.querySelector("#student-problem-close")?.addEventListener("click", closeProblem);
   const grid = document.querySelector("#student-maps");
   grid?.addEventListener("click", onGridClick);
@@ -659,7 +665,15 @@ function renderMaps(contest, maps, phase, frozen, team) {
     host.append(block);
     renderGrid(contest, map, phase, frozen, team, grid);
   }
-  drawTeleportLinks(host, contest.teleports);
+  paintTeleportLineChoices();
+  drawTeleportLinks(host, teleportLinesVisible(contestId) ? contest.teleports : []);
+}
+
+function paintTeleportLineChoices() {
+  const visible = teleportLinesVisible(contestId);
+  for (const btn of document.querySelectorAll("[data-teleport-lines]")) {
+    btn.setAttribute("aria-pressed", String((btn.dataset.teleportLines === "shown") === visible));
+  }
 }
 
 function renderGrid(contest, map, phase, frozen, team, grid = document.querySelector("#student-maps")) {

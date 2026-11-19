@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=hidden-burst" />
+  <link rel="stylesheet" href="/style.css?v=contest-lines" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
 </head>
@@ -80,6 +80,10 @@
       <ol id="student-leaderboard" class="leaderboard" hidden></ol>
 
       <div id="student-board" class="student-board" hidden>
+        <div class="kind-choices" id="teleport-line-choices" role="group" aria-label="Teleport lines">
+          <button type="button" data-teleport-lines="shown" aria-pressed="true">Transparent lines</button>
+          <button type="button" data-teleport-lines="hidden" aria-pressed="false">Hide lines</button>
+        </div>
         <ul class="legend">
           <li><span class="swatch fill easy"></span>Easy</li>
           <li><span class="swatch fill normal"></span>Normal</li>
@@ -120,6 +124,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/student-play.js?v=hidden-burst"></script>
+  <script type="module" src="/app/student-play.js?v=contest-lines"></script>
 </body>
 </html>

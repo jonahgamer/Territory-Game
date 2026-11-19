@@ -1,7 +1,7 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=hidden-rules";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=hidden-burst";
+import { loadPage } from "../shared/data.js?v=contest-lines";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
@@ -12,7 +12,7 @@ import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, points
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
-import { drawTeleportLinks } from "../shared/teleport-link.js";
+import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { watchContestPatch } from "../shared/contest-sync.js";
 import { mergeEnergyLedger } from "../shared/energy.js";
 
@@ -45,9 +45,13 @@ async function run() {
     state.students = [];
   }
 
+  const advancedLink = document.querySelector("#advanced-settings");
+  if (advancedLink) advancedLink.href = `/admin/contest-advanced.html?id=${encodeURIComponent(contestId)}`;
+  const backLink = document.querySelector("#back-to-contest");
+  if (backLink) backLink.href = `/admin/contest.html?id=${encodeURIComponent(contestId)}`;
   bindEvents();
   render();
-  renderHiddenRules();
+  if (document.querySelector("#hidden-rule-list")) renderHiddenRules();
   startClock();
   watchContestPatch(contestId, (patch) => {
     if (!Array.isArray(patch.energy)) return;
@@ -72,6 +76,12 @@ function bindEvents() {
     removeContestMap(btn.dataset.removeMap);
   });
   document.querySelector("#teleport-connect")?.addEventListener("click", connectTeleports);
+  document.querySelector("#teleport-line-choices")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-teleport-lines]");
+    if (!btn) return;
+    setTeleportLinesVisible(contestId, btn.dataset.teleportLines !== "hidden");
+    renderBoard();
+  });
   document.querySelector("#teleport-pairs")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-remove-teleport]");
     if (!btn) return;
@@ -175,29 +185,34 @@ function contestAsTeam(contest, teamId) {
 
 function render() {
   const c = state.current;
-  document.querySelector("#contest-title").textContent = c.name;
-  document.querySelector("#contest-name-input").value = c.name;
-  fillMapSelect();
-  fillSchedule();
-  fillEnergy();
-  updateSpawnNote();
-  renderSpawnMode();
-  renderMode();
-
-  document.querySelector("#contest-mode-note").textContent = isTestingContest()
-    ? "Testing contest. Each team plays its own copy of the map. Changing this clears scores and spawn points."
-    : "Competition. Every team shares one map. Changing this clears scores and spawn points.";
-  document.querySelector("#contest-team-lead").textContent = isTestingContest()
-    ? "Add as many teams as you need. Each team has 1 to 5 students and plays alone on this map."
-    : "A team has 1 to 5 students and shares one spawn point, territory, and score.";
-  document.querySelector("#contest-leaderboard-heading").textContent = isTestingContest() ? "Team scores" : "Leaderboard";
-
-  renderTestingTeamView();
-  paintRulePoints();
-  renderTeams();
-  fillContestantPicker();
-  renderLeaderboard();
-  renderBoard();
+  const title = document.querySelector("#contest-title");
+  if (title) title.textContent = c.name;
+  const name = document.querySelector("#contest-name-input");
+  if (name && document.activeElement !== name) name.value = c.name;
+  if (document.querySelector("#contest-map-add")) fillMapSelect();
+  if (document.querySelector("#contest-start-input")) {
+    fillSchedule();
+    updateSpawnNote();
+    renderSpawnMode();
+  }
+  if (document.querySelector("#energy-regen")) fillEnergy();
+  if (document.querySelector("#contest-mode-note")) {
+    renderMode();
+    document.querySelector("#contest-mode-note").textContent = isTestingContest()
+      ? "Testing contest. Each team plays its own copy of the map. Changing this clears scores and spawn points."
+      : "Competition. Every team shares one map. Changing this clears scores and spawn points.";
+    document.querySelector("#contest-team-lead").textContent = isTestingContest()
+      ? "Add as many teams as you need. Each team has 1 to 5 students and plays alone on this map."
+      : "A team has 1 to 5 students and shares one spawn point, territory, and score.";
+    document.querySelector("#contest-leaderboard-heading").textContent = isTestingContest() ? "Team scores" : "Leaderboard";
+    renderTestingTeamView();
+    renderTeams();
+    fillContestantPicker();
+    renderLeaderboard();
+  }
+  if (document.querySelector("#hidden-rule-list")) paintRulePoints();
+  if (document.querySelector("#contest-boards")) renderBoard();
+  if (document.querySelector("#teleport-from")) renderTeleports();
   paintClock();
 }
 
@@ -296,6 +311,7 @@ function fillSchedule() {
 
 function updateSpawnNote() {
   const note = document.querySelector("#contest-map-edit-note");
+  if (!note) return;
   const maps = contestMaps();
   if (!maps.length) { note.hidden = true; return; }
   const count = maps.reduce((sum, map) => sum + (map.cells || []).filter((cell) => cell.kind === "spawnpoint").length, 0);
@@ -1011,8 +1027,15 @@ function renderBoard() {
     block.append(scroll);
     boards.append(block);
   }
-  drawTeleportLinks(boards, state.current?.teleports);
-  renderTeleports();
+  paintTeleportLineChoices();
+  drawTeleportLinks(boards, teleportLinesVisible(contestId) ? state.current?.teleports : []);
+}
+
+function paintTeleportLineChoices() {
+  const visible = teleportLinesVisible(contestId);
+  for (const btn of document.querySelectorAll("[data-teleport-lines]")) {
+    btn.setAttribute("aria-pressed", String((btn.dataset.teleportLines === "shown") === visible));
+  }
 }
 
 function teleportChoices() {
@@ -1126,7 +1149,7 @@ function paintClock() {
 function startClock() {
   if (state.clock) return;
   state.clock = setInterval(() => {
-    if (!document.querySelector("#contest-boards")) {
+    if (!document.querySelector("#contest-boards") && !document.querySelector("#hidden-rule-list") && !document.querySelector("#teleport-from")) {
       clearInterval(state.clock); state.clock = null; return;
     }
     paintClock();

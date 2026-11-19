@@ -4,6 +4,24 @@ const stored = new WeakMap();
 const watchers = new WeakMap();
 const busy = new WeakSet();
 
+const LINE_KEY = "territory-teleport-lines";
+
+export function teleportLinesVisible(contestId) {
+  try {
+    return localStorage.getItem(`${LINE_KEY}:${contestId || ""}`) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+export function setTeleportLinesVisible(contestId, visible) {
+  try {
+    localStorage.setItem(`${LINE_KEY}:${contestId || ""}`, visible ? "shown" : "hidden");
+  } catch {
+    // The lines stay on the choice made for this visit.
+  }
+}
+
 export function drawTeleportLinks(container, pairs) {
   if (!container) return;
   const list = Array.isArray(pairs) ? pairs : [];

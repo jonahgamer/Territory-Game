@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced settings · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css?v=contest-lines" />
+</head>
+<body>
+  <div class="app">
+    <header class="mobile-bar">
+      <a id="mobile-home" class="brand mobile-logo" href="/admin/contests.html">Puzzle Territory</a>
+      <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+        <span class="menu-bars" aria-hidden="true"></span>Menu
+      </button>
+    </header>
+    <aside class="sidebar">
+      <a class="brand" id="home-button" href="/admin/maps.html">Puzzle Territory</a>
+      <nav id="site-nav" aria-label="Sections"><ul id="nav-list"></ul></nav>
+      <div class="account">
+        <img id="account-pfp" class="account-pfp" alt="" hidden />
+        <p id="account-name" hidden></p>
+        <button id="account-button" type="button">Log out</button>
+        <p id="account-role"></p>
+      </div>
+    </aside>
+    <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
+    <main>
+      <p id="load-error" class="form-error" hidden></p>
+      <div class="editor-toolbar">
+        <a class="back-button" id="back-to-contest" href="/admin/contest.html">Back to contest</a>
+      </div>
+      <p class="eyebrow">Contest</p>
+      <h1 id="contest-title"></h1>
+
+      <form id="contest-form" class="problem-editor">
+        <fieldset class="contest-schedule" id="contest-energy">
+          <legend>Energy</legend>
+          <p class="field-note">Each team shares one pool. The maximum is 100. During the solving period the clock restores energy, and each attempt spends energy. A correct answer also restores the difficulty amount while the team is below the line you set.</p>
+          <label>Restore <input id="energy-regen" type="number" min="0" max="100" /></label>
+          <label>Every (seconds) <input id="energy-regen-seconds" type="number" min="1" max="86400" /></label>
+          <label>Spent per attempt <input id="energy-attempt-cost" type="number" min="0" max="100" /></label>
+          <label>Cannot attempt below <input id="energy-attempt-min" type="number" min="0" max="100" /></label>
+          <label>Solve restore applies below <input id="energy-solve-below" type="number" min="0" max="100" /></label>
+          <label>Easy restore <input id="energy-solve-easy" type="number" min="0" max="100" /></label>
+          <label>Normal restore <input id="energy-solve-normal" type="number" min="0" max="100" /></label>
+          <label>Hard restore <input id="energy-solve-hard" type="number" min="0" max="100" /></label>
+          <label>Insane restore <input id="energy-solve-insane" type="number" min="0" max="100" /></label>
+        </fieldset>
+        <p id="contest-energy-error" class="form-error" hidden></p>
+        <fieldset class="hidden-rule-panel" id="hidden-rules">
+          <legend>Hidden rules</legend>
+          <p class="field-note">Contestants do not see a hidden rule until its reveal time. A rule can stay hidden for the whole contest. The rules themselves are written in the program. This page only chooses which ones this contest uses. <a href="/admin/hidden-rules.html">Open the hidden rule list</a></p>
+          <div class="kind-choices" id="hidden-reveal-mode" role="group" aria-label="Hidden rule reveal">
+            <button type="button" data-hidden-reveal="minutes" aria-pressed="true">At a set minute</button>
+            <button type="button" data-hidden-reveal="periodic" aria-pressed="false">Every few minutes</button>
+          </div>
+          <div class="kind-choices" id="hidden-order-mode" role="group" aria-label="Hidden rule order">
+            <button type="button" data-hidden-order="designated" aria-pressed="true">Designated order</button>
+            <button type="button" data-hidden-order="random" aria-pressed="false">Random order</button>
+          </div>
+          <p id="hidden-rule-note" class="field-note"></p>
+          <label id="hidden-period-field">Every (min) <input id="hidden-period" type="number" min="1" max="10080" /></label>
+          <label id="hidden-rule-add-field">Add a hidden rule
+            <select id="hidden-rule-add"><option value="">Choose a rule…</option></select>
+          </label>
+          <p id="hidden-rules-empty" class="field-note">No hidden rules have been written yet.</p>
+          <ul id="hidden-rule-list" class="hidden-rule-list"></ul>
+          <p id="hidden-rule-error" class="form-error" hidden></p>
+        </fieldset>
+      </form>
+
+      <h2>Teleport paths</h2>
+      <p class="field-note">Connect two teleport cells. A pair can stay on one map or join two maps. The link belongs to this contest, so the map itself is unchanged. The lines on the contest page stay transparent, and a contestant can hide them.</p>
+      <div class="problem-editor" id="teleport-builder">
+        <label>From <select id="teleport-from"><option value="">Choose a teleport…</option></select></label>
+        <label>To <select id="teleport-to"><option value="">Choose a teleport…</option></select></label>
+        <button type="button" class="add-problem" id="teleport-connect">Connect</button>
+      </div>
+      <p id="teleport-empty" class="field-note">No teleport paths yet.</p>
+      <ul id="teleport-pairs" class="teleport-pairs" hidden></ul>
+    </main>
+  </div>
+  <div id="page-toast" class="page-toast" role="status" aria-live="polite" hidden>
+    <p id="page-toast-message"></p>
+    <button id="page-toast-close" type="button">Close</button>
+  </div>
+  <script type="module" src="/app/admin-contest.js?v=contest-lines"></script>
+</body>
+</html>
