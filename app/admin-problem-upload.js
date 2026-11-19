@@ -3,7 +3,7 @@ import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=roles";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=replace-batch";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, PROBLEM_TYPES, DIFFICULTIES } from "../shared/constants.js";
 import { typeInfo, difficultyScore, problemTag } from "../shared/difficulty.js";
@@ -300,6 +300,23 @@ function readParts(prompt, answer) {
   };
 }
 
+function confirmReplace(labels) {
+  if (!labels.length) return false;
+  const sample = labels.slice(0, 6).join(", ");
+  const extra = labels.length > 6 ? ` and ${labels.length - 6} more` : "";
+  const lead = labels.length === 1
+    ? `${sample} already exists.`
+    : `${labels.length} problems already exist: ${sample}${extra}.`;
+  return window.confirm(`${lead} Replace ${labels.length === 1 ? "it" : "them"} with the new version${labels.length === 1 ? "" : "s"}?`);
+}
+
+function savedMessage(saved, replaced) {
+  const added = saved - replaced;
+  if (replaced && added) return `Added ${added} and replaced ${replaced}.`;
+  if (replaced) return `Replaced ${replaced} problem${replaced === 1 ? "" : "s"}.`;
+  return `Added ${added} problem${added === 1 ? "" : "s"}.`;
+}
+
 async function saveAll() {
   errorEl.hidden = true;
   const keys = [...state.groups.keys()];
@@ -318,10 +335,6 @@ async function saveAll() {
     }
     if (!group.pro) { showError(`${label}: missing .pro statement file.`); return; }
     if (!group.ans) { showError(`${label}: missing .ans answer file.`); return; }
-    if (state.problems.some((p) => p.type === group.type && p.index === group.index)) {
-      showError(`${label}: already exists.`);
-      return;
-    }
   }
 
   const entries = [];
@@ -377,11 +390,19 @@ async function saveAll() {
     });
   }
 
+  const existing = entries.filter((entry) => state.problems.some((p) => p.type === entry.type && p.index === entry.index));
+  const replace = confirmReplace(existing.map((entry) => problemTag(entry.index, entry.type)));
+  const saving = replace ? entries : entries.filter((entry) => !existing.includes(entry));
+  if (!saving.length) {
+    showPageToast("Nothing was added. The existing problems were left as they are.", "warn");
+    return;
+  }
+
   saveBtn.disabled = true;
   try {
-    const data = await api.addProblems(entries, state.revisions.problems);
+    const data = await api.addProblems(saving, state.revisions.problems, replace && existing.length > 0);
     state.revisions.problems = data.revision;
-    showPageToast(`${entries.length} problem${entries.length === 1 ? "" : "s"} added.`, "ok");
+    showPageToast(savedMessage(saving.length, replace ? existing.length : 0), "ok");
     const savedTypes = new Set(entries.map((item) => item.type));
     const destType = savedTypes.size === 1 ? entries[0].type : backType;
     location.assign(`/admin/problems.html?type=${encodeURIComponent(destType)}`);

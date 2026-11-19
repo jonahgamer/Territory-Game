@@ -2,10 +2,10 @@ import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=roles";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=roles";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=replace-batch";
 import { el } from "../shared/dom.js";
 import { MIN_PROBLEM_NO, MAX_PROBLEM_NO, YEAR_INDEX_START, YEAR_INDEX_END } from "../shared/constants.js";
-import { typeInfo, difficultyScore } from "../shared/difficulty.js";
+import { typeInfo, difficultyScore, problemTag } from "../shared/difficulty.js";
 
 
 
@@ -32,6 +32,9 @@ async function run() {
 }
 
 function bindEvents() {
+  document.querySelector("#batch-advanced")?.addEventListener("click", () => {
+    location.assign(`/admin/problem-batch2.html?type=${encodeURIComponent(type)}`);
+  });
   document.querySelector("#batch-add-row")?.addEventListener("click", () => {
     createRow(nextRowIndex());
     rowsEl.querySelector(".batch-row:last-child [data-batch-index]")?.focus();
@@ -141,6 +144,23 @@ function nextProblemNo(pType) {
 
 function showError(msg) { errorEl.hidden = false; errorEl.textContent = msg; }
 
+function confirmReplace(labels) {
+  if (!labels.length) return false;
+  const sample = labels.slice(0, 6).join(", ");
+  const extra = labels.length > 6 ? ` and ${labels.length - 6} more` : "";
+  const lead = labels.length === 1
+    ? `${sample} already exists.`
+    : `${labels.length} problems already exist: ${sample}${extra}.`;
+  return window.confirm(`${lead} Replace ${labels.length === 1 ? "it" : "them"} with the new version${labels.length === 1 ? "" : "s"}?`);
+}
+
+function savedMessage(saved, replaced) {
+  const added = saved - replaced;
+  if (replaced && added) return `Added ${added} and replaced ${replaced}.`;
+  if (replaced) return `Replaced ${replaced} problem${replaced === 1 ? "" : "s"}.`;
+  return `Added ${added} problem${added === 1 ? "" : "s"}.`;
+}
+
 async function saveAll() {
   const rows = [...rowsEl.querySelectorAll(".batch-row")];
   const entries = [];
@@ -158,19 +178,23 @@ async function saveAll() {
     if (!v.prompt.trim()) { showError(`${label}: add a statement.`); return; }
     if (!v.answer.trim()) { showError(`${label}: add an answer.`); return; }
     if (seen.has(index)) { showError(`${label}: index ${index} used twice.`); return; }
-    if (state.problems.some((p) => p.type === type && p.index === index)) {
-      showError(`${label}: ${typeInfo(type).tag}${index} already exists.`); return;
-    }
     seen.add(index);
     entries.push({ index, type, prompt: v.prompt, answer: v.answer, logic: v.logic, difficulty: "normal", score: difficultyScore("normal") });
   }
 
   if (entries.length === 0) { showError("Add at least one problem."); return; }
+  const existing = entries.filter((entry) => state.problems.some((p) => p.type === entry.type && p.index === entry.index));
+  const replace = confirmReplace(existing.map((entry) => problemTag(entry.index, entry.type)));
+  const saving = replace ? entries : entries.filter((entry) => !existing.includes(entry));
+  if (!saving.length) {
+    showPageToast("Nothing was added. The existing problems were left as they are.", "warn");
+    return;
+  }
 
   try {
-    const data = await api.addProblems(entries, state.revisions.problems);
+    const data = await api.addProblems(saving, state.revisions.problems, replace && existing.length > 0);
     state.revisions.problems = data.revision;
-    showPageToast(`${entries.length} problem${entries.length === 1 ? "" : "s"} added.`, "ok");
+    showPageToast(savedMessage(saving.length, replace ? existing.length : 0), "ok");
     location.assign(`/admin/problems.html?type=${encodeURIComponent(type)}`);
   } catch (err) {
     showError(err.message || "Could not save.");

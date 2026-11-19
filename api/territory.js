@@ -2644,16 +2644,31 @@ async function handleAddProblems(req, res, db, user, body) {
     await session.withTransaction(async () => {
       const current = await readRevision(db, 'problems', session);
       assertRevision(current, body.revision);
+      const now = new Date();
+      const fresh = [];
       for (const problem of parsed.items) {
         const existing = await findStoredProblem(db.collection('problems'), problem.type, problem.index, session);
-        if (existing) throw new Error(`Problem ${problem.type} ${problem.index} already exists.`);
+        if (!existing) {
+          fresh.push(problem);
+          continue;
+        }
+        if (body.replace !== true) throw new Error(`Problem ${problem.type} ${problem.index} already exists.`);
+        const id = problemIdentity(problem.type, problem.index);
+        const fields = { ...problem, id, updatedAt: now };
+        const update = { $set: fields };
+        if (problem.multipleChoice !== true && problem.multipleChoice !== false) {
+          delete fields.multipleChoice;
+          update.$unset = { multipleChoice: '' };
+        }
+        await db.collection('problems').updateOne({ _id: existing._id }, update, { session });
       }
-      const now = new Date();
-      await db.collection('problems').insertMany(parsed.items.map((problem) => ({
-        ...problem,
-        id: problemIdentity(problem.type, problem.index),
-        updatedAt: now,
-      })), { session });
+      if (fresh.length) {
+        await db.collection('problems').insertMany(fresh.map((problem) => ({
+          ...problem,
+          id: problemIdentity(problem.type, problem.index),
+          updatedAt: now,
+        })), { session });
+      }
       revision = await bumpRevision(db, 'problems', session);
     });
   } catch (err) {

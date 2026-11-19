@@ -96,7 +96,11 @@ export const api = {
   deleteMap: (mapId, revision) => apiCall("delete-map", { mapId, revision }),
   saveProblem: (problem, revision) => apiCall("save-problem", { problem, revision }),
   setProblemDifficulty: (problems, difficulty, revision) => apiCall("set-problem-difficulty", { problems, difficulty, revision }),
-  addProblems: (problems, revision) => apiCall("add-problems", { problems, revision }),
+  addProblems: (problems, revision, replace = false) => apiCall("add-problems", {
+    problems,
+    revision,
+    ...(replace ? { replace: true } : {}),
+  }),
   deleteProblems: (problems, revision) => apiCall("delete-problems", { problems, revision }),
   moveProblem: (from, to, revision) => apiCall("move-problem", { from, to, revision }),
   problemText: (items) => apiCall("page-problem-text", { items }),
