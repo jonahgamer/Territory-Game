@@ -1,5 +1,5 @@
 import { requireSession, getSession, isAdmin, isRoot } from "../shared/session.js?v=home";
-import { initNav } from "../shared/nav.js?v=home";
+import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=home";
 import { el, renderList } from "../shared/dom.js";
@@ -47,12 +47,13 @@ function renderLinks(admin) {
     ["/admin/rules.html", "Rules", "The public rules contestants can read."],
     ["/admin/hidden-rules.html", "Hidden rules", "The rules a contest can reveal later."],
     ["/admin/accounts.html", "Accounts", "Students, admins, and who can sign in."],
+    ["/settings.html", "Settings", "Change your name, username, or password."],
     ["/admin/credits.html", "Credits", "Version notes for this site."],
   ] : [
     ["/index.html", "Contests", "Open the contest your team is playing."],
     ["/admin/rules.html", "Rules", "Read the rules for the game."],
     ["/admin/credits.html", "Credits", "See what changed in recent versions."],
-    ["/settings.html", "Settings", "Choose how an answer page opens."],
+    ["/settings.html", "Settings", "Change your name, username, password, or how an answer opens."],
   ];
   if (isRoot()) links.push(["/admin/backups.html", "Backups", "Save or restore the database."]);
   const list = document.querySelector("#home-links");

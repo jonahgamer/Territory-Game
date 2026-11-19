@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=account" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -30,9 +30,24 @@
     </aside>
     <button class="sidebar-backdrop" type="button" aria-label="Close menu" hidden></button>
     <main>
-      <section id="student-settings-view">
+      <section id="account-settings">
         <p class="eyebrow">Settings</p>
-        <h1>Answer settings</h1>
+        <h1>Your account</h1>
+        <p class="lead">Change the name people see, your username, your picture, or your password.</p>
+        <form id="account-settings-form" class="problem-editor account-settings">
+          <label>Display name <input id="settings-display-name" type="text" maxlength="60" autocomplete="nickname" /></label>
+          <label>Username <input id="settings-username" type="text" maxlength="64" autocomplete="username" required /></label>
+          <label>Picture address <input id="settings-pfp" type="text" maxlength="500" placeholder="https://… or a site path" /></label>
+          <label>Current password <input id="settings-current-password" type="password" maxlength="256" autocomplete="current-password" /></label>
+          <label>New password <input id="settings-new-password" type="password" minlength="4" maxlength="256" autocomplete="new-password" /></label>
+          <label>Repeat new password <input id="settings-confirm-password" type="password" minlength="4" maxlength="256" autocomplete="new-password" /></label>
+          <button type="submit">Save account</button>
+          <p id="account-settings-error" class="form-error" hidden></p>
+          <p class="field-note">The current password is required only when the username or password changes.</p>
+        </form>
+      </section>
+      <section id="student-settings-view">
+        <h2>Answer settings</h2>
         <p class="lead">Choose how a problem opens when you click a cell you can solve. The setting is kept on this device.</p>
         <div class="kind-choices" id="answer-open-mode" role="group" aria-label="Where to open a problem">
           <button type="button" data-answer-mode="current" aria-pressed="true">Open in this page</button>
@@ -46,6 +61,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/student-settings.js?v=home"></script>
+  <script type="module" src="/app/student-settings.js?v=account"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import { requireAdmin, getSession, isRoot } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=home";
+import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList, formatAccountDate, confirmTwice } from "../shared/dom.js";
@@ -170,6 +170,13 @@ function createCard(account) {
   pwSave.dataset.accountPassword = account.username;
 
   fields.append(displayField, displaySave, pwField, pwSave);
+  if (isRoot() && account.role === "student") {
+    const known = typeof account.password === "string" && account.password;
+    const shown = el("p", "account-password-read", known
+      ? `Password: ${account.password}`
+      : "Password is not on record. A password set before this was added cannot be recovered. Set a new password to record it.");
+    fields.append(shown);
+  }
 
   // 操作区
   const actions = el("div", "account-actions");

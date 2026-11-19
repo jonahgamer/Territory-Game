@@ -1,5 +1,5 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=home";
+import { initNav } from "../shared/nav.js?v=account";
 import { loadPage } from "../shared/data.js?v=hidden-score";
 import { el, renderList } from "../shared/dom.js";
 

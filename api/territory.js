@@ -2123,8 +2123,8 @@ function timestampValue(value) {
   return Number.isFinite(time) && time > 0 ? time : null;
 }
 
-function publicAccount(record, memberships = []) {
-  return {
+function publicAccount(record, memberships = [], options = {}) {
+  const account = {
     username: String(record.username || ''),
     displayName: String(record.displayName || record.username || ''),
     role: accountRole(record),
@@ -2134,6 +2134,40 @@ function publicAccount(record, memberships = []) {
     lastLoginAt: timestampValue(record.lastLoginAt),
     teams: memberships,
   };
+  if (options.includePassword && account.role === 'student') {
+    account.password = typeof record.passwordCopy === 'string' && record.passwordCopy ? record.passwordCopy : '';
+  }
+  return account;
+}
+
+function signUserToken(record) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return '';
+  const role = accountRole(record);
+  return jwt.sign(
+    {
+      username: String(record.username || ''),
+      role,
+      displayName: String(record.displayName || record.username || ''),
+      pfp: typeof record.pfp === 'string' ? record.pfp : '',
+    },
+    secret,
+    { expiresIn: '7d' }
+  );
+}
+
+function cleanPfp(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (url.length > 500) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return url;
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function contestMemberships(contests) {
@@ -2169,7 +2203,11 @@ async function handleListAccounts(req, res, db, user) {
   const accounts = records
     .filter((record) => typeof record.username === 'string' && record.username)
     .filter((record) => isRoot(user) || accountRole(record) !== 'root')
-    .map((record) => publicAccount(record, memberships.get(record.username.toLowerCase()) || []))
+    .map((record) => publicAccount(
+      record,
+      memberships.get(record.username.toLowerCase()) || [],
+      { includePassword: isRoot(user) }
+    ))
     .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.username.localeCompare(b.username));
   return res.status(200).json({ success: true, accounts });
 }
@@ -2192,11 +2230,13 @@ async function handleCreateAccount(req, res, db, user, body) {
   const existing = await users.findOne({ username });
   if (existing) return res.status(409).json({ success: false, message: 'That username is already used.' });
   const passwordHash = await bcrypt.hash(password, 10);
+  const student = body.admin !== true;
   await users.insertOne({
     username,
     displayName,
     password: passwordHash,
-    role: body.admin === true ? 'admin' : 'student',
+    ...(student ? { passwordCopy: password } : {}),
+    role: student ? 'student' : 'admin',
     banned: false,
     pfp: '',
     createdAt: new Date(),
@@ -2272,6 +2312,7 @@ async function handleUpdateAccount(req, res, db, user, body) {
       return res.status(400).json({ success: false, message: 'Password must be 4 to 256 characters.' });
     }
     update.password = await bcrypt.hash(password, 10);
+    update.passwordCopy = accountRole(record) === 'student' ? password : '';
   }
   if (body.banned !== undefined) {
     if (typeof body.banned !== 'boolean') {
@@ -2293,6 +2334,7 @@ async function handleUpdateAccount(req, res, db, user, body) {
       return res.status(400).json({ success: false, message: 'You cannot change your own admin status.' });
     }
     update.role = body.admin ? 'admin' : 'student';
+    if (update.role !== 'student') update.passwordCopy = '';
   }
   if (Object.keys(update).length === 0) {
     return res.status(400).json({ success: false, message: 'Nothing to change.' });
@@ -2315,8 +2357,111 @@ async function handleUpdateAccount(req, res, db, user, body) {
   const memberships = contestMemberships(contests).get(username.toLowerCase()) || [];
   return res.status(200).json({
     success: true,
-    account: publicAccount(updated, memberships),
+    account: publicAccount(updated, memberships, { includePassword: isRoot(user) }),
     ...(revision === null ? {} : { revision }),
+  });
+}
+
+function replaceUsername(value, from, to) {
+  return sameName(value, from) ? to : value;
+}
+
+async function renameAccountInContests(db, from, to, mongoSession) {
+  const col = db.collection('contests');
+  const contests = await col.find({}, { session: mongoSession }).toArray();
+  for (const contest of contests) {
+    let changed = false;
+    const swap = (value) => {
+      if (!sameName(value, from)) return value;
+      changed = true;
+      return to;
+    };
+    const teams = Array.isArray(contest.teams) ? contest.teams.map((team) => ({
+      ...team,
+      members: Array.isArray(team.members) ? team.members.map(swap) : team.members,
+    })) : contest.teams;
+    const contestantIds = Array.isArray(contest.contestantIds) ? contest.contestantIds.map(swap) : contest.contestantIds;
+    const spawnVotes = Array.isArray(contest.spawnVotes) ? contest.spawnVotes.map((vote) => (
+      vote && typeof vote === 'object' ? { ...vote, username: swap(vote.username) } : vote
+    )) : contest.spawnVotes;
+    const claims = Array.isArray(contest.claims) ? contest.claims.map((claim) => (
+      claim && typeof claim === 'object' ? { ...claim, solvedBy: swap(claim.solvedBy) } : claim
+    )) : contest.claims;
+    if (!changed) continue;
+    await col.updateOne(
+      { id: contest.id },
+      { $set: { teams, contestantIds, spawnVotes, claims, updatedAt: new Date() } },
+      { session: mongoSession }
+    );
+  }
+}
+
+async function handleUpdateSelf(req, res, db, user, body) {
+  const users = db.collection('users');
+  const record = await users.findOne({ username: user.username });
+  if (!record) return res.status(404).json({ success: false, message: 'Account not found' });
+  const update = {};
+  const nextName = body.username === undefined ? '' : cleanUsername(body.username);
+  const rename = Boolean(nextName) && nextName !== record.username;
+  const nextPassword = body.password === undefined ? '' : String(body.password);
+  const changePassword = nextPassword !== '';
+  if (rename || changePassword) {
+    const current = String(body.currentPassword || '');
+    let match = false;
+    try { match = await bcrypt.compare(current, String(record.password || '')); } catch { match = false; }
+    if (!match) return res.status(400).json({ success: false, message: 'The current password is not right.' });
+  }
+  if (body.displayName !== undefined) {
+    const displayName = String(body.displayName || '').trim() || record.username;
+    if (displayName.length > 60) {
+      return res.status(400).json({ success: false, message: 'Display name must be 60 characters or fewer.' });
+    }
+    update.displayName = displayName;
+  }
+  if (body.pfp !== undefined) {
+    const pfp = cleanPfp(body.pfp);
+    if (pfp === null) return res.status(400).json({ success: false, message: 'Use an http, https, or site picture address.' });
+    update.pfp = pfp;
+  }
+  if (changePassword) {
+    if (nextPassword.length < 4 || nextPassword.length > 256) {
+      return res.status(400).json({ success: false, message: 'Password must be 4 to 256 characters.' });
+    }
+    update.password = await bcrypt.hash(nextPassword, 10);
+    if (accountRole(record) === 'student') update.passwordCopy = nextPassword;
+  }
+  if (rename) {
+    const taken = await users.find({}, { projection: { username: 1 } }).toArray();
+    if (taken.some((item) => item.username !== record.username && sameName(item.username, nextName))) {
+      return res.status(409).json({ success: false, message: 'That username is already used.' });
+    }
+    update.username = nextName;
+  }
+  if (Object.keys(update).length === 0) {
+    return res.status(400).json({ success: false, message: 'Nothing to change.' });
+  }
+  update.updatedAt = new Date();
+  const session = getMongoClient().startSession();
+  try {
+    await session.withTransaction(async () => {
+      await users.updateOne({ username: record.username }, { $set: update }, { session });
+      if (rename) await renameAccountInContests(db, record.username, nextName, session);
+    });
+  } finally {
+    await session.endSession();
+  }
+  const saved = await users.findOne({ username: update.username || record.username });
+  const token = signUserToken(saved);
+  if (!token) return res.status(500).json({ success: false, message: 'Server misconfigured' });
+  return res.status(200).json({
+    success: true,
+    token,
+    user: {
+      username: saved.username,
+      displayName: saved.displayName || saved.username,
+      role: accountRole(saved),
+      pfp: typeof saved.pfp === 'string' ? saved.pfp : '',
+    },
   });
 }
 
@@ -3518,6 +3663,7 @@ export default async function handler(req, res) {
       case 'list-accounts': return await handleListAccounts(req, res, db, user);
       case 'create-account': return await handleCreateAccount(req, res, db, user, body);
       case 'update-account': return await handleUpdateAccount(req, res, db, user, body);
+      case 'update-self': return await handleUpdateSelf(req, res, db, user, body);
       case 'delete-account': return await handleDeleteAccount(req, res, db, user, body);
       case 'add-version': return await handleAddVersion(req, res, db, user, body);
       case 'delete-version': return await handleDeleteVersion(req, res, db, user, body);

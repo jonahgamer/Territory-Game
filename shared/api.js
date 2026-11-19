@@ -124,6 +124,7 @@ export const api = {
   listAccounts: () => apiCall("list-accounts"),
   createAccount: (body) => apiCall("create-account", body),
   updateAccount: (body) => apiCall("update-account", body),
+  updateSelf: (body) => apiCall("update-self", body),
   deleteAccount: (username) => apiCall("delete-account", { username }),
   addVersion: (version, message) => apiCall("add-version", { version, message }),
   deleteVersion: (id) => apiCall("delete-version", { id }),

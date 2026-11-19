@@ -2158,6 +2158,20 @@ main:has(.editor-head) .grid-scroll {
   font-size: 18px;
 }
 
+.account-settings input,
+.account-password-read {
+  width: min(28rem, 100%);
+}
+
+.account-password-read {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .problem-editor textarea {
   resize: vertical;
 }

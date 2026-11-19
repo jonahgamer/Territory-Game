@@ -27,6 +27,7 @@ export function initNav(activePage) {
     { href: "/admin/rules.html", label: "Rules", key: "rules" },
     { href: "/admin/hidden-rules.html", label: "Hidden rules", key: "hidden-rules" },
     { href: "/admin/accounts.html", label: "Accounts", key: "accounts" },
+    { href: "/settings.html", label: "Settings", key: "settings" },
     ...(session.user.role === "root" ? [{ href: "/admin/backups.html", label: "Backups", key: "backups" }] : []),
   ];
 

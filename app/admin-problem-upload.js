@@ -1,6 +1,6 @@
 // app/admin-problem-upload.js
 import { requireAdmin } from "../shared/session.js?v=roles";
-import { initNav } from "../shared/nav.js?v=home";
+import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=roles";
 import { api } from "../shared/api.js?v=replace-batch";
