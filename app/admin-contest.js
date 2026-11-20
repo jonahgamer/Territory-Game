@@ -6,7 +6,7 @@ import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import { renderScoreGrid } from "../shared/score-grid.js?v=score-grid";
 import {
-  contestSchedule, phaseClock, phaseSentence, readSchedule,
+  contestSchedule, phaseClock, phaseSentence, contestPhase, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
 import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=leaderboard";
@@ -981,9 +981,37 @@ function renderLeaderboard() {
   const rows = Array.isArray(state.current.leaderboard) ? state.current.leaderboard : buildLeaderboard(state.current);
   const list = document.querySelector("#contest-leaderboard");
   const empty = document.querySelector("#contest-leaderboard-empty");
-  empty.hidden = rows.length > 0;
-  list.hidden = rows.length === 0;
-  renderScoreGrid(list, rows);
+  if (empty) empty.hidden = rows.length > 0;
+  if (list) {
+    list.hidden = rows.length === 0;
+    renderScoreGrid(list, rows);
+  }
+  renderContestantLeaderboard(rows);
+}
+
+function renderContestantLeaderboard(rows) {
+  const list = document.querySelector("#contestant-leaderboard");
+  const empty = document.querySelector("#contestant-leaderboard-empty");
+  const note = document.querySelector("#contestant-leaderboard-note");
+  if (!list || !note) return;
+  const hidden = state.current.leaderboardHidden === true;
+  const ended = contestPhase(state.current) === "ended";
+  if (hidden) {
+    note.textContent = "Contestants cannot open the leaderboard, including after the contest ends.";
+    empty.hidden = true;
+    list.hidden = true;
+    list.replaceChildren();
+    return;
+  }
+  const shown = ended
+    ? rows
+    : rows.map((row) => ({ teamId: row.teamId, name: row.name, rankScore: row.rankScore }));
+  note.textContent = ended
+    ? "The contest has ended. Contestants see every rule, the basic score, the points from rules, and the final score."
+    : "During the contest, contestants see each team’s final score only.";
+  if (empty) empty.hidden = shown.length > 0;
+  list.hidden = shown.length === 0;
+  renderScoreGrid(list, shown);
 }
 
 function buildLeaderboard(contest) {
