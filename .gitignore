@@ -7,3 +7,4 @@ _env
 .vercel
 .env*
 _env 
+tools/

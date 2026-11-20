@@ -124,6 +124,49 @@ function render() {
     : "This problem is not placed on any map yet.";
 
   updateSaveState();
+  paintNeighbors();
+}
+
+function neighborIndex(direction) {
+  const draft = state.draft;
+  if (!draft) return null;
+  const indexes = state.keys
+    .filter((problem) => problem.type === draft.type && problem.index !== draft.index)
+    .map((problem) => problem.index)
+    .sort((a, b) => a - b);
+  if (direction < 0) {
+    const lower = indexes.filter((value) => value < draft.index);
+    return lower.length ? lower[lower.length - 1] : null;
+  }
+  return indexes.find((value) => value > draft.index) ?? null;
+}
+
+function paintNeighbors() {
+  const prev = neighborIndex(-1);
+  const next = neighborIndex(1);
+  const prevBtn = document.querySelector("#problem-prev");
+  const nextBtn = document.querySelector("#problem-next");
+  const name = typeInfo(state.draft?.type)?.name || "this category";
+  if (prevBtn) {
+    prevBtn.disabled = prev == null;
+    prevBtn.title = prev == null ? `No previous ${name} problem` : problemTag(prev, state.draft.type);
+  }
+  if (nextBtn) {
+    nextBtn.disabled = next == null;
+    nextBtn.title = next == null ? `No next ${name} problem` : problemTag(next, state.draft.type);
+  }
+}
+
+function openNeighbor(direction) {
+  const next = neighborIndex(direction);
+  if (next == null || !state.draft) return;
+  if (state.dirty && !window.confirm("Leave this problem without saving?")) return;
+  const query = new URLSearchParams({ type: state.draft.type, index: String(next) });
+  if (fromMap && mapId) {
+    query.set("from", "map");
+    query.set("map", mapId);
+  }
+  location.assign(`/admin/problem-editor.html?${query}`);
 }
 
 function choiceModeOf(draft) {
@@ -248,6 +291,8 @@ function bindEvents() {
 
   document.querySelector("#delete-open-problem")?.addEventListener("click", deleteProblem);
   document.querySelector("#duplicate-open-problem")?.addEventListener("click", duplicateProblem);
+  document.querySelector("#problem-prev")?.addEventListener("click", () => openNeighbor(-1));
+  document.querySelector("#problem-next")?.addEventListener("click", () => openNeighbor(1));
 
   document.addEventListener("keydown", (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s") return;

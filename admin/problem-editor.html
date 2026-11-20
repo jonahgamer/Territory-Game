@@ -35,6 +35,8 @@
       <div class="editor-toolbar">
         <a class="back-button" id="problem-back-button" href="/admin/problems.html">Back to problems</a>
         <div class="editor-toolbar-actions">
+          <button class="account-action" id="problem-prev" type="button">Prev</button>
+          <button class="account-action" id="problem-next" type="button">Next</button>
           <span id="problem-save-state" class="problem-save-state"></span>
           <button class="save-changes" id="save-problem-top" type="button" disabled>Save</button>
           <button class="account-action" id="duplicate-open-problem" type="button">Duplicate</button>
@@ -115,6 +117,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/admin-problem-editor.js?v=account"></script>
+  <script type="module" src="/app/admin-problem-editor.js?v=problem-nav"></script>
 </body>
 </html>
