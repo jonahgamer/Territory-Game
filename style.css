@@ -1249,7 +1249,7 @@ main:has(.editor-head) .grid-scroll {
 }
 
 .answer-page {
-  max-width: 40rem;
+  max-width: 68rem;
   margin: 0 auto;
   padding: 24px 16px 48px;
 }
@@ -1768,8 +1768,8 @@ main:has(.editor-head) .grid-scroll {
 }
 
 .student-problem-card {
-  width: min(100%, 40rem);
-  max-height: min(90dvh, 800px);
+  width: min(100%, 68rem);
+  max-height: min(94dvh, 1200px);
   overflow: auto;
   padding: 20px 22px;
   border: 1px solid var(--line);
@@ -1815,6 +1815,7 @@ main:has(.editor-head) .grid-scroll {
   min-height: 60px;
   border: 0;
   background: #081220;
+  color-scheme: dark;
 }
 #student-problem-prompt.rich-html,
 .problem-preview-content.rich-html {

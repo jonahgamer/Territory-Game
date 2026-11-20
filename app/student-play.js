@@ -15,7 +15,7 @@ import { problemDifficulty, problemTag, problemScore } from "../shared/difficult
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
-import { createStatementView, partStatement } from "../shared/statement.js?v=part-tail";
+import { createStatementView, partStatement } from "../shared/statement.js?v=frame-box";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 
 // ── 顶层常量 ─────────────────────────────────────────────

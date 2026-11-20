@@ -29,10 +29,11 @@ function buildStatementDocument(source, tag = "") {
     ? text
     : `<pre class="statement-text">${escapeStatementText(text)}</pre>`;
   return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="${STATEMENT_KATEX_CSS}" crossorigin="anonymous">
 <style>
-  html, body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; }
-  body { font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }
+  html { color-scheme: dark; background: #081220; height: 100%; }
+  body { margin: 0; padding: 0; min-height: 100%; background: #081220; color: #d7f6ff; font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }
   #territory-bridge { display: none; }
   .statement-content { overflow-wrap: anywhere; font-size: 16px; }
   .katex { font-size: 1em; }
@@ -191,7 +192,9 @@ export function createStatementView(container, options = {}) {
       frame.className = "statement-frame";
       frame.setAttribute("sandbox", "allow-scripts");
       frame.setAttribute("title", "Problem statement");
-      frame.style.height = "240px";
+      frame.style.colorScheme = "dark";
+      frame.style.background = "#081220";
+      frame.style.height = "4.5rem";
       frame.addEventListener("load", () => {
         if (frame.contentWindow) statementFrames.set(frame.contentWindow, frame);
         const fit = () => {
