@@ -468,10 +468,20 @@ function render() {
     + (contest.claims || []).filter((c) => c.teamId === team.id).length;
   const summary = document.querySelector("#student-team-summary");
   summary.hidden = false;
-  const scoreText = `Score: ${pointsLabel(row?.rankScore || 0)} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"}`;
-  summary.textContent = contest.leaderboardHidden
-    ? `Members: ${team.members.join(", ")} · ${scoreText}.`
-    : `Members: ${team.members.join(", ")} · ${scoreText} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
+  summary.replaceChildren();
+  const stats = [
+    ["Members", team.members.join(", ") || "—"],
+    ["Score", pointsLabel(row?.rankScore || 0)],
+    ["Territory", `${ownedCells} cell${ownedCells === 1 ? "" : "s"}`],
+  ];
+  if (!contest.leaderboardHidden) {
+    stats.push(["Rank", rank < 0 ? "—" : `${rank + 1} of ${board.length}`]);
+  }
+  for (const [label, value] of stats) {
+    const cell = el("div", "team-stat");
+    cell.append(el("span", "team-stat-label", label), el("strong", "team-stat-value", value));
+    summary.append(cell);
+  }
   paintEnergy();
 
   writeStatus(contest, phase, map, frozen);
@@ -507,7 +517,7 @@ function writeStatus(contest, phase, map, frozen) {
   const mapBit = map ? `${map.name} · ${map.cols} × ${map.rows}` : "The map for this contest has been removed.";
   const team = teamForUser(contest);
   const score = buildLeaderboard(contest, map).find((r) => r.teamId === team?.id);
-  const scoreBit = score ? ` ${team.name} has ${score.score} point${score.score === 1 ? "" : "s"}.` : "";
+  const scoreBit = score ? ` ${team.name} has ${pointsLabel(score.rankScore)}.` : "";
   document.querySelector("#student-play-meta").textContent = `${mapBit}. ${phaseSentence(contest, phase, frozen)}${scoreBit}`;
   const note = document.querySelector("#student-spawn-note");
   if (!map) { note.hidden = true; return; }
