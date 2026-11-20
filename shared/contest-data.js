@@ -162,6 +162,26 @@ export function rulePointsFor(contest, teamId, ruleId) {
   return found ? found.points : 0;
 }
 
+function cleanLeaderboard(value) {
+  if (!Array.isArray(value)) return [];
+  const rows = [];
+  for (const row of value) {
+    if (!row || typeof row.teamId !== "string" || typeof row.name !== "string") continue;
+    const rankScore = Math.round(Number(row.rankScore) * 10) / 10;
+    if (!Number.isFinite(rankScore)) continue;
+    const item = { teamId: row.teamId, name: row.name, rankScore };
+    if (Number.isInteger(row.solved)) item.solved = row.solved;
+    if (Number.isInteger(row.territory)) item.territory = row.territory;
+    if (Array.isArray(row.rules)) {
+      item.rules = row.rules
+        .filter((rule) => rule && typeof rule.label === "string" && Number.isFinite(Number(rule.points)))
+        .map((rule) => ({ label: rule.label, points: Math.round(Number(rule.points) * 10) / 10 }));
+    }
+    rows.push(item);
+  }
+  return rows;
+}
+
 function cleanRulePoints(value) {
   if (!Array.isArray(value)) return [];
   const rows = [];
@@ -341,6 +361,8 @@ export function normalizeContest(raw) {
     rectangleBonus: cleanRectangleBonus(raw.rectangleBonus),
     rulePoints: cleanRulePoints(raw.rulePoints),
     notices: cleanNotices(raw.notices),
+    leaderboardHidden: raw.leaderboardHidden === true,
+    leaderboard: cleanLeaderboard(raw.leaderboard),
     resolvedTeams: Array.isArray(raw.resolvedTeams) ? raw.resolvedTeams.filter((id) => typeof id === "string") : [],
     spawnChoices: normalizeTeamCells(raw.spawnChoices, fallback),
     spawnVotes: normalizeSpawnVotes(raw.spawnVotes, fallback),

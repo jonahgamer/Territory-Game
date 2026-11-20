@@ -131,5 +131,6 @@ export const api = {
   deleteVersion: (id) => apiCall("delete-version", { id }),
   addRule: (title, message) => apiCall("add-rule", { title, message }),
   deleteRule: (id) => apiCall("delete-rule", { id }),
+  saveRuleDescription: (id, text) => apiCall("save-rule-description", { id, text }),
   testProblem: (logic, expected, answer) => apiCall("test-problem", { logic, expected, answer }),
 };

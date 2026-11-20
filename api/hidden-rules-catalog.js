@@ -46,6 +46,22 @@ export const HIDDEN_RULES = [
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const MAX_RULES = 40;
 const MAX_MINUTES = 10080;
+const MAX_DESCRIPTION = 4000;
+
+let descriptionOverrides = new Map();
+
+export async function loadRuleDescriptions(db) {
+  const docs = await db.collection("rule_descriptions").find({}, { projection: { text: 1 } }).toArray();
+  const next = new Map();
+  for (const doc of docs) {
+    const id = typeof doc._id === "string" ? doc._id : "";
+    const text = typeof doc.text === "string" ? doc.text.trim() : "";
+    if (!id || !text || text.length > MAX_DESCRIPTION) continue;
+    next.set(id, text);
+  }
+  descriptionOverrides = next;
+  return next;
+}
 
 export function hiddenRuleCatalog() {
   const rules = [];
@@ -57,7 +73,14 @@ export function hiddenRuleCatalog() {
     if (!ID_RE.test(id) || !title || title.length > 80 || !text || text.length > 4000) continue;
     if (seen.has(id)) continue;
     seen.add(id);
-    rules.push({ id, title, text });
+    const custom = descriptionOverrides.get(id) || "";
+    rules.push({
+      id,
+      title,
+      text: custom || text,
+      defaultText: text,
+      custom: Boolean(custom),
+    });
   }
   return rules;
 }
@@ -249,6 +272,38 @@ function seededShuffle(items, seedText) {
   return list;
 }
 
+const SCORING_RULE_IDS = new Set([
+  "same-type-run",
+  "map-multiplier",
+  "cell-steal",
+  "touch-bonus",
+  "territory-rectangle",
+  "solve-burst",
+]);
+
+export function scoringRuleLabels(contest) {
+  const settings = cleanHiddenRuleSettings(contest?.hiddenRules);
+  let ordered = [];
+  if (settings.reveal === "periodic") {
+    const queue = settings.items.filter((item) => item.hidden !== true);
+    ordered = settings.order === "random"
+      ? seededShuffle(queue, `${contest?.id || ""}:hidden-rules`)
+      : queue;
+  } else {
+    ordered = settings.items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.hidden !== true && item.revealMinute !== null)
+      .sort((a, b) => a.item.revealMinute - b.item.revealMinute || a.index - b.index)
+      .map(({ item }) => item);
+  }
+  const labels = [];
+  ordered.forEach((item, index) => {
+    if (!SCORING_RULE_IDS.has(item.id)) return;
+    labels.push({ id: item.id, label: `Rule ${index + 1}` });
+  });
+  return labels;
+}
+
 export function revealedHiddenRules(contest, now = Date.now()) {
   const settings = cleanHiddenRuleSettings(contest?.hiddenRules);
   const catalog = new Map(hiddenRuleCatalog().map((rule) => [rule.id, rule]));
@@ -283,6 +338,8 @@ export function revealedHiddenRules(contest, now = Date.now()) {
 }
 
 function revealedRuleText(contest, rule) {
+  const custom = descriptionOverrides.get(rule.id);
+  if (custom) return custom;
   const item = cleanHiddenRuleSettings(contest?.hiddenRules).items.find((entry) => entry.id === rule.id);
   if (rule.id === "cell-steal") {
     const seconds = Number.isInteger(item?.seconds) && item.seconds >= 1 && item.seconds <= 3600 ? item.seconds : 45;

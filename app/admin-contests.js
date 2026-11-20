@@ -129,7 +129,11 @@ function render() {
     button.addEventListener("click", () => {
       location.assign(`/admin/contest.html?id=${encodeURIComponent(contest.id)}`);
     });
-    item.append(button);
+    const board = el("a", "back-button", "Scoreboard");
+    board.href = `/admin/scoreboard.html?id=${encodeURIComponent(contest.id)}`;
+    board.target = "_blank";
+    board.rel = "noopener";
+    item.append(button, board);
     return item;
   });
 }

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=rule-popup" />
+  <link rel="stylesheet" href="/style.css?v=team-stats" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous" />
 </head>
@@ -42,6 +42,8 @@
       <p id="load-error" class="form-error" hidden></p>
       <div class="editor-toolbar">
         <a class="back-button" href="/index.html">Back to contests</a>
+        <a class="back-button" id="open-leaderboard" href="/leaderboard.html" hidden>Leaderboard</a>
+        <a class="back-button" id="open-rules" href="/revealed-rules.html" hidden>Revealed rules</a>
       </div>
       <p class="eyebrow">Contest</p>
       <h1 id="student-play-title"></h1>
@@ -67,17 +69,9 @@
 
       <p id="student-spawn-note" class="field-note" hidden></p>
       <p id="student-joined" class="field-note" hidden></p>
-      <p id="student-team-summary" class="field-note" hidden></p>
+      <p id="student-team-summary" class="team-stats" hidden></p>
       <p id="student-energy" class="energy-readout" hidden></p>
       <div id="student-energy-track" class="energy-track" hidden><div id="student-energy-fill" class="energy-fill"></div></div>
-
-      <section id="revealed-rules" class="revealed-rules" hidden>
-        <h2>Revealed rules</h2>
-        <ul id="revealed-rules-list" class="revealed-rule-list"></ul>
-      </section>
-
-      <h2 id="student-leaderboard-heading" hidden>Leaderboard</h2>
-      <ol id="student-leaderboard" class="leaderboard" hidden></ol>
 
       <div id="student-board" class="student-board" hidden>
         <div class="kind-choices" id="teleport-line-choices" role="group" aria-label="Teleport lines">
@@ -124,6 +118,6 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="/app/student-play.js?v=sqrt-fix"></script>
+  <script type="module" src="/app/student-play.js?v=team-stats"></script>
 </body>
 </html>

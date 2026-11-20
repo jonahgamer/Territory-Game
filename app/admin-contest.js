@@ -1,14 +1,14 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=hidden-end";
+import { loadPage } from "../shared/data.js?v=leaderboard";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=leaderboard";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
@@ -47,6 +47,8 @@ async function run() {
 
   const advancedLink = document.querySelector("#advanced-settings");
   if (advancedLink) advancedLink.href = `/admin/contest-advanced.html?id=${encodeURIComponent(contestId)}`;
+  const scoreboardLink = document.querySelector("#open-scoreboard");
+  if (scoreboardLink) scoreboardLink.href = `/admin/scoreboard.html?id=${encodeURIComponent(contestId)}`;
   const backLink = document.querySelector("#back-to-contest");
   if (backLink) backLink.href = `/admin/contest.html?id=${encodeURIComponent(contestId)}`;
   bindEvents();
@@ -92,6 +94,10 @@ function bindEvents() {
   for (const id of ["#contest-start-input", "#contest-duration-input", "#contest-spawn-input", "#contest-ready-input"]) {
     document.querySelector(id)?.addEventListener("change", commitSchedule);
   }
+  document.querySelector("#contest-hide-leaderboard")?.addEventListener("change", (event) => {
+    state.current.leaderboardHidden = event.target.checked;
+    persistContests();
+  });
   for (const id of ["#energy-regen", "#energy-regen-seconds", "#energy-attempt-cost", "#energy-attempt-min", "#energy-solve-below", "#energy-solve-easy", "#energy-solve-normal", "#energy-solve-hard", "#energy-solve-insane"]) {
     document.querySelector(id)?.addEventListener("change", commitEnergy);
   }
@@ -307,6 +313,8 @@ function fillSchedule() {
   document.querySelector("#contest-duration-input").value = Number.isInteger(c.durationMinutes) ? String(c.durationMinutes) : "";
   document.querySelector("#contest-spawn-input").value = Number.isInteger(c.spawnMinutes) ? String(c.spawnMinutes) : "";
   document.querySelector("#contest-ready-input").value = Number.isInteger(c.readyMinutes) ? String(c.readyMinutes) : "";
+  const hideBoard = document.querySelector("#contest-hide-leaderboard");
+  if (hideBoard) hideBoard.checked = c.leaderboardHidden === true;
 }
 
 function updateSpawnNote() {
@@ -951,6 +959,7 @@ function applyPlayState(data) {
   if (Array.isArray(next.rectangleBonus)) state.current.rectangleBonus = next.rectangleBonus;
   else if (next.rectangleBonus === null) state.current.rectangleBonus = null;
   if (Array.isArray(next.rulePoints)) state.current.rulePoints = next.rulePoints;
+  if (Array.isArray(next.leaderboard)) state.current.leaderboard = next.leaderboard;
   if (next.mode) state.current.mode = next.mode;
   noteServerTime(data.serverNow);
 }
@@ -968,7 +977,7 @@ async function removeTeam(team) {
 }
 
 function renderLeaderboard() {
-  const rows = buildLeaderboard(state.current);
+  const rows = Array.isArray(state.current.leaderboard) ? state.current.leaderboard : buildLeaderboard(state.current);
   const list = document.querySelector("#contest-leaderboard");
   const empty = document.querySelector("#contest-leaderboard-empty");
   empty.hidden = rows.length > 0;
@@ -979,9 +988,14 @@ function renderLeaderboard() {
       el("span", "leaderboard-rank", `${rows.indexOf(row) + 1}.`),
       el("span", "leaderboard-team", row.name),
       el("span", "leaderboard-stat", pointsLabel(row.rankScore)),
-      el("span", "leaderboard-stat", `${row.solved} solved`),
-      el("span", "leaderboard-stat", `${row.territory} cell${row.territory === 1 ? "" : "s"}`)
+      el("span", "leaderboard-stat", `${row.solved || 0} solved`),
+      el("span", "leaderboard-stat", `${row.territory || 0} cell${row.territory === 1 ? "" : "s"}`)
     );
+    if (Array.isArray(row.rules) && row.rules.length) {
+      const rules = el("ul", "leaderboard-rules");
+      for (const rule of row.rules) rules.append(el("li", null, `${rule.label}: ${pointsLabel(rule.points)}`));
+      item.append(rules);
+    }
     return item;
   });
 }

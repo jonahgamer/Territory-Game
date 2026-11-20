@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=contest-lines" />
+  <link rel="stylesheet" href="/style.css?v=leaderboard-rules" />
 </head>
 <body>
   <div class="app">
@@ -32,6 +32,7 @@
       <p id="load-error" class="form-error" hidden></p>
       <div class="editor-toolbar">
         <a class="back-button" href="/admin/contests.html">Back to contests</a>
+        <a class="back-button" id="open-scoreboard" href="/admin/scoreboard.html" target="_blank" rel="noopener">Scoreboard</a>
         <a class="back-button" id="advanced-settings" href="/admin/contest-advanced.html">Advanced settings</a>
         <button class="delete-map" id="delete-open-contest" type="button">Delete contest</button>
       </div>
@@ -59,6 +60,8 @@
           </div>
           <label id="contest-spawn-field">Spawn time (min) <input id="contest-spawn-input" type="number" min="0" max="10080" /></label>
           <label>Wait after spawn (min) <input id="contest-ready-input" type="number" min="0" max="10080" /></label>
+          <label class="check-line"><input id="contest-hide-leaderboard" type="checkbox" /> Hide the leaderboard from contestants</label>
+          <p class="field-note">When this is on, contestants cannot open the leaderboard, including after the contest ends. When it is off, they open it from the contest. Until the contest ends they see each team's total only.</p>
           <p id="contest-spawn-mode-note" class="field-note" hidden>Teams are placed on random spawn points when the contest starts. There is no choosing period. The wait still runs before solving begins.</p>
         </fieldset>
         <p id="contest-schedule-error" class="form-error" hidden></p>
@@ -113,6 +116,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-contest.js?v=hidden-end"></script>
+  <script type="module" src="/app/admin-contest.js?v=leaderboard-rules"></script>
 </body>
 </html>

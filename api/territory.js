@@ -35,7 +35,7 @@ import {
   contestMapIds, primaryMapId, placeKey, cleanTeleports, teleportPairAt, teleportOtherEnd,
 } from '../shared/contest-board.js';
 import { shiftedCell } from '../shared/map-render.js';
-import { cleanHiddenRuleSettings, hiddenRuleCatalog, hiddenRuleEffectMessage, hiddenRuleEnabled, largestRectangleInTerritory, revealedHiddenRules, roundMark, sameTypeRunBonus, solveBurstBonus } from './hidden-rules-catalog.js';
+import { cleanHiddenRuleSettings, hiddenRuleCatalog, hiddenRuleEffectMessage, hiddenRuleEnabled, largestRectangleInTerritory, loadRuleDescriptions, revealedHiddenRules, roundMark, sameTypeRunBonus, scoringRuleLabels, solveBurstBonus } from './hidden-rules-catalog.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // Auth
@@ -854,6 +854,8 @@ function buildLeaderboard(contest, maps, problems, now = Date.now()) {
   const mapById = new Map(list.map((map) => [map.id, map]));
   const awards = touchAwards(contest, list, now);
   const rectangles = rectangleAwardList(contest, list, now);
+  const totals = rulePointList(contest, list, now, null);
+  const labels = scoringRuleLabels(contest);
   return cleanTeams(contest?.teams).map((team) => {
     let score = 0;
     let solved = 0;
@@ -871,7 +873,11 @@ function buildLeaderboard(contest, maps, problems, now = Date.now()) {
     const rectangle = rectangles ? (rectangles.find((item) => item.teamId === team.id) || { area: 0, bonus: 0 }) : null;
     const extra = (touchBonus !== null ? touchBonus : 0) + (rectangle ? rectangle.bonus : 0);
     const rankScore = roundMark(score + extra);
-    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore };
+    const rules = labels.map((rule) => {
+      const found = totals.find((row) => row.teamId === team.id && row.id === rule.id);
+      return { label: rule.label, points: found ? found.points : 0 };
+    });
+    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore, rules };
   }).sort((a, b) => b.rankScore - a.rankScore || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
@@ -937,12 +943,18 @@ function contestPayload(contest, mapOrMaps, problems, user) {
   if (!admin && rectangleBonus && !revealedIds.has('territory-rectangle')) {
     rectangleBonus = rectangleBonus.map((item) => ({ teamId: item.teamId, bonus: item.bonus, area: 0 }));
   }
-  const shownClaims = admin ? visibleClaims : visibleClaims.map((claim) => {
+  const shownClaims = (admin ? visibleClaims : visibleClaims.map((claim) => {
     if (!Array.isArray(claim.awards) || !claim.awards.length) return claim;
     const awards = claim.awards.filter((award) => revealedIds.has(award.id));
     const next = { ...claim };
     if (awards.length) next.awards = awards;
     else delete next.awards;
+    return next;
+  })).map((claim) => {
+    if (admin || contest.leaderboardHidden !== true || (team && claim.teamId === team.id)) return claim;
+    const next = { ...claim };
+    delete next.score;
+    delete next.awards;
     return next;
   });
   return {
@@ -968,14 +980,16 @@ function contestPayload(contest, mapOrMaps, problems, user) {
         : spawns.filter(own),
       claims: shownClaims,
       locks,
-      leaderboard: buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, maps, problems || []).map((row) => {
-        if (admin || revealedIds.has('territory-rectangle') || !row.rectangle) return row;
-        return { ...row, rectangle: { area: 0, bonus: row.rectangle.bonus } };
-      }),
+      leaderboard: publicLeaderboard(contest, maps, problems, admin, ended, revealedIds, visibleTeams, visibleClaims),
+      leaderboardHidden: contest.leaderboardHidden === true,
+      startAt: Number.isInteger(contest.startAt) ? contest.startAt : null,
+      durationMinutes: Number.isInteger(contest.durationMinutes) ? contest.durationMinutes : null,
+      spawnMinutes: Number.isInteger(contest.spawnMinutes) ? contest.spawnMinutes : null,
+      readyMinutes: Number.isInteger(contest.readyMinutes) ? contest.readyMinutes : null,
       frozen,
       revealedRules: revealed,
-      touchBonus: touchAwardList(contest, maps, Date.now()),
-      rectangleBonus,
+      touchBonus: contestantScoreList(touchAwardList(contest, maps, Date.now()), contest, admin, team),
+      rectangleBonus: contestantScoreList(rectangleBonus, contest, admin, team),
       rulePoints: rulePointList(contest, maps, Date.now(), admin ? null : (team || { id: '' })),
       notices: admin || !team ? [] : ruleNotices(contest, maps, Date.now(), team),
       ruleBlocks: admin || !team ? [] : hiddenAttemptBlocks(contest, maps, team.id),
@@ -983,6 +997,24 @@ function contestPayload(contest, mapOrMaps, problems, user) {
       ...energyFields(contest, admin ? null : team?.id, Date.now()),
     },
   };
+}
+
+function contestantScoreList(list, contest, admin, team) {
+  if (!Array.isArray(list)) return list;
+  if (admin || contest.leaderboardHidden !== true) return list;
+  if (!team) return [];
+  return list.filter((item) => item.teamId === team.id);
+}
+
+function publicLeaderboard(contest, maps, problems, admin, ended, revealedIds, visibleTeams, visibleClaims) {
+  const rows = buildLeaderboard({ ...contest, teams: visibleTeams, claims: visibleClaims }, maps, problems || []).map((row) => {
+    if (admin || revealedIds.has('territory-rectangle') || !row.rectangle) return row;
+    return { ...row, rectangle: { area: 0, bonus: row.rectangle.bonus } };
+  });
+  if (!admin && contest.leaderboardHidden === true) return [];
+  if (!admin && !ended) return rows.map(({ teamId, name, rankScore }) => ({ teamId, name, rankScore }));
+  if (!admin) return rows.map(({ teamId, name, rankScore, rules }) => ({ teamId, name, rankScore, rules }));
+  return rows;
 }
 
 function energyFields(contest, onlyTeamId, now) {
@@ -1093,6 +1125,7 @@ function contestStoredUpdate(contest, stored) {
     energySolveBelow: contest.energySolveBelow,
     energySolve: contest.energySolve,
     hiddenRules: contest.hiddenRules,
+    leaderboardHidden: contest.leaderboardHidden === true,
     updatedAt: new Date(),
   };
   const sameMode = stored && isTestingContest(stored) === (contest.mode === 'testing');
@@ -1181,6 +1214,7 @@ function normalizeContest(v) {
     energySolveBelow: energy.solveBelow,
     energySolve: energy.solve,
     hiddenRules: cleanHiddenRuleSettings(v.hiddenRules, mapIds),
+    leaderboardHidden: v.leaderboardHidden === true,
   };
 }
 
@@ -2592,13 +2626,33 @@ async function listRules(db) {
   })).filter((item) => item.title && item.message);
 }
 
-function handlePageHiddenRules(req, res, user) {
-  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
-  return res.status(200).json({
+function hiddenRulePage(user) {
+  return {
     success: true,
     user: pageUser(user),
     rules: hiddenRuleCatalog(),
-  });
+  };
+}
+
+function handlePageHiddenRules(req, res, user) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  return res.status(200).json(hiddenRulePage(user));
+}
+
+async function handleSaveRuleDescription(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const id = typeof body.id === 'string' ? body.id.trim() : '';
+  const written = hiddenRuleCatalog().find((rule) => rule.id === id);
+  if (!written) return res.status(400).json({ success: false, message: 'That rule was not found.' });
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (text.length > 4000) {
+    return res.status(400).json({ success: false, message: 'The description can be at most 4000 characters.' });
+  }
+  const col = db.collection('rule_descriptions');
+  if (!text || text === written.defaultText) await col.deleteOne({ _id: id });
+  else await col.updateOne({ _id: id }, { $set: { text, updatedAt: new Date() } }, { upsert: true });
+  await loadRuleDescriptions(db);
+  return res.status(200).json(hiddenRulePage(user));
 }
 
 async function handlePageRules(req, res, db, user) {
@@ -3784,6 +3838,7 @@ export default async function handler(req, res) {
   const action = req.query.action || body.action;
 
   try {
+    await loadRuleDescriptions(db);
     switch (action) {
       case 'bootstrap':     return await handleBootstrap(req, res, db, user);
       case 'page-maps':     return await handlePageMaps(req, res, db, user);
@@ -3810,6 +3865,7 @@ export default async function handler(req, res) {
       case 'page-credits':  return await handlePageCredits(req, res, db, user);
       case 'page-rules':    return await handlePageRules(req, res, db, user);
       case 'page-hidden-rules': return handlePageHiddenRules(req, res, user);
+      case 'save-rule-description': return await handleSaveRuleDescription(req, res, db, user, body);
       case 'add-rule':      return await handleAddRule(req, res, db, user, body);
       case 'delete-rule':   return await handleDeleteRule(req, res, db, user, body);
       case 'save-maps':     return await handleSaveMaps(req, res, db, user, body);

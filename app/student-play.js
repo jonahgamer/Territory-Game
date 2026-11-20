@@ -2,13 +2,13 @@ import { requireContestant, getSession, sameContestant } from "../shared/session
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { showRulePopup, showRulePopupOnce } from "../shared/rule-popup.js";
-import { loadPage } from "../shared/data.js?v=hidden-end";
+import { loadPage } from "../shared/data.js?v=leaderboard";
 import { api } from "../shared/api.js?v=roles";
-import { el, renderList } from "../shared/dom.js";
+import { el } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel } from "../shared/contest-data.js?v=leaderboard";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=map-read";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
@@ -468,16 +468,26 @@ function render() {
     + (contest.claims || []).filter((c) => c.teamId === team.id).length;
   const summary = document.querySelector("#student-team-summary");
   summary.hidden = false;
-  summary.textContent = `Members: ${team.members.join(", ")} · Score: ${pointsLabel(row?.rankScore || 0)} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
+  const scoreText = `Score: ${pointsLabel(row?.rankScore || 0)} · Territory: ${ownedCells} cell${ownedCells === 1 ? "" : "s"}`;
+  summary.textContent = contest.leaderboardHidden
+    ? `Members: ${team.members.join(", ")} · ${scoreText}.`
+    : `Members: ${team.members.join(", ")} · ${scoreText} · Rank ${rank < 0 ? "—" : rank + 1} of ${board.length}.`;
   paintEnergy();
-  paintRevealedRules();
 
   writeStatus(contest, phase, map, frozen);
   renderRoster(contest, map, phase);
-  renderLeaderboard(board);
-  const showScores = phase === "live" || phase === "ended" || frozen;
-  document.querySelector("#student-leaderboard").hidden = !showScores;
-  document.querySelector("#student-leaderboard-heading").hidden = !showScores;
+  const boardLink = document.querySelector("#open-leaderboard");
+  if (boardLink) {
+    const open = !contest.leaderboardHidden && phase !== "before" && phase !== "unscheduled";
+    boardLink.hidden = !open;
+    boardLink.href = `/leaderboard.html?contest=${encodeURIComponent(contest.id)}`;
+  }
+  const rulesLink = document.querySelector("#open-rules");
+  if (rulesLink) {
+    const openRules = phase !== "before" && phase !== "unscheduled";
+    rulesLink.hidden = !openRules;
+    rulesLink.href = `/revealed-rules.html?contest=${encodeURIComponent(contest.id)}`;
+  }
   document.querySelector("#student-board").hidden = maps.length === 0;
 
   if (!map) {
@@ -544,22 +554,6 @@ function renderRoster(contest, map, phase) {
     : "No spawn point";
   row.append(name, members, spawn);
   body.append(row);
-}
-
-function renderLeaderboard(rows) {
-  const list = document.querySelector("#student-leaderboard");
-  renderList(list, rows, (row) => {
-    const item = el("li", "leaderboard-row");
-    const idx = rows.indexOf(row) + 1;
-    item.append(
-      el("span", "leaderboard-rank", `${idx}.`),
-      el("span", "leaderboard-team", row.name),
-      el("span", "leaderboard-stat", pointsLabel(row.rankScore)),
-      el("span", "leaderboard-stat", `${row.solved} solved`),
-      el("span", "leaderboard-stat", `${row.territory} cell${row.territory === 1 ? "" : "s"}`)
-    );
-    return item;
-  });
 }
 
 function touchBonusFor(contest, teamId) {
@@ -1498,6 +1492,7 @@ function applyPlayState(data) {
   if (Number.isInteger(next.energyAttemptMin)) c.energyAttemptMin = next.energyAttemptMin;
   if (Number.isInteger(next.energySolveBelow)) c.energySolveBelow = next.energySolveBelow;
   if (next.energySolve) c.energySolve = next.energySolve;
+  if (typeof next.leaderboardHidden === "boolean") c.leaderboardHidden = next.leaderboardHidden;
   if (Array.isArray(next.revealedRules)) c.revealedRules = next.revealedRules.map(publicRevealedRule).filter(Boolean);
   if (Array.isArray(next.ruleBlocks)) c.ruleBlocks = next.ruleBlocks.filter((block) => block && typeof block.mapId === "string" && Number.isInteger(block.cell));
   if (Array.isArray(next.stealOpen)) {
@@ -1525,33 +1520,6 @@ function publicRevealedRule(rule) {
     text: rule.text,
     minute: Number.isInteger(rule.minute) ? rule.minute : null,
   };
-}
-
-function paintRevealedRules() {
-  const section = document.querySelector("#revealed-rules");
-  const list = document.querySelector("#revealed-rules-list");
-  if (!section || !list) return;
-  const rules = Array.isArray(state.contest?.revealedRules) ? state.contest.revealedRules : [];
-  section.hidden = rules.length === 0;
-  list.replaceChildren();
-  for (const rule of rules) {
-    const item = document.createElement("li");
-    const title = document.createElement("h3");
-    const team = teamForUser(state.contest);
-    title.textContent = scoringRule(rule.id) && team
-      ? `${rule.title} · ${pointsLabel(rulePointsFor(state.contest, team.id, rule.id))}`
-      : rule.title;
-    const body = document.createElement("p");
-    body.textContent = rule.text;
-    item.append(title, body);
-    if (Number.isInteger(rule.minute)) {
-      const when = document.createElement("p");
-      when.className = "version-time";
-      when.textContent = rule.minute === 0 ? "Revealed at the start." : `Revealed at minute ${rule.minute}.`;
-      item.append(when);
-    }
-    list.append(item);
-  }
 }
 
 function showRuleNotices(contest) {

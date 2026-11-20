@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scoreboard · Territory Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css?v=leaderboard-rules" />
+</head>
+<body class="scoreboard-body">
+  <main class="scoreboard">
+    <header class="scoreboard-head">
+      <div>
+        <p class="eyebrow">Live scoreboard</p>
+        <h1 id="scoreboard-title">Contest</h1>
+      </div>
+      <div class="scoreboard-clock">
+        <p id="scoreboard-phase"></p>
+        <p id="scoreboard-status">Waiting for scores</p>
+      </div>
+    </header>
+    <p id="scoreboard-error" class="form-error" hidden></p>
+    <p id="scoreboard-empty" class="field-note">No teams yet.</p>
+    <ol id="scoreboard-list" class="scoreboard-list" hidden></ol>
+  </main>
+  <script type="module" src="/app/admin-scoreboard.js?v=leaderboard-rules"></script>
+</body>
+</html>
