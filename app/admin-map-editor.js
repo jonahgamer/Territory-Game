@@ -231,6 +231,8 @@ function renderPlaceMode() {
   document.querySelector("#place-fixed-field").hidden = state.placePickSource !== "fixed";
   document.querySelector("#place-range-field").hidden = state.placePickSource !== "range";
   document.querySelector("#place-round-field").hidden = state.placePickSource !== "random";
+  const stopField = document.querySelector("#place-stop-field");
+  if (stopField) stopField.hidden = state.placePickSource !== "random";
   const skipOn = state.placePickSource === "random";
   const skipField = document.querySelector("#place-skip-field");
   if (skipField) skipField.hidden = !skipOn;
@@ -543,6 +545,9 @@ function pickProblemForMap(map) {
   }
   const countOf = (p) => uses.get(`${p.type}:${p.index}`) || 0;
   const unused = pool.filter((p) => countOf(p) === 0);
+  if (state.placePickSource === "random" && document.querySelector("#place-stop-used")?.checked && !unused.length) {
+    return { error: "Every match is already on this map." };
+  }
   const source = unused.length > 0 ? unused : pool;
   let lowest = Infinity;
   for (const p of source) lowest = Math.min(lowest, countOf(p));
