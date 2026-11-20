@@ -82,6 +82,10 @@ A map’s `backdrop` is `terrain` or `photo`. `photo` is a `data:image/jpeg`, `p
 
 Admin only. Sets `difficulty` on the listed problems and leaves the prompt, answer, solution, logic, and parts untouched. A score that still matches the old difficulty default changes to the new default. A typed score stays. Body may include `revision`; a stale revision returns 409. The response includes the new `revision`.
 
+### `POST { "action": "set-problem-score", "score": 5, "problems": [{ "type": "oi", "index": 26000 }] }`
+
+Admin only. Sets `score` on the listed problems to a whole number from 0 to 999. A problem with parts keeps those parts, and the score is split across them so the part marks add up to that number. Body may include `revision`; a stale revision returns 409. The response includes the new `revision`.
+
 ### `POST { "action": "save-problems", "problems": [...] }`
 
 Admin only. Same rule: an invalid problem rejects the whole save. Body may include `revision`; a stale revision returns 409. Problems are identified by `type` and `index`, so the save is incremental in the same way as maps.

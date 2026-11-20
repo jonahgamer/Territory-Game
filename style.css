@@ -2066,6 +2066,35 @@ main:has(.editor-head) .grid-scroll {
   cursor: default;
 }
 
+.problem-bulk-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.problem-bulk-score label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.problem-bulk-score input {
+  width: 5.5rem;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 12, 22, 0.85);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .problem-check {
   display: flex;
   align-items: center;

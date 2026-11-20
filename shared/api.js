@@ -96,6 +96,7 @@ export const api = {
   deleteMap: (mapId, revision) => apiCall("delete-map", { mapId, revision }),
   saveProblem: (problem, revision) => apiCall("save-problem", { problem, revision }),
   setProblemDifficulty: (problems, difficulty, revision) => apiCall("set-problem-difficulty", { problems, difficulty, revision }),
+  setProblemScore: (problems, score, revision) => apiCall("set-problem-score", { problems, score, revision }),
   addProblems: (problems, revision, replace = false) => apiCall("add-problems", {
     problems,
     revision,

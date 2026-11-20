@@ -3136,6 +3136,57 @@ async function handleSetProblemDifficulty(req, res, db, user, body) {
   return res.status(200).json({ success: true, revision });
 }
 
+function splitMarks(total, count) {
+  const base = Math.floor(total / count);
+  let extra = total % count;
+  const marks = [];
+  for (let i = 0; i < count; i += 1) {
+    marks.push(base + (extra > 0 ? 1 : 0));
+    if (extra > 0) extra -= 1;
+  }
+  return marks;
+}
+
+async function handleSetProblemScore(req, res, db, user, body) {
+  if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
+  const score = typeof body.score === 'number' ? body.score : Number(body.score);
+  if (!Number.isInteger(score) || score < 0 || score > MAX_PROBLEM_SCORE) {
+    return res.status(400).json({ success: false, message: 'Score must be a whole number from 0 to 999.' });
+  }
+  const wanted = (Array.isArray(body.problems) ? body.problems : []).filter((item) => (
+    PROBLEM_TYPES.includes(item?.type) && Number.isInteger(item?.index)
+  ));
+  if (!wanted.length) return res.status(400).json({ success: false, message: 'Select at least one problem.' });
+  const session = getMongoClient().startSession();
+  let revision = 0;
+  try {
+    await session.withTransaction(async () => {
+      const current = await readRevision(db, 'problems', session);
+      assertRevision(current, body.revision);
+      const col = db.collection('problems');
+      for (const item of wanted) {
+        const existing = await findStoredProblem(col, item.type, item.index, session);
+        if (!existing) continue;
+        const parts = Array.isArray(existing.parts)
+          ? existing.parts.filter((part) => part && typeof part === 'object')
+          : [];
+        const fields = { score, updatedAt: new Date() };
+        if (parts.length) {
+          const marks = splitMarks(score, parts.length);
+          fields.parts = parts.map((part, index) => ({ ...part, score: marks[index] }));
+        }
+        await col.updateOne({ _id: existing._id }, { $set: fields }, { session });
+      }
+      revision = await bumpRevision(db, 'problems', session);
+    });
+  } catch (err) {
+    return revisionError(res, err);
+  } finally {
+    await session.endSession();
+  }
+  return res.status(200).json({ success: true, revision });
+}
+
 async function handleSaveProblem(req, res, db, user, body) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const problem = normalizeProblem(body.problem);
@@ -3633,6 +3684,7 @@ export default async function handler(req, res) {
       case 'page-problem-text': return await handlePageProblemText(req, res, db, user, body);
       case 'save-problem':  return await handleSaveProblem(req, res, db, user, body);
       case 'set-problem-difficulty': return await handleSetProblemDifficulty(req, res, db, user, body);
+      case 'set-problem-score': return await handleSetProblemScore(req, res, db, user, body);
       case 'add-problems':  return await handleAddProblems(req, res, db, user, body);
       case 'delete-problems': return await handleDeleteProblems(req, res, db, user, body);
       case 'move-problem':  return await handleMoveProblem(req, res, db, user, body);

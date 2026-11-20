@@ -2,7 +2,7 @@ import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=roles";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=set-score";
 import { el, renderList, debounce } from "../shared/dom.js";
 import {
   PROBLEM_PAGE_SIZE, PROBLEM_YEAR, YEAR_INDEX_START, YEAR_INDEX_END,
@@ -129,6 +129,35 @@ function bindEvents() {
       box.checked = event.target.checked;
     }
     syncSelection();
+  });
+
+  document.querySelector("#problem-bulk-score")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const chosen = selectedProblems();
+    const score = Number(document.querySelector("#problem-score-input")?.value);
+    if (!Number.isInteger(score) || score < 0 || score > 999) {
+      showPageToast("Score must be a whole number from 0 to 999.", "warn");
+      return;
+    }
+    if (chosen.length === 0) {
+      showPageToast("Select at least one problem.", "warn");
+      return;
+    }
+    const label = chosen.length === 1 ? problemTag(chosen[0].index, chosen[0].type) : `${chosen.length} problems`;
+    if (!window.confirm(`Set ${label} to ${score} point${score === 1 ? "" : "s"}? A problem with several parts keeps those parts, and the points are split across them.`)) return;
+    try {
+      const data = await api.setProblemScore(
+        chosen.map((p) => ({ type: p.type, index: p.index })),
+        score,
+        state.revisions.problems,
+      );
+      state.revisions.problems = data.revision;
+    } catch (err) {
+      showPageToast(err.message || "Could not set the score.", "warn");
+      return;
+    }
+    for (const p of chosen) p.score = score;
+    render();
   });
 
   document.querySelector("#problem-bulk-difficulty")?.addEventListener("click", async (event) => {
@@ -507,6 +536,8 @@ function syncSelection() {
   const anyChecked = document.querySelector("[data-select-problem]:checked");
   if (exportBtn) exportBtn.disabled = chosen.length === 0 && !anyChecked;
   for (const btn of document.querySelectorAll("[data-bulk-difficulty]")) btn.disabled = chosen.length === 0;
+  const scoreBtn = document.querySelector("#problem-bulk-score button");
+  if (scoreBtn) scoreBtn.disabled = chosen.length === 0;
 }
 
 function renderPages(pageCount) {
