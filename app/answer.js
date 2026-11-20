@@ -3,7 +3,7 @@ import { api } from "../shared/api.js?v=roles";
 import { loadPage } from "../shared/data.js?v=roles";
 import { noteServerTime, serverNow } from "../shared/contest-time.js";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
-import { createStatementView, partStatement } from "../shared/statement.js?v=frame-fit";
+import { createStatementView, partStatement } from "../shared/statement.js?v=kakuro-cell";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
 import { teamForUser, teamEnergy } from "../shared/contest-data.js";
@@ -99,12 +99,12 @@ function paintEnergy() {
   node.hidden = false;
   track.hidden = false;
   node.textContent = blocked
-    ? `Energy ${value} / 100. An attempt needs at least ${settings.attemptMin}.`
+    ? `Energy ${value} / 100. You can still check an answer. Taking a cell needs at least ${settings.attemptMin}.`
     : `Energy ${value} / 100. Restores ${settings.regen} every ${settings.regenSeconds}s. Each attempt spends ${settings.attemptCost}.`;
   fill.style.width = `${value}%`;
   fill.classList.toggle("low", blocked);
   const submit = form.querySelector("button");
-  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked || locked;
+  if (submit && submit.dataset.busy !== "1") submit.disabled = locked;
 }
 
 function paintChoiceLock() {
@@ -221,6 +221,16 @@ form.addEventListener("submit", async (event) => {
     const data = await api.solve(contestId, cellIndex, submitted.answer, openMapId, submitted.answers);
     takeServerContest(data.contest, data.serverNow);
     if (Array.isArray(data.effects) && data.effects.length) showRulePopupOnce(data.effects);
+    if (data.checked) {
+      releaseSubmitButton(submit, label);
+      if (data.correct) showStatus(data.message);
+      else {
+        errorEl.hidden = false;
+        errorEl.textContent = data.message;
+      }
+      paintEnergy();
+      return;
+    }
     if (data.complete === false) {
       renderParts(problemParts);
       releaseSubmitButton(submit, label);

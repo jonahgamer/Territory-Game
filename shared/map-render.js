@@ -271,6 +271,8 @@ export function paintPhotoGrid(grid, map, findProblem) {
     for (const button of buttons) {
       const index = Number(button.dataset.index);
       if (!Number.isInteger(index)) continue;
+      const cellData = map.cells?.[index];
+      if (cellData?.kind === "obstacle") continue;
       const col = index % map.cols;
       const row = Math.floor(index / map.cols);
       button.classList.add("photo-cell");
@@ -278,7 +280,6 @@ export function paintPhotoGrid(grid, map, findProblem) {
       button.style.backgroundRepeat = "no-repeat";
       button.style.backgroundSize = `${cover.drawW}px ${cover.drawH}px`;
       button.style.backgroundPosition = `${cover.offsetX - col * (cell + gap)}px ${cover.offsetY - row * (cell + gap)}px`;
-      const cellData = map.cells?.[index];
       if (cellData?.kind !== "problem") continue;
       const difficulty = ["easy", "normal", "hard", "insane"].includes(cellData.difficulty)
         ? cellData.difficulty

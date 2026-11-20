@@ -1853,25 +1853,58 @@ async function handleSolve(req, res, db, user, body) {
   }
   const settings = readEnergySettings(contest);
   const preview = teamEnergySnapshot(contest, team.id, now);
+  const correct = fresh.length > 0;
   if (preview.value < settings.attemptMin) {
-    return res.status(400).json({
-      success: false,
-      message: `The team has ${preview.value} energy. An attempt needs at least ${settings.attemptMin}.`,
+    let latest = contest;
+    let lockUntil = 0;
+    if (!correct && choiceProblem) {
+      lockUntil = now + CHOICE_LOCK_MS;
+      await col.updateOne(
+        { id: contestId },
+        { $pull: { locks: { mapId: map.id, cell, teamId: team.id } } }
+      );
+      await col.updateOne(
+        { id: contestId },
+        { $push: { locks: { mapId: map.id, cell, teamId: team.id, until: lockUntil } }, $set: { updatedAt: new Date() } }
+      );
+      latest = await col.findOne({ id: contestId });
+    }
+    const verdict = correct
+      ? (graded.single ? 'That answer is right.' : 'Those parts are right.')
+      : (graded.wrong || 'That answer is not right.');
+    const lockNote = lockUntil ? ` ${lockWaitMessage(lockUntil, now)}` : '';
+    return res.status(200).json({
+      success: true,
+      checked: true,
+      correct,
+      complete: false,
+      message: `${verdict} The team has ${preview.value} energy, so this attempt does not take the cell.${lockNote}`,
+      ...(lockUntil ? { lockUntil } : {}),
       serverNow: now,
-      contest: contestPayload(contest, maps, problems, user).contest,
+      contest: contestPayload(latest, maps, problems, user).contest,
     });
   }
 
-  const correct = fresh.length > 0;
   const spent = await spendTeamEnergy(col, contestId, team.id, now, difficulty, correct);
   if (spent.missing) return res.status(404).json({ success: false, message: 'Contest not found', serverNow: now });
   if (spent.blocked || spent.conflict || !spent.contest) {
-    const message = spent.blocked
-      ? `The team has ${spent.current} energy. An attempt needs at least ${settings.attemptMin}.`
-      : 'Energy changed while that answer was checked. Try again.';
+    if (spent.blocked) {
+      const verdict = correct
+        ? (graded.single ? 'That answer is right.' : 'Those parts are right.')
+        : (graded.wrong || 'That answer is not right.');
+      return res.status(200).json({
+        success: true,
+        checked: true,
+        correct,
+        complete: false,
+        message: `${verdict} The team has ${spent.current} energy, so this attempt does not take the cell.`,
+        serverNow: now,
+        ...(spent.contest ? { contest: contestPayload(spent.contest, maps, problems, user).contest } : {}),
+      });
+    }
     return res.status(400).json({
       success: false,
-      message,
+      message: 'Energy changed while that answer was checked. Try again.',
       serverNow: now,
       ...(spent.contest ? { contest: contestPayload(spent.contest, maps, problems, user).contest } : {}),
     });

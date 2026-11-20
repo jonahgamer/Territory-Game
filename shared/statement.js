@@ -49,13 +49,47 @@ function buildStatementDocument(source, tag = "") {
   .statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }
   .statement-content table { max-width: 100%; border-collapse: collapse; }
   .statement-content a { color: #3ee0ff; }
+  #kakuro-puzzle-host input {
+    color: #111111 !important;
+    -webkit-text-fill-color: #111111 !important;
+    caret-color: #111111;
+    color-scheme: light;
+  }
+  #kakuro-puzzle-host [data-kakuro-reset] {
+    display: inline-block;
+    margin: 0 0 10px;
+    padding: 6px 14px;
+    border: 1px solid #3ee0ff;
+    background: #102033;
+    color: #d7f6ff;
+    font: 14px/1.2 "Share Tech Mono", ui-monospace, monospace;
+    cursor: pointer;
+  }
 </style>
 <script src="${STATEMENT_KATEX_JS}" crossorigin="anonymous"></script>
 <script src="${STATEMENT_AUTO_RENDER_JS}" crossorigin="anonymous"></script>
 <script>
 (function () {
+  function ensureKakuroReset() {
+    const host = document.getElementById("kakuro-puzzle-host");
+    if (!host || host.querySelector("[data-kakuro-reset]")) return;
+    const inputs = host.querySelectorAll("input");
+    if (!inputs.length) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.kakuroReset = "1";
+    button.textContent = "Reset";
+    button.addEventListener("click", function () {
+      host.querySelectorAll("input").forEach(function (input) {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
+    host.insertBefore(button, host.firstChild);
+  }
   function report() {
     try {
+      ensureKakuroReset();
       const content = document.querySelector(".statement-content");
       if (!content) return;
       const height = Math.ceil(Math.max(content.scrollHeight, content.getBoundingClientRect().height));

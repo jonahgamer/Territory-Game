@@ -10,13 +10,13 @@ import {
 } from "../shared/contest-time.js";
 import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
 import { readEnergySettings } from "../shared/energy.js";
-import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=no-id";
+import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=map-read";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
 import { problemDifficulty, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
-import { createStatementView, partStatement } from "../shared/statement.js?v=frame-fit";
+import { createStatementView, partStatement } from "../shared/statement.js?v=kakuro-cell";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 import { beginSubmitCooldown, bindSubmitCooldown, cooldownLeft, cooldownText, releaseSubmitButton } from "../shared/submit-cooldown.js";
 
@@ -665,15 +665,26 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
   const style = document.createElement("style");
   style.textContent = `
 #student-maps .student-cell.obstacle-cell {
-  background: rgb(58, 58, 58) !important;
-  background-image: none !important;
-  border: 0 !important;
-  box-shadow: none !important;
+  background-color: #1a1408 !important;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #1a1408 0 5px,
+    #f0c14a 5px 9px
+  ) !important;
+  box-shadow: inset 0 0 0 2px #f0c14a !important;
 }
 #student-maps .student-cell.obstacle-cell::before,
 #student-maps .student-cell.obstacle-cell::after {
   content: none !important;
   background: none !important;
+}
+#student-maps .student-cell.mine {
+  box-shadow: inset 0 0 0 4px #ffffff !important;
+  filter: brightness(1.45) saturate(1.5) !important;
+  z-index: 2;
+}
+#student-maps .student-cell.rival {
+  filter: saturate(0.4) brightness(0.58) !important;
 }
 #student-maps .student-cell.cell-occupied::before,
 #student-maps .student-cell.cell-occupied::after {
@@ -1253,14 +1264,6 @@ async function submitAnswer(event) {
   if (!contest || !map || !team || state.selectedCell === null) return;
   const cell = state.selectedCell;
   const submit = document.querySelector("#student-answer-form button");
-  const settings = readEnergySettings(contest);
-  const energy = teamEnergy(contest, team.id);
-  if (energy < settings.attemptMin) {
-    const errorEl = document.querySelector("#student-answer-error");
-    errorEl.hidden = false;
-    errorEl.textContent = `The team has ${energy} energy. An attempt needs at least ${settings.attemptMin}.`;
-    return;
-  }
   if (paintOpenChoiceLock()) return;
   if (cooldownLeft() > 0) {
     const errorEl = document.querySelector("#student-answer-error");
@@ -1309,7 +1312,17 @@ async function submitAnswer(event) {
     const data = await api.solve(contest.id, cell, answer, map.id, answers);
     applyPlayState(data);
     publishContestPatch(contest.id, data.contest, data.serverNow);
-    if (data.complete === false) {
+    if (data.checked) {
+      const success = document.querySelector("#student-answer-success");
+      if (data.correct) {
+        errorEl.hidden = true;
+        success.hidden = false;
+        success.textContent = data.message;
+      } else {
+        success.hidden = true;
+        failure = data.message;
+      }
+    } else if (data.complete === false) {
       partialMessage = data.message || "Part recorded. The other parts are still open.";
     } else {
     document.querySelector("#student-answer").value = "";
@@ -1525,19 +1538,15 @@ function paintEnergy() {
   node.hidden = false;
   track.hidden = false;
   node.textContent = value < settings.attemptMin
-    ? `Energy ${value} / 100. An attempt needs at least ${settings.attemptMin}.`
+    ? `Energy ${value} / 100. You can still check an answer. Taking a cell needs at least ${settings.attemptMin}.`
     : `Energy ${value} / 100. Restores ${settings.regen} every ${settings.regenSeconds}s. Each attempt spends ${settings.attemptCost}.`;
   fill.style.width = `${value}%`;
   fill.classList.toggle("low", value < settings.attemptMin);
   const submit = document.querySelector("#student-answer-form button");
   const block = document.querySelector("#student-energy-block");
-  const blocked = value < settings.attemptMin;
   const locked = paintOpenChoiceLock();
-  if (submit && submit.dataset.busy !== "1") submit.disabled = blocked || locked;
-  if (block) {
-    block.hidden = !blocked;
-    block.textContent = `The team has ${value} energy. An attempt needs at least ${settings.attemptMin}.`;
-  }
+  if (submit && submit.dataset.busy !== "1") submit.disabled = locked;
+  if (block) block.hidden = true;
 }
 
 function paintClock() {
