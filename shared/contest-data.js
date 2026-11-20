@@ -95,6 +95,10 @@ function cleanHiddenRuleSettings(value) {
       item.mapId = typeof raw?.mapId === "string" ? raw.mapId : "";
       item.multiplier = Number.isFinite(factor) && factor >= 0.1 && factor <= 10 ? factor : 1;
     }
+    if (id === "cell-steal") {
+      const seconds = Number(raw?.seconds);
+      item.seconds = Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : 45;
+    }
     if (id === "solve-burst") {
       const count = Number(raw?.count);
       const seconds = Number(raw?.seconds);
@@ -195,7 +199,7 @@ export function contestScoreParts(score, touchBonus, rectangle, ended) {
   if (Number.isFinite(touchBonus)) {
     parts.push({
       value: touchBonus,
-      detail: "Extra marks for other teams whose territory touched this team when that rule was revealed.",
+      detail: "Extra marks added at the end, one for each other team whose territory touches this team.",
     });
   }
   if (ended && rectangle && Number.isInteger(rectangle.bonus) && Number.isInteger(rectangle.area)) {

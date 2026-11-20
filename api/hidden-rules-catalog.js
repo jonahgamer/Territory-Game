@@ -24,12 +24,12 @@ export const HIDDEN_RULES = [
   {
     id: "cell-steal",
     title: "Steal a fresh solve",
-    text: "If one team solves a problem and another team solves that same problem within 45 seconds, the second team takes the cell. The first team loses that cell and the marks scored on it.",
+    text: "If one team solves a problem and another team solves that same problem within the chosen number of seconds, the second team takes the cell. The first team loses that cell and the marks scored on it.",
   },
   {
     id: "touch-bonus",
     title: "Touching territories",
-    text: "When this rule is revealed, each team gains 1 mark for every other team whose territory touches theirs at that moment. Those marks are added to the score.",
+    text: "When the contest ends, each team gains 1 mark for every other team whose territory touches theirs. Those marks are added at the end.",
   },
   {
     id: "territory-rectangle",
@@ -161,22 +161,24 @@ export function pointPhrase(points) {
 export function hiddenRuleEffectMessage(contest, ruleId, now, { points = null, action = "" } = {}) {
   const revealed = revealedHiddenRules(contest, now).some((rule) => rule.id === ruleId);
   const title = hiddenRuleCatalog().find((rule) => rule.id === ruleId)?.title || "a hidden rule";
-  if (points !== null && Number.isFinite(Number(points))) {
-    const amount = roundMark(points);
-    if (!amount) return "";
-    const phrase = pointPhrase(amount);
-    if (!revealed) {
-      return amount < 0
-        ? `You lost ${phrase} due to an unrevealed hidden rule.`
-        : `You got ${phrase} due to an unrevealed hidden rule.`;
-    }
-    return amount < 0 ? `You lost ${phrase} from ${title}.` : `You got ${phrase} from ${title}.`;
+  const amount = points !== null && Number.isFinite(Number(points)) ? roundMark(points) : 0;
+  if (action === "attempting this problem") {
+    return revealed
+      ? `${title}: only the team on that spawn can attempt this cell.`
+      : "A hidden rule stops your team from attempting this problem.";
   }
   if (action === "cell") {
-    return revealed ? `You got this cell from ${title}.` : "You got this cell due to an unrevealed hidden rule.";
+    return revealed ? `You got this cell from ${title}.` : "A hidden rule gave this cell to your team.";
   }
   if (action === "lost-cell") {
-    return revealed ? `You lost a cell from ${title}.` : "You lost a cell due to an unrevealed hidden rule.";
+    const lost = amount ? pointPhrase(Math.abs(amount)) : "";
+    if (!revealed) return lost ? `A hidden rule took a cell from your team and removed ${lost}.` : "A hidden rule took a cell from your team.";
+    return lost ? `${title} took a cell from your team and removed ${lost}.` : `You lost a cell from ${title}.`;
+  }
+  if (amount) {
+    const phrase = pointPhrase(Math.abs(amount));
+    if (!revealed) return amount < 0 ? `A hidden rule took ${phrase} from your team.` : `A hidden rule gave your team ${phrase}.`;
+    return amount < 0 ? `You lost ${phrase} from ${title}.` : `You got ${phrase} from ${title}.`;
   }
   if (action) {
     return revealed
@@ -213,6 +215,10 @@ export function cleanHiddenRuleSettings(value, mapIds = null) {
       const multiplier = cleanMultiplier(raw?.multiplier);
       item.mapId = allowedMaps && !allowedMaps.has(mapId) ? "" : mapId;
       item.multiplier = multiplier === null ? 1 : multiplier;
+    }
+    if (id === "cell-steal") {
+      const seconds = Number(raw?.seconds);
+      item.seconds = Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : 45;
     }
     if (id === "solve-burst") Object.assign(item, cleanBurstSettings(raw));
     items.push(item);
@@ -278,6 +284,10 @@ export function revealedHiddenRules(contest, now = Date.now()) {
 
 function revealedRuleText(contest, rule) {
   const item = cleanHiddenRuleSettings(contest?.hiddenRules).items.find((entry) => entry.id === rule.id);
+  if (rule.id === "cell-steal") {
+    const seconds = Number.isInteger(item?.seconds) && item.seconds >= 1 && item.seconds <= 3600 ? item.seconds : 45;
+    return `If one team solves a problem and another team solves that same problem within ${seconds} seconds, the second team takes the cell. The first team loses that cell and the marks scored on it.`;
+  }
   if (rule.id === "map-multiplier") {
     const factor = item?.multiplier ?? 1;
     const mapName = typeof contest?.mapNames?.[item?.mapId] === "string" && contest.mapNames[item.mapId]

@@ -1,14 +1,14 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=contest-lines";
+import { loadPage } from "../shared/data.js?v=hidden-end";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
 } from "../shared/contest-time.js";
-import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-burst";
+import { normalizeContest, teamColor, teamEnergy, teamForUser, teamShort, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
 import { layoutMapGrid, mapMode, mapBackdrop, paintPhotoGrid, cellClassName, fillCellLabel } from "../shared/map-render.js?v=mem";
 import { problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, nextTeleportLabel, placeKey } from "../shared/contest-board.js";
@@ -403,6 +403,10 @@ function hiddenSettings() {
       next.mapId = typeof item.mapId === "string" ? item.mapId : "";
       next.multiplier = Number.isFinite(factor) && factor >= 0.1 && factor <= 10 ? factor : 1;
     }
+    if (id === "cell-steal") {
+      const seconds = Number(item.seconds);
+      next.seconds = Number.isInteger(seconds) && seconds >= 1 && seconds <= 3600 ? seconds : 45;
+    }
     if (id === "solve-burst") {
       const count = Number(item.count);
       const seconds = Number(item.seconds);
@@ -437,6 +441,9 @@ function readHiddenFromDom() {
     if (row.dataset.ruleId === "map-multiplier") {
       next.mapId = row.querySelector("[data-multiplier-map]")?.value || "";
       next.multiplier = Number(row.querySelector("[data-multiplier]")?.value);
+    }
+    if (row.dataset.ruleId === "cell-steal") {
+      next.seconds = Number(row.querySelector("[data-steal-seconds]")?.value);
     }
     if (row.dataset.ruleId === "solve-burst") {
       next.count = Number(row.querySelector("[data-burst-count]")?.value);
@@ -477,6 +484,18 @@ function commitHidden(rebuild) {
       return;
     }
     multiplier.multiplier = factor;
+  }
+  const steal = draft.items.find((item) => item.id === "cell-steal");
+  if (steal) {
+    const seconds = Number(steal.seconds);
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600) {
+      if (error) {
+        error.hidden = false;
+        error.textContent = "The steal window must be a whole number of seconds from 1 to 3600.";
+      }
+      return;
+    }
+    steal.seconds = seconds;
   }
   const burst = draft.items.find((item) => item.id === "solve-burst");
   if (burst) {
@@ -628,6 +647,18 @@ function renderHiddenRules() {
       factorLabel.append(factor);
       actions.append(mapLabel, factorLabel);
     }
+    if (item.id === "cell-steal") {
+      const secondsLabel = el("label", null, "Seconds ");
+      const seconds = document.createElement("input");
+      seconds.type = "number";
+      seconds.min = "1";
+      seconds.max = "3600";
+      seconds.step = "1";
+      seconds.dataset.stealSeconds = "true";
+      seconds.value = String(item.seconds ?? 45);
+      secondsLabel.append(seconds);
+      actions.append(secondsLabel);
+    }
     if (item.id === "solve-burst") {
       const countLabel = el("label", null, "Problems ");
       const count = document.createElement("input");
@@ -672,11 +703,12 @@ function addHiddenRule() {
   if (!id) return;
   const settings = readHiddenFromDom();
   if (settings.items.some((item) => item.id === id)) return;
-  const added = { id, revealMinute: null, hidden: false };
+  const added = { id, revealMinute: null, hidden: id === "spawn-guard" };
   if (id === "map-multiplier") {
     added.mapId = contestMaps()[0]?.id || "";
     added.multiplier = 1;
   }
+  if (id === "cell-steal") added.seconds = 45;
   if (id === "solve-burst") {
     added.count = 3;
     added.seconds = 60;

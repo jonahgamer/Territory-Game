@@ -1,13 +1,13 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
-import { loadPage } from "../shared/data.js?v=contest-lines";
+import { loadPage } from "../shared/data.js?v=hidden-end";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
 } from "../shared/contest-time.js";
-import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=contest-lines";
+import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
 import { readEnergySettings } from "../shared/energy.js";
 import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
@@ -977,7 +977,7 @@ function hiddenRuleBlocksAttempt(contest, mapId, cell) {
 
 function hiddenAttemptMessage(contest) {
   const rule = (contest?.revealedRules || []).find((item) => item.id === "spawn-guard");
-  if (rule) return `${rule.title} stops your team from attempting this problem.`;
+  if (rule) return `${rule.title}: only the team on that spawn can attempt this cell.`;
   return "A hidden rule stops your team from attempting this problem.";
 }
 
