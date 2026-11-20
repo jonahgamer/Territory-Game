@@ -16,7 +16,7 @@ import { problemDifficulty, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
-import { createStatementView, partStatement } from "../shared/statement.js?v=kakuro-cell";
+import { createStatementView, partStatement } from "../shared/statement.js?v=sqrt-fix";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
 import { beginSubmitCooldown, bindSubmitCooldown, cooldownLeft, cooldownText, releaseSubmitButton } from "../shared/submit-cooldown.js";
 

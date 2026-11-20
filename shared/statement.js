@@ -46,7 +46,7 @@ function buildStatementDocument(source, tag = "") {
   .part-body > :first-child { margin-top: 0; }
   .part-answer { margin: 0.8rem 0 0; }
   .statement-content img, .statement-content video,
-  .statement-content canvas, .statement-content svg { max-width: 100%; height: auto; }
+  .statement-content canvas { max-width: 100%; height: auto; }
   .statement-content table { max-width: 100%; border-collapse: collapse; }
   .statement-content a { color: #3ee0ff; }
   #kakuro-puzzle-host input {

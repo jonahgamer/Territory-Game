@@ -3,7 +3,7 @@ import { api } from "../shared/api.js?v=roles";
 import { loadPage } from "../shared/data.js?v=roles";
 import { noteServerTime, serverNow } from "../shared/contest-time.js";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
-import { createStatementView, partStatement } from "../shared/statement.js?v=kakuro-cell";
+import { createStatementView, partStatement } from "../shared/statement.js?v=sqrt-fix";
 import { DIFFICULTY_NAME } from "../shared/constants.js";
 import { problemScore } from "../shared/difficulty.js";
 import { teamForUser, teamEnergy } from "../shared/contest-data.js";
