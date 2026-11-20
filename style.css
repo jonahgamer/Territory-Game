@@ -3194,11 +3194,13 @@ main:has(.editor-head) .grid-scroll {
 
 .score-grid-wrap {
   overflow-x: auto;
+  max-width: 100%;
   margin-top: 12px;
 }
 
 .score-grid {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-family: var(--font-ui);
   font-size: 16px;
@@ -3210,6 +3212,7 @@ main:has(.editor-head) .grid-scroll {
   padding: 10px 14px;
   text-align: right;
   white-space: nowrap;
+  width: max-content;
 }
 
 .score-grid th {
@@ -4029,9 +4032,10 @@ main:has(.editor-head) .grid-scroll {
 }
 
 .scoreboard {
-  width: min(72rem, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 28px 0 48px;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 28px 24px 48px;
 }
 
 .scoreboard-head {
