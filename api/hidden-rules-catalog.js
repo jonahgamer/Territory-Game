@@ -272,15 +272,6 @@ function seededShuffle(items, seedText) {
   return list;
 }
 
-const SCORING_RULE_IDS = new Set([
-  "same-type-run",
-  "map-multiplier",
-  "cell-steal",
-  "touch-bonus",
-  "territory-rectangle",
-  "solve-burst",
-]);
-
 export function scoringRuleLabels(contest) {
   const settings = cleanHiddenRuleSettings(contest?.hiddenRules);
   let ordered = [];
@@ -296,12 +287,7 @@ export function scoringRuleLabels(contest) {
       .sort((a, b) => a.item.revealMinute - b.item.revealMinute || a.index - b.index)
       .map(({ item }) => item);
   }
-  const labels = [];
-  ordered.forEach((item, index) => {
-    if (!SCORING_RULE_IDS.has(item.id)) return;
-    labels.push({ id: item.id, label: `Rule ${index + 1}` });
-  });
-  return labels;
+  return ordered.map((item, index) => ({ id: item.id, label: `Rule ${index + 1}` }));
 }
 
 export function revealedHiddenRules(contest, now = Date.now()) {
