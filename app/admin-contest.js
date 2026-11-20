@@ -4,6 +4,7 @@ import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=leaderboard";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
+import { renderScoreGrid } from "../shared/score-grid.js?v=score-grid";
 import {
   contestSchedule, phaseClock, phaseSentence, readSchedule,
   formatContestPicker, formatContestTime, noteServerTime,
@@ -982,22 +983,7 @@ function renderLeaderboard() {
   const empty = document.querySelector("#contest-leaderboard-empty");
   empty.hidden = rows.length > 0;
   list.hidden = rows.length === 0;
-  renderList(list, rows, (row) => {
-    const item = el("li", "leaderboard-row");
-    item.append(
-      el("span", "leaderboard-rank", `${rows.indexOf(row) + 1}.`),
-      el("span", "leaderboard-team", row.name),
-      el("span", "leaderboard-stat", pointsLabel(row.rankScore)),
-      el("span", "leaderboard-stat", `${row.solved || 0} solved`),
-      el("span", "leaderboard-stat", `${row.territory || 0} cell${row.territory === 1 ? "" : "s"}`)
-    );
-    if (Array.isArray(row.rules) && row.rules.length) {
-      const rules = el("ul", "leaderboard-rules");
-      for (const rule of row.rules) rules.append(el("li", null, `${rule.label}: ${pointsLabel(rule.points)}`));
-      item.append(rules);
-    }
-    return item;
-  });
+  renderScoreGrid(list, rows);
 }
 
 function buildLeaderboard(contest) {

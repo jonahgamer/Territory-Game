@@ -170,6 +170,8 @@ function cleanLeaderboard(value) {
     const rankScore = Math.round(Number(row.rankScore) * 10) / 10;
     if (!Number.isFinite(rankScore)) continue;
     const item = { teamId: row.teamId, name: row.name, rankScore };
+    if (Number.isFinite(Number(row.basic))) item.basic = Math.round(Number(row.basic) * 10) / 10;
+    if (Number.isFinite(Number(row.ruleTotal))) item.ruleTotal = Math.round(Number(row.ruleTotal) * 10) / 10;
     if (Number.isInteger(row.solved)) item.solved = row.solved;
     if (Number.isInteger(row.territory)) item.territory = row.territory;
     if (Array.isArray(row.rules)) {

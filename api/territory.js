@@ -877,7 +877,9 @@ function buildLeaderboard(contest, maps, problems, now = Date.now()) {
       const found = totals.find((row) => row.teamId === team.id && row.id === rule.id);
       return { label: rule.label, points: found ? found.points : 0 };
     });
-    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore, rules };
+    const ruleTotal = roundMark(rules.reduce((sum, rule) => sum + rule.points, 0));
+    const basic = roundMark(rankScore - ruleTotal);
+    return { teamId: team.id, name: team.name, score, solved, territory, touchBonus, rectangle, rankScore, basic, ruleTotal, rules };
   }).sort((a, b) => b.rankScore - a.rankScore || b.solved - a.solved || a.name.localeCompare(b.name));
 }
 
@@ -1013,7 +1015,7 @@ function publicLeaderboard(contest, maps, problems, admin, ended, revealedIds, v
   });
   if (!admin && contest.leaderboardHidden === true) return [];
   if (!admin && !ended) return rows.map(({ teamId, name, rankScore }) => ({ teamId, name, rankScore }));
-  if (!admin) return rows.map(({ teamId, name, rankScore, rules }) => ({ teamId, name, rankScore, rules }));
+  if (!admin) return rows.map(({ teamId, name, rankScore, basic, ruleTotal, rules }) => ({ teamId, name, rankScore, basic, ruleTotal, rules }));
   return rows;
 }
 

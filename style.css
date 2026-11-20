@@ -3165,10 +3165,64 @@ main:has(.editor-head) .grid-scroll {
   text-align: left;
 }
 
-.leaderboard-row.leaderboard-total,
-.leaderboard-row.leaderboard-detailed {
-  grid-template-columns: 4rem minmax(10rem, 1fr) 12rem;
-  min-width: 0;
+.score-grid-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.score-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+
+.score-grid th,
+.score-grid td {
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.score-grid th {
+  background: rgba(62, 224, 255, 0.1);
+  color: var(--cyan);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.score-grid th:first-child,
+.score-grid td:first-child {
+  text-align: left;
+}
+
+.score-grid .score-team {
+  font-size: 18px;
+}
+
+.score-grid .score-final {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.scoreboard-body .score-grid {
+  font-size: 22px;
+}
+
+.scoreboard-body .score-grid th {
+  font-size: 16px;
+}
+
+.scoreboard-body .score-grid .score-team {
+  font-size: 26px;
+}
+
+.scoreboard-body .score-grid .score-final {
+  font-size: 32px;
 }
 
 .leaderboard-rules,

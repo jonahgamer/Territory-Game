@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=leaderboard-rules" />
+  <link rel="stylesheet" href="/style.css?v=score-grid" />
 </head>
 <body>
   <div class="app">
@@ -37,9 +37,9 @@
       <h1 id="leaderboard-title">Leaderboard</h1>
       <p id="leaderboard-note" class="field-note"></p>
       <p id="leaderboard-empty" class="field-note" hidden>No scores yet.</p>
-      <ol id="leaderboard-list" class="leaderboard" hidden></ol>
+      <div id="leaderboard-list" class="score-grid-wrap" hidden></div>
     </main>
   </div>
-  <script type="module" src="/app/contest-leaderboard.js?v=leaderboard-rules"></script>
+  <script type="module" src="/app/contest-leaderboard.js?v=score-grid"></script>
 </body>
 </html>
