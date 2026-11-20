@@ -2637,6 +2637,24 @@ main:has(.editor-head) .grid-scroll {
 
 .problem-pages {
   align-items: center;
+  gap: 6px;
+}
+
+.problem-pages button {
+  min-width: 2.4rem;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.problem-pages .page-number.page-current {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #041018;
 }
 
 .problem-pages button:disabled {

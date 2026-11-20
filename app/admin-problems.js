@@ -549,7 +549,6 @@ function renderPages(pageCount) {
     const btn = el("button", null, label);
     btn.type = "button";
     if (page !== null) btn.dataset.problemPage = String(page);
-    if (opts.current) btn.setAttribute("aria-pressed", "true");
     if (opts.disabled) btn.disabled = true;
     btn.addEventListener("click", () => {
       if (btn.disabled) return;
@@ -567,7 +566,18 @@ function renderPages(pageCount) {
   let prev = 0;
   for (const p of ordered) {
     if (prev && p - prev > 1) container.append(el("span", "page-gap", "…"));
-    add(String(p), p, { current: p === state.page });
+    const number = el("button", p === state.page ? "page-number page-current" : "page-number", String(p));
+    number.type = "button";
+    number.dataset.problemPage = String(p);
+    if (p === state.page) {
+      number.setAttribute("aria-pressed", "true");
+      number.setAttribute("aria-current", "page");
+    }
+    number.addEventListener("click", () => {
+      state.page = p;
+      render();
+    });
+    container.append(number);
     prev = p;
   }
   add("Next ›", state.page + 1, { disabled: state.page >= pageCount });
