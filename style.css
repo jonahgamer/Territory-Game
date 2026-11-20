@@ -1848,16 +1848,17 @@ main:has(.editor-head) .grid-scroll {
 }
 
 #student-energy {
-  max-width: 22rem;
-  margin: 0 0 6px;
-  font-size: 14px;
-  line-height: 1.4;
+  max-width: none;
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 #student-energy-track {
-  width: min(22rem, 100%);
-  height: 8px;
-  margin-bottom: 14px;
+  width: min(46rem, 100%);
+  height: 12px;
+  margin-bottom: 16px;
 }
 
 .contest-schedule legend {
