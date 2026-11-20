@@ -221,6 +221,11 @@ function renderPlaceMode() {
   }
   document.querySelector("#place-fixed-field").hidden = state.placePickSource !== "fixed";
   document.querySelector("#place-range-field").hidden = state.placePickSource !== "range";
+  document.querySelector("#place-round-field").hidden = state.placePickSource !== "random";
+}
+
+function isRoundIndex(index) {
+  return String(index).padStart(5, "0")[2] === "0";
 }
 
 function renderView() {
@@ -449,6 +454,13 @@ function pickProblemForMap(map) {
   let pool = state.problems.filter((p) =>
     state.placePickTypes.has(p.type) && state.placePickDifficulties.has(problemDifficulty(p)));
   if (mapMode(map) !== "testing") pool = pool.filter((p) => p.type !== "testing");
+  if (state.placePickSource === "random" && !document.querySelector("#place-include-round")?.checked) {
+    const withoutRound = pool.filter((p) => !isRoundIndex(p.index));
+    if (!withoutRound.length && pool.length) {
+      return { error: "Every match is an x0xx problem. Turn on Include x0xx numbers to place one." };
+    }
+    pool = withoutRound;
+  }
   if (state.placePickSource === "fixed") {
     const index = readProblemNo(document.querySelector("#place-fixed-index")?.value);
     if (index === null) return { error: `Index must be ${MIN_PROBLEM_NO}–${MAX_PROBLEM_NO}.` };
