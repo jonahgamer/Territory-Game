@@ -550,6 +550,39 @@ function sameTypeBonusFor(contest, maps, teamId, map, cell, solvedAt) {
   return sameTypeRunBonus([...prior, { mapId: map.id, cell, solvedAt }].map(typeAt));
 }
 
+function cellStealClosed(contest, mapId, cell, teamId, now) {
+  if (isTestingContest(contest)) return false;
+  const held = cleanClaims(contest?.claims, primaryMapId(contest)).filter((claim) => (
+    claim.mapId === mapId
+    && claim.cell === cell
+    && claim.teamId !== teamId
+    && claim.complete !== false
+    && Number.isFinite(claim.solvedAt)
+  ));
+  if (!held.length) return false;
+  if (!hiddenRuleEnabled(contest, 'cell-steal')) return true;
+  const latest = held.reduce((best, claim) => (claim.solvedAt > best.solvedAt ? claim : best));
+  return now < latest.solvedAt || now - latest.solvedAt > stealWindowMs(contest);
+}
+
+function stealOpenCells(contest, now) {
+  if (isTestingContest(contest) || !hiddenRuleEnabled(contest, 'cell-steal')) return [];
+  const windowMs = stealWindowMs(contest);
+  const latest = new Map();
+  for (const claim of cleanClaims(contest?.claims, primaryMapId(contest))) {
+    if (claim.complete === false || !Number.isFinite(claim.solvedAt)) continue;
+    const key = `${claim.mapId}\0${claim.cell}`;
+    const prev = latest.get(key);
+    if (!prev || claim.solvedAt > prev.solvedAt) latest.set(key, claim);
+  }
+  const open = [];
+  for (const claim of latest.values()) {
+    if (now < claim.solvedAt || now - claim.solvedAt > windowMs) continue;
+    open.push({ mapId: claim.mapId, cell: claim.cell, until: claim.solvedAt + windowMs });
+  }
+  return open;
+}
+
 function stealWindowMs(contest) {
   const item = cleanHiddenRuleSettings(contest?.hiddenRules).items.find((entry) => entry.id === 'cell-steal');
   const seconds = Number(item?.seconds);
@@ -946,6 +979,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
       rulePoints: rulePointList(contest, maps, Date.now(), admin ? null : (team || { id: '' })),
       notices: admin || !team ? [] : ruleNotices(contest, maps, Date.now(), team),
       ruleBlocks: admin || !team ? [] : hiddenAttemptBlocks(contest, maps, team.id),
+      stealOpen: stealOpenCells(contest, Date.now()),
       ...energyFields(contest, admin ? null : team?.id, Date.now()),
     },
   };
@@ -1824,6 +1858,14 @@ async function handleSolve(req, res, db, user, body) {
   if (!myClaim && !adjacentToTeam(map, contest, team.id, cell)) {
     return res.status(400).json({ success: false, message: 'That cell is not next to your territory.', serverNow: now });
   }
+  if (cellStealClosed(contest, map.id, cell, team.id, now)) {
+    return res.status(400).json({
+      success: false,
+      message: 'That cell is already taken.',
+      serverNow: now,
+      contest: contestPayload(contest, maps, problems, user).contest,
+    });
+  }
   if (spawnGuardBlocks(contest, map, team.id, cell)) {
     return res.status(400).json({ success: false, message: hiddenRuleEffectMessage(contest, 'spawn-guard', now, { action: 'attempting this problem' }), serverNow: now });
   }
@@ -1998,16 +2040,13 @@ async function handleSolve(req, res, db, user, body) {
   }
   let victims = [];
   if (!testing && complete && hiddenRuleEnabled(updated, 'cell-steal')) {
-    victims = cleanClaims(updated.claims, primaryMapId(updated)).filter((claim) => (
-      claim.teamId !== team.id
-      && claim.mapId === map.id
-      && claim.cell === cell
-      && claim.complete !== false
-      && Number.isFinite(claim.solvedAt)
-      && now >= claim.solvedAt
-      && now - claim.solvedAt <= stealWindowMs(updated)
+    const others = cleanClaims(updated.claims, primaryMapId(updated)).filter((claim) => (
+      claim.teamId !== team.id && claim.mapId === map.id && claim.cell === cell
     ));
-    if (victims.length) {
+    const held = others.filter((claim) => claim.complete !== false && Number.isFinite(claim.solvedAt));
+    const latest = held.reduce((best, claim) => (claim.solvedAt > best.solvedAt ? claim : best), null);
+    if (latest && now >= latest.solvedAt && now - latest.solvedAt <= stealWindowMs(updated)) {
+      victims = others;
       const ledger = cleanRuleLedger(updated.ruleLedger);
       for (const victim of victims) {
         ledger.push({
@@ -3634,6 +3673,9 @@ async function handlePageAnswer(req, res, db, user) {
     return res.status(404).json({ success: false, message: 'That problem is not available.' });
   }
   const answerTeam = teamForUser(contest, user.username);
+  if (!isAdmin(user) && answerTeam && cellStealClosed(contest, map.id, cell, answerTeam.id, Date.now())) {
+    return res.status(400).json({ success: false, message: 'That cell is already taken.' });
+  }
   if (!isAdmin(user) && answerTeam && spawnGuardBlocks(contest, map, answerTeam.id, cell)) {
     return res.status(400).json({ success: false, message: hiddenRuleEffectMessage(contest, 'spawn-guard', Date.now(), { action: 'attempting this problem' }) });
   }

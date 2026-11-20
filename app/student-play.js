@@ -767,7 +767,7 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
       button.classList.add("cell-occupied");
       button.textContent = "";
       appendOwnerDots(button, contest, here, team?.id);
-      const reachable = phase === "live" && !frozen && team && !mineDone && (Boolean(mine) || adjacentToTeam(map, contest, team.id, index));
+      const reachable = canOpenProblem(contest, map, index, team, phase, frozen);
       button.disabled = !reachable;
       button.style.filter = mine ? "brightness(1)" : "brightness(0.85)";
     } else if (owner && isSpawnCell) {
@@ -1018,6 +1018,42 @@ function adjacentToTeam(map, contest, teamId, cell) {
   return neighbors.some((i) => owned.has(i));
 }
 
+function heldByAnotherTeam(contest, mapId, cell, teamId) {
+  if (contest?.mode === "testing") return false;
+  return (contest?.claims || []).some((claim) => (
+    claim.teamId !== teamId
+    && (claim.mapId || primaryMapId(contest)) === mapId
+    && claim.cell === cell
+    && claim.complete !== false
+  ));
+}
+
+function stealStillOpen(contest, mapId, cell) {
+  const open = (contest?.stealOpen || []).find((item) => item.mapId === mapId && item.cell === cell);
+  return Boolean(open && Number.isInteger(open.until) && open.until > serverNow());
+}
+
+function canOpenProblem(contest, map, cell, team, phase, frozen) {
+  if (!contest || !map || !team || phase !== "live" || frozen) return false;
+  const mine = (contest.claims || []).find((claim) => (
+    claim.teamId === team.id && (claim.mapId || primaryMapId(contest)) === map.id && claim.cell === cell
+  ));
+  if (mine && mine.complete !== false) return false;
+  const beside = Boolean(mine) || adjacentToTeam(map, contest, team.id, cell);
+  if (!beside) return false;
+  if (heldByAnotherTeam(contest, map.id, cell, team.id) && !stealStillOpen(contest, map.id, cell)) return false;
+  return true;
+}
+
+function problemTagText(cell, problem) {
+  const difficulty = ["easy", "normal", "hard", "insane"].includes(problem?.difficulty)
+    ? problem.difficulty
+    : (["easy", "normal", "hard", "insane"].includes(cell?.difficulty) ? cell.difficulty : "normal");
+  const scored = problem && (Number.isInteger(problem.score) || problem.difficulty) ? problem : cell;
+  const points = problemScore(scored);
+  return `${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`;
+}
+
 function renderSpawnAgreement(contest, map, phase) {
   const wrap = document.querySelector("#spawn-agreement");
   const body = document.querySelector("#spawn-votes");
@@ -1074,13 +1110,14 @@ async function onGridClick(event) {
     return;
   }
   if (cell?.kind === "problem" && phase === "live" && !isFrozen(contest, maps)) {
-    const mine = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
-    const mineDone = Boolean(mine && mine.complete !== false);
     if (hiddenRuleBlocksAttempt(contest, map.id, index)) {
       showRulePopup(hiddenAttemptMessage(contest));
       return;
     }
-    if (mineDone || (!mine && !adjacentToTeam(map, contest, team.id, index))) return;
+    if (!canOpenProblem(contest, map, index, team, phase, isFrozen(contest, maps))) {
+      if (heldByAnotherTeam(contest, map.id, index, team.id)) showPageToast("That cell is already taken.", "warn");
+      return;
+    }
     if (answerOpenMode() === "newtab") {
       const url = new URL("/answer.html", location.origin);
       url.searchParams.set("contest", contest.id);
@@ -1101,9 +1138,7 @@ let promptRequest = 0;
 async function showProblem(contest, map, phase) {
   const team = teamForUser(contest);
   const cell = map.cells[state.selectedCell];
-  const claim = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
-  const mineDone = Boolean(claim && claim.complete !== false);
-  const playable = phase === "live" && !isFrozen(contest, playMaps(contest)) && cell?.kind === "problem" && !mineDone && !hiddenRuleBlocksAttempt(contest, map.id, state.selectedCell) && (Boolean(claim) || adjacentToTeam(map, contest, team.id, state.selectedCell));
+  const playable = cell?.kind === "problem" && canOpenProblem(contest, map, state.selectedCell, team, phase, isFrozen(contest, playMaps(contest))) && !hiddenRuleBlocksAttempt(contest, map.id, state.selectedCell);
   const panel = document.querySelector("#student-problem");
   const form = document.querySelector("#student-answer-form");
   if (!playable) { panel.hidden = true; form.hidden = true; return; }
@@ -1113,10 +1148,8 @@ async function showProblem(contest, map, phase) {
   const openMapId = map.id;
   const openCell = state.selectedCell;
   panel.hidden = false;
-  const d = problemDifficulty(problem);
-  const pts = problemScore(problem);
   const tag = document.querySelector("#student-problem-tag");
-  tag.textContent = `${DIFFICULTY_NAME[d] || "Normal"} · ${pts} point${pts === 1 ? "" : "s"}`;
+  tag.textContent = problemTagText(cell, problem);
   form.hidden = false;
   paintEnergy();
   document.querySelector("#student-answer-error").hidden = true;
@@ -1133,6 +1166,14 @@ async function showProblem(contest, map, phase) {
       if (request !== promptRequest || state.selectedMapId !== openMapId || state.selectedCell !== openCell) return;
       prompt = data.problem?.prompt || "";
       parts = Array.isArray(data.problem?.parts) ? data.problem.parts : [];
+      tag.textContent = problemTagText(cell, data.problem);
+      if (cell && data.problem) {
+        const previousDifficulty = cell.difficulty;
+        const previousScore = cell.score;
+        if (["easy", "normal", "hard", "insane"].includes(data.problem.difficulty)) cell.difficulty = data.problem.difficulty;
+        if (Number.isInteger(data.problem.score)) cell.score = data.problem.score;
+        if (cell.difficulty !== previousDifficulty || cell.score !== previousScore) render();
+      }
       if (problem) {
         problem.prompt = prompt;
         problem.parts = parts;
@@ -1150,6 +1191,7 @@ async function showProblem(contest, map, phase) {
     }
   }
   if (request !== promptRequest) return;
+  const claim = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === state.selectedCell);
   const solved = new Set(Array.isArray(claim?.solvedParts) ? claim.solvedParts : []);
   renderPlayParts(parts || [], solved);
   statement.render(prompt.trim() ? prompt : ((parts && parts.length) ? "" : "This problem has no text yet."), tag.textContent);
@@ -1458,6 +1500,9 @@ function applyPlayState(data) {
   if (next.energySolve) c.energySolve = next.energySolve;
   if (Array.isArray(next.revealedRules)) c.revealedRules = next.revealedRules.map(publicRevealedRule).filter(Boolean);
   if (Array.isArray(next.ruleBlocks)) c.ruleBlocks = next.ruleBlocks.filter((block) => block && typeof block.mapId === "string" && Number.isInteger(block.cell));
+  if (Array.isArray(next.stealOpen)) {
+    c.stealOpen = next.stealOpen.filter((item) => item && typeof item.mapId === "string" && Number.isInteger(item.cell) && Number.isInteger(item.until));
+  }
   if (Array.isArray(next.touchBonus)) {
     c.touchBonus = next.touchBonus.filter((award) => award && typeof award.teamId === "string" && Number.isInteger(award.bonus));
   } else if (next.touchBonus === null) c.touchBonus = null;
@@ -1583,10 +1628,21 @@ function startClock() {
     paintClock();
     paintEnergy();
     const phase = contestPhase(state.contest);
+    const team = state.contest && teamForUser(state.contest);
+    const openMap = state.maps.find((item) => item.id === state.selectedMapId);
+    const panel = document.querySelector("#student-problem");
+    if (panel && !panel.hidden && openMap && team && state.selectedCell != null && heldByAnotherTeam(state.contest, openMap.id, state.selectedCell, team.id) && !stealStillOpen(state.contest, openMap.id, state.selectedCell)) {
+      closeProblem();
+      showPageToast("That cell is already taken.", "warn");
+    }
     const map = playMaps(state.contest)[0] || null;
     const frozen = isFrozen(state.contest, playMaps(state.contest));
     const sig = `${phase}:${frozen}:${state.contest.spawnResolved}`;
-    if (sig !== `${state.phase}:${state.frozen}:${state.contest.spawnResolved}`) render();
+    const stealSig = (state.contest.stealOpen || []).map((item) => `${item.mapId}:${item.cell}:${item.until > serverNow()}`).join();
+    if (sig !== `${state.phase}:${state.frozen}:${state.contest.spawnResolved}` || stealSig !== state.stealSig) {
+      state.stealSig = stealSig;
+      render();
+    }
     else writeStatus(state.contest, phase, map, frozen);
     syncContest().catch(() => {});
   }, 1000);
