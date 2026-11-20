@@ -1154,12 +1154,12 @@ function startClock() {
     }
     paintClock();
     syncContest().catch(() => {});
-  }, 2000);
+  }, 1000);
 }
 
 async function syncContest() {
   const now = Date.now();
-  const gap = document.hidden ? 60000 : (now - state.lastMouse >= 5000 ? 20000 : 5000);
+  const gap = document.hidden ? 15000 : 2000;
   if (now - state.syncAt < gap) return;
   state.syncAt = now;
   try {

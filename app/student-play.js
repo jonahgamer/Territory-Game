@@ -17,6 +17,7 @@ import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
 import { createStatementView, partStatement } from "../shared/statement.js?v=frame-box";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
+import { beginSubmitCooldown, bindSubmitCooldown, cooldownLeft, cooldownText, releaseSubmitButton } from "../shared/submit-cooldown.js";
 
 // ── 顶层常量 ─────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
@@ -162,7 +163,8 @@ function bindEvents() {
 
   installPanZoom();
   bindBackToTop();
-  bindZoomControlsNearTop();
+  bindMapZoomControls();
+  bindSubmitCooldown();
 }
 
 function answerOpenMode() {
@@ -175,38 +177,62 @@ function answerOpenMode() {
 // ──────────────────────────────────────────────────────────
 // PAN + ZOOM
 // ──────────────────────────────────────────────────────────
+function layoutZoom() {
+  const zoom = Number.parseFloat(getComputedStyle(document.body).zoom);
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
+function mapStage(host) {
+  let stage = host.querySelector(":scope > .map-stage");
+  if (!stage) {
+    stage = document.createElement("div");
+    stage.className = "map-stage";
+    host.append(stage);
+  }
+  return stage;
+}
+
 function installPanZoom() {
   const board = document.querySelector("#student-board");
-  const grid  = document.querySelector("#student-maps");
-  if (!board || !grid) return;
+  const host  = document.querySelector("#student-maps");
+  if (!board || !host) return;
+  const stage = mapStage(host);
 
-  board.style.position = "relative";
-  board.style.overflow = "hidden";
   board.style.touchAction = "none";
   board.style.cursor = "grab";
+  stage.style.transformOrigin = "0 0";
+  stage.style.willChange = "transform";
 
-  grid.style.transformOrigin = "0 0";
-  grid.style.willChange = "transform";
-  grid.style.userSelect = "none";
+  const clampView = () => {
+    const viewW = host.clientWidth;
+    const viewH = host.clientHeight;
+    const scaledW = stage.offsetWidth * state.view.scale;
+    const scaledH = stage.offsetHeight * state.view.scale;
+    state.view.x = clamp(state.view.x, Math.min(0, viewW - scaledW), Math.max(0, viewW - scaledW));
+    state.view.y = clamp(state.view.y, Math.min(0, viewH - scaledH), Math.max(0, viewH - scaledH));
+  };
 
   const applyView = () => {
+    clampView();
     const { scale, x, y } = state.view;
-    grid.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    stage.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     refreshDotFontSizes();
   };
   state.applyView = applyView;
 
-  // Convert a client point into the grid's local (untransformed) coords.
-  // Also exposes the grid's untransformed origin so we can re-anchor
-  // after a scale change — independent of board padding / page scroll.
+  // clientX and getBoundingClientRect are viewport pixels. The page zoom
+  // makes one transform pixel a different on-screen distance, so convert
+  // before anchoring the scale under the pointer.
   const clientToLocal = (clientX, clientY) => {
-    const rect = grid.getBoundingClientRect();
+    const z = layoutZoom();
+    const rect = stage.getBoundingClientRect();
     const s = state.view.scale || 1;
     return {
-      x: (clientX - rect.left) / s,
-      y: (clientY - rect.top) / s,
-      originX: rect.left - state.view.x,
-      originY: rect.top - state.view.y,
+      x: (clientX - rect.left) / (s * z),
+      y: (clientY - rect.top) / (s * z),
+      originX: rect.left - state.view.x * z,
+      originY: rect.top - state.view.y * z,
+      z,
     };
   };
 
@@ -214,23 +240,17 @@ function installPanZoom() {
     const v = state.view;
     const nextScale = clamp(v.scale * factor, ZOOM_MIN, ZOOM_MAX);
     if (nextScale === v.scale) return;
-    const { x: localX, y: localY, originX, originY } = clientToLocal(clientX, clientY);
+    const { x: localX, y: localY, originX, originY, z } = clientToLocal(clientX, clientY);
     v.scale = nextScale;
-    v.x = clientX - originX - localX * nextScale;
-    v.y = clientY - originY - localY * nextScale;
+    v.x = (clientX - originX) / z - localX * nextScale;
+    v.y = (clientY - originY) / z - localY * nextScale;
     applyView();
   };
   state.zoomAtClient = zoomAtClient;
 
   const zoomAtVisibleCenter = (factor) => {
-    const rect = board.getBoundingClientRect();
-    const left   = Math.max(rect.left, 0);
-    const right  = Math.min(rect.right, window.innerWidth);
-    const top    = Math.max(rect.top, 0);
-    const bottom = Math.min(rect.bottom, window.innerHeight);
-    const cx = right > left ? (left + right) / 2 : rect.left + rect.width / 2;
-    const cy = bottom > top ? (top + bottom) / 2 : rect.top + rect.height / 2;
-    zoomAtClient(cx, cy, factor);
+    const rect = host.getBoundingClientRect();
+    zoomAtClient(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   };
   state.zoomAtVisibleCenter = zoomAtVisibleCenter;
 
@@ -271,6 +291,7 @@ function installPanZoom() {
   };
 
   board.addEventListener("pointerdown", (event) => {
+    if (event.target.closest?.(".map-zoom-bar")) return;
     if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     moved = false;
@@ -307,8 +328,9 @@ function installPanZoom() {
         try { board.setPointerCapture(event.pointerId); dragCapturedId = event.pointerId; } catch {}
       }
       if (moved) {
-        state.view.x = dragStart.vx + dx;
-        state.view.y = dragStart.vy + dy;
+        const z = layoutZoom();
+        state.view.x = dragStart.vx + dx / z;
+        state.view.y = dragStart.vy + dy / z;
         applyView();
       }
     } else if (pointers.size === 2 && pinchStart) {
@@ -318,18 +340,13 @@ function installPanZoom() {
       const factor = Math.pow(rawFactor, PINCH_DAMP);
       const nextScale = clamp(pinchStart.scale * factor, ZOOM_MIN, ZOOM_MAX);
       const mid = getMid();
-
-      // Recompute the grid's untransformed origin from its CURRENT
-      // transformed rect — robust against page scroll / layout shift.
-      const rect = grid.getBoundingClientRect();
-      const originX = rect.left - state.view.x;
-      const originY = rect.top  - state.view.y;
-
+      const z = layoutZoom();
+      const rect = stage.getBoundingClientRect();
+      const originX = rect.left - state.view.x * z;
+      const originY = rect.top - state.view.y * z;
       state.view.scale = nextScale;
-      // Keep the local point that was under the initial midpoint
-      // pinned under the current midpoint → pinch at the right spot.
-      state.view.x = mid.x - originX - pinchStart.localX * nextScale;
-      state.view.y = mid.y - originY - pinchStart.localY * nextScale;
+      state.view.x = (mid.x - originX) / z - pinchStart.localX * nextScale;
+      state.view.y = (mid.y - originY) / z - pinchStart.localY * nextScale;
       applyView();
     }
   });
@@ -373,77 +390,35 @@ function installPanZoom() {
   window.addEventListener("resize", () => refreshDotFontSizes(), { passive: true });
 }
 
-// Adds +/- buttons beside #back-to-top (mobile) and #back-to-top-desktop.
-// Fully defensive: never throws, never touches the map containers.
-// The map must always render regardless of this cosmetic step.
-function bindZoomControlsNearTop() {
-  try {
-    const zoomAtCenter = state.zoomAtVisibleCenter;
-    if (typeof zoomAtCenter !== "function") return;
-
-    const anchors = [
-      document.querySelector("#back-to-top"),
-      document.querySelector("#back-to-top-desktop"),
-    ].filter(Boolean);
-    if (!anchors.length) return;
-
-    // Refuse to inject inside the map surface itself.
-    const forbidden = new Set([
-      document.querySelector("#student-board"),
-      document.querySelector("#student-maps"),
-    ].filter(Boolean));
-
-    const bars = [...new Set(
-      anchors.map((a) => a.parentNode).filter((p) => p && !forbidden.has(p))
-    )];
-    if (!bars.length) return;
-
-    const mkBtn = (label, aria) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = label;
-      btn.setAttribute("aria-label", aria);
-      btn.title = aria;
-      Object.assign(btn.style, {
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "36px",
-        height: "36px",
-        minWidth: "36px",
-        flex: "0 0 auto",
-        padding: "0",
-        margin: "0 6px",
-        borderRadius: "6px",
-        border: "1px solid rgba(255,255,255,0.25)",
-        background: "rgba(255,255,255,0.08)",
-        color: "inherit",
-        fontSize: "18px",
-        fontWeight: "700",
-        lineHeight: "1",
-        cursor: "pointer",
-        userSelect: "none",
-      });
-      return btn;
-    };
-
-    for (const bar of bars) {
-      const anchor  = anchors.find((a) => a.parentNode === bar);
-      const zoomIn  = mkBtn("+", "Zoom in");
-      const zoomOut = mkBtn("-", "Zoom out");   // ASCII hyphen — no encoding risk
-      zoomIn.addEventListener("click",  () => zoomAtCenter(ZOOM_STEP));
-      zoomOut.addEventListener("click", () => zoomAtCenter(1 / ZOOM_STEP));
-      if (anchor) {
-        bar.insertBefore(zoomOut, anchor);
-        bar.insertBefore(zoomIn, zoomOut);
-      } else {
-        bar.append(zoomIn, zoomOut);
+function bindMapZoomControls() {
+  const host = document.querySelector("#student-maps");
+  const zoomAtCenter = state.zoomAtVisibleCenter;
+  if (!host || typeof zoomAtCenter !== "function" || host.querySelector(".map-zoom-bar")) return;
+  const bar = document.createElement("div");
+  bar.className = "map-zoom-bar";
+  const mkBtn = (label, aria, factor) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "map-zoom-btn";
+    btn.textContent = label;
+    btn.setAttribute("aria-label", aria);
+    btn.title = aria;
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (factor) zoomAtCenter(factor);
+      else {
+        state.view = { scale: 1, x: 0, y: 0 };
+        state.applyView?.();
       }
-    }
-  } catch (e) {
-    // Zoom buttons are cosmetic — never let them break the page.
-    console.warn("[student-play] Could not add zoom buttons:", e);
-  }
+    });
+    return btn;
+  };
+  bar.append(
+    mkBtn("+", "Zoom in", ZOOM_STEP),
+    mkBtn("−", "Zoom out", 1 / ZOOM_STEP),
+    mkBtn("1:1", "Reset zoom", 0),
+  );
+  host.append(bar);
 }
 
 function refreshDotFontSizes() {
@@ -654,7 +629,8 @@ function rgbToCss({ r, g, b }) {
 function renderMaps(contest, maps, phase, frozen, team) {
   const host = document.querySelector("#student-maps");
   if (!host) return;
-  host.replaceChildren();
+  const stage = mapStage(host);
+  stage.replaceChildren();
   for (const map of maps) {
     const block = el("section", "contest-map-block");
     if (maps.length > 1) block.append(el("h3", null, map.name));
@@ -662,11 +638,11 @@ function renderMaps(contest, maps, phase, frozen, team) {
     const grid = el("div", "editor-grid");
     scroll.append(grid);
     block.append(scroll);
-    host.append(block);
+    stage.append(block);
     renderGrid(contest, map, phase, frozen, team, grid);
   }
   paintTeleportLineChoices();
-  drawTeleportLinks(host, teleportLinesVisible(contestId) ? contest.teleports : []);
+  drawTeleportLinks(stage, teleportLinesVisible(contestId) ? contest.teleports : []);
 }
 
 function paintTeleportLineChoices() {
@@ -1279,6 +1255,13 @@ async function submitAnswer(event) {
     return;
   }
   if (paintOpenChoiceLock()) return;
+  if (cooldownLeft() > 0) {
+    const errorEl = document.querySelector("#student-answer-error");
+    errorEl.hidden = false;
+    errorEl.textContent = cooldownText();
+    releaseSubmitButton(submit, "Submit");
+    return;
+  }
   if (submit.disabled) return;
   const label = submit.textContent;
   submit.dataset.busy = "1";
@@ -1307,6 +1290,7 @@ async function submitAnswer(event) {
     return;
   }
 
+  beginSubmitCooldown();
   const prevClaims = (contest.claims || []).slice();
   const pending = { mapId: map.id, cell, teamId: team.id, solvedBy: getSession()?.user?.username, solvedAt: Date.now(), pending: true, complete: false };
   contest.claims = prevClaims.filter((c) => !(c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === cell)).concat(pending);
@@ -1414,8 +1398,7 @@ async function submitAnswer(event) {
     }
     failure = err.message;
   }
-  submit.dataset.busy = "";
-  submit.disabled = false; submit.textContent = label;
+  releaseSubmitButton(submit, label);
   render();
   if (partialMessage) {
     showProblem(state.contest, map, contestPhase(state.contest));
@@ -1587,12 +1570,12 @@ function startClock() {
     if (sig !== `${state.phase}:${state.frozen}:${state.contest.spawnResolved}`) render();
     else writeStatus(state.contest, phase, map, frozen);
     syncContest().catch(() => {});
-  }, 2000);
+  }, 1000);
 }
 
 async function syncContest() {
   const now = Date.now();
-  const gap = document.hidden ? 60000 : (now - state.lastMouse >= 5000 ? 20000 : 5000);
+  const gap = document.hidden ? 15000 : 2000;
   if (now - state.syncAt < gap) return;
   state.syncAt = now;
   try {

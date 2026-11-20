@@ -9,6 +9,7 @@ import { problemScore } from "../shared/difficulty.js";
 import { teamForUser, teamEnergy } from "../shared/contest-data.js";
 import { readEnergySettings } from "../shared/energy.js";
 import { publishContestPatch } from "../shared/contest-sync.js";
+import { beginSubmitCooldown, bindSubmitCooldown, cooldownLeft, cooldownText, releaseSubmitButton } from "../shared/submit-cooldown.js";
 
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
@@ -180,7 +181,14 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorEl.hidden = true;
   const submit = form.querySelector("button");
-  if (submit.disabled || paintChoiceLock()) return;
+  if (paintChoiceLock()) return;
+  if (cooldownLeft() > 0) {
+    errorEl.hidden = false;
+    errorEl.textContent = cooldownText();
+    releaseSubmitButton(submit, "Submit");
+    return;
+  }
+  if (submit.disabled) return;
   const label = submit.textContent;
   submit.dataset.busy = "1";
   submit.disabled = true;
@@ -207,29 +215,28 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  beginSubmitCooldown();
   try {
     const data = await api.solve(contestId, cellIndex, submitted.answer, openMapId, submitted.answers);
     takeServerContest(data.contest, data.serverNow);
-    submit.dataset.busy = "";
     if (data.complete === false) {
       renderParts(problemParts);
-      submit.disabled = false;
-      submit.textContent = label;
+      releaseSubmitButton(submit, label);
       showStatus(data.message || "Part recorded. The other parts are still open.");
       paintEnergy();
       return;
     }
+    submit.dataset.busy = "";
     form.hidden = true;
     showStatus(data.message || "Answer recorded. You can close this tab.");
   } catch (err) {
     takeServerContest(err.data?.contest, err.data?.serverNow);
     errorEl.hidden = false;
     errorEl.textContent = err.message;
-    submit.dataset.busy = "";
-    submit.disabled = false;
-    submit.textContent = label;
+    releaseSubmitButton(submit, label);
     paintEnergy();
   }
 });
 
+bindSubmitCooldown();
 loadProblem();

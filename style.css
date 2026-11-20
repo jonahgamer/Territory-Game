@@ -1039,6 +1039,39 @@ a.create-map-link {
   position: relative;
 }
 
+#student-maps {
+  overflow: hidden;
+}
+
+.map-stage {
+  width: max-content;
+  min-width: 100%;
+  transform-origin: 0 0;
+}
+
+.map-zoom-bar {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.map-zoom-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(8, 18, 32, 0.92);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .teleport-links {
   position: absolute;
   left: 0;
