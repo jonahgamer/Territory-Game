@@ -17,7 +17,10 @@ function paint(contest) {
   if (title) title.textContent = contest.name || "Leaderboard";
   const hidden = contest.leaderboardHidden === true;
   const ended = contestPhase(contest) === "ended";
-  const rows = hidden ? [] : (Array.isArray(contest.leaderboard) ? contest.leaderboard : []);
+  let rows = hidden ? [] : (Array.isArray(contest.leaderboard) ? contest.leaderboard : []);
+  if (!ended) {
+    rows = rows.map((row) => ({ teamId: row.teamId, name: row.name, rankScore: row.rankScore }));
+  }
   if (note) {
     note.textContent = hidden
       ? "The leaderboard is hidden."

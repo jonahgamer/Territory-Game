@@ -2,7 +2,7 @@ import { requireContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { api } from "../shared/api.js?v=roles";
 import { el } from "../shared/dom.js";
-import { noteServerTime } from "../shared/contest-time.js";
+import { contestPhase, noteServerTime } from "../shared/contest-time.js";
 import { pointsLabel, rulePointsFor, teamForUser } from "../shared/contest-data.js?v=leaderboard";
 
 const contestId = new URLSearchParams(location.search).get("contest") || "";
@@ -25,7 +25,8 @@ function paint(contest) {
     if (!rule || typeof rule.title !== "string" || typeof rule.text !== "string") continue;
     const item = el("li");
     item.append(el("h3", null, rule.title), el("p", null, rule.text));
-    const points = team ? rulePointsFor(contest, team.id, rule.id) : 0;
+    const ended = contestPhase(contest) === "ended";
+    const points = ended && team ? rulePointsFor(contest, team.id, rule.id) : 0;
     if (points) {
       const amount = pointsLabel(Math.abs(points));
       item.append(el("p", "rule-points", points > 0

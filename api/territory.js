@@ -946,9 +946,13 @@ function contestPayload(contest, mapOrMaps, problems, user) {
     rectangleBonus = rectangleBonus.map((item) => ({ teamId: item.teamId, bonus: item.bonus, area: 0 }));
   }
   const shownClaims = (admin ? visibleClaims : visibleClaims.map((claim) => {
-    if (!Array.isArray(claim.awards) || !claim.awards.length) return claim;
-    const awards = claim.awards.filter((award) => revealedIds.has(award.id));
     const next = { ...claim };
+    if (!ended) {
+      delete next.awards;
+      return next;
+    }
+    if (!Array.isArray(claim.awards) || !claim.awards.length) return next;
+    const awards = claim.awards.filter((award) => revealedIds.has(award.id));
     if (awards.length) next.awards = awards;
     else delete next.awards;
     return next;
@@ -992,7 +996,7 @@ function contestPayload(contest, mapOrMaps, problems, user) {
       revealedRules: revealed,
       touchBonus: contestantScoreList(touchAwardList(contest, maps, Date.now()), contest, admin, team),
       rectangleBonus: contestantScoreList(rectangleBonus, contest, admin, team),
-      rulePoints: rulePointList(contest, maps, Date.now(), admin ? null : (team || { id: '' })),
+      rulePoints: !admin && !ended ? [] : rulePointList(contest, maps, Date.now(), admin ? null : (team || { id: '' })),
       notices: admin || !team ? [] : ruleNotices(contest, maps, Date.now(), team),
       ruleBlocks: admin || !team ? [] : hiddenAttemptBlocks(contest, maps, team.id),
       stealOpen: stealOpenCells(contest, Date.now()),
