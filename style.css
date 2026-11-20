@@ -3212,7 +3212,6 @@ main:has(.editor-head) .grid-scroll {
   padding: 10px 14px;
   text-align: right;
   white-space: nowrap;
-  width: max-content;
 }
 
 .score-grid th {
@@ -4032,10 +4031,10 @@ main:has(.editor-head) .grid-scroll {
 }
 
 .scoreboard {
-  width: auto;
-  max-width: none;
-  margin: 0;
-  padding: 28px 24px 48px;
+  width: min(110rem, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+  overflow-x: hidden;
 }
 
 .scoreboard-head {
