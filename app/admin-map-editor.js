@@ -34,6 +34,8 @@ const state = {
   placePickSource: "random",
   placePickTypes: new Set(["math"]),
   placePickDifficulties: new Set(["easy", "normal", "hard", "insane"]),
+  mapPlacements: [],
+  placeSkipMapIds: new Set(),
 };
 
 // ── 函数 ─────────────────────────────────────────────────
@@ -44,6 +46,7 @@ async function run() {
   state.maps = [data.map];
   state.problems = data.problems;
   state.reserved = data.reserved || [];
+  state.mapPlacements = Array.isArray(data.mapPlacements) ? data.mapPlacements : [];
   state.revisions = data.revisions;
   if (!state.current) throw new Error("That map was not found.");
 
@@ -158,6 +161,12 @@ function bindEvents() {
     state.placePickSource = s;
     renderPlaceMode();
   });
+  document.querySelector("#place-skip-used")?.addEventListener("change", (event) => {
+    if (event.target.checked && state.placeSkipMapIds.size === 0 && state.current?.id) {
+      state.placeSkipMapIds.add(state.current.id);
+    }
+    renderPlaceMode();
+  });
   document.querySelector("#apply-map-size")?.addEventListener("click", applySize);
   nameInput?.addEventListener("input", () => {
     const name = nameInput.value.trim();
@@ -222,10 +231,55 @@ function renderPlaceMode() {
   document.querySelector("#place-fixed-field").hidden = state.placePickSource !== "fixed";
   document.querySelector("#place-range-field").hidden = state.placePickSource !== "range";
   document.querySelector("#place-round-field").hidden = state.placePickSource !== "random";
+  const skipOn = state.placePickSource === "random";
+  const skipField = document.querySelector("#place-skip-field");
+  if (skipField) skipField.hidden = !skipOn;
+  renderSkipMaps();
 }
 
 function isRoundIndex(index) {
   return String(index).padStart(5, "0")[2] === "0";
+}
+
+function renderSkipMaps() {
+  const box = document.querySelector("#place-skip-maps");
+  const enabled = state.placePickSource === "random" && document.querySelector("#place-skip-used")?.checked === true;
+  if (box) box.hidden = !enabled;
+  if (!box || !enabled) return;
+  box.replaceChildren();
+  const maps = state.mapPlacements;
+  if (!maps.length) {
+    box.append(el("p", "field-note", "No maps are saved yet."));
+    return;
+  }
+  for (const map of maps) {
+    const label = el("label", "next-number");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = state.placeSkipMapIds.has(map.id);
+    input.addEventListener("change", () => {
+      if (input.checked) state.placeSkipMapIds.add(map.id);
+      else state.placeSkipMapIds.delete(map.id);
+    });
+    const name = map.id === state.current?.id ? `${map.name} (this map)` : map.name;
+    label.append(input, document.createTextNode(name));
+    box.append(label);
+  }
+}
+
+function problemsOnChosenMaps() {
+  const blocked = new Set();
+  const chosen = state.placeSkipMapIds;
+  if (state.current && chosen.has(state.current.id)) {
+    for (const cell of state.current.cells || []) {
+      if (cell?.kind === "problem") blocked.add(`${cell.type}:${cell.problemNo}`);
+    }
+  }
+  for (const map of state.mapPlacements) {
+    if (map.id === state.current?.id || !chosen.has(map.id)) continue;
+    for (const problem of map.problems || []) blocked.add(`${problem.type}:${problem.index}`);
+  }
+  return blocked;
 }
 
 function renderView() {
@@ -460,6 +514,13 @@ function pickProblemForMap(map) {
       return { error: "Every match is an x0xx problem. Turn on Include x0xx numbers to place one." };
     }
     pool = withoutRound;
+  }
+  if (state.placePickSource === "random" && document.querySelector("#place-skip-used")?.checked) {
+    if (state.placeSkipMapIds.size === 0) return { error: "Choose at least one map to skip problems from." };
+    const blocked = problemsOnChosenMaps();
+    const fresh = pool.filter((p) => !blocked.has(`${p.type}:${p.index}`));
+    if (!fresh.length && pool.length) return { error: "Every match is already on a chosen map." };
+    pool = fresh;
   }
   if (state.placePickSource === "fixed") {
     const index = readProblemNo(document.querySelector("#place-fixed-index")?.value);

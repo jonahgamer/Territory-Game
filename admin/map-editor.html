@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=map-head" />
+  <link rel="stylesheet" href="/style.css?v=skip-maps" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" />
 </head>
 <body>
@@ -125,6 +125,11 @@
               <input id="place-include-round" type="checkbox" />
               Include x0xx numbers, such as 26000–26099
             </label>
+            <label id="place-skip-field" class="next-number">
+              <input id="place-skip-used" type="checkbox" />
+              Do not repeat problems from chosen maps
+            </label>
+            <div id="place-skip-maps" class="place-skip-maps" hidden></div>
           </div>
         </div>
       </div>
@@ -139,6 +144,6 @@
     <p id="page-toast-message"></p>
     <button id="page-toast-close" type="button">Close</button>
   </div>
-  <script type="module" src="/app/admin-map-editor.js?v=x0xx"></script>
+  <script type="module" src="/app/admin-map-editor.js?v=skip-maps"></script>
 </body>
 </html>

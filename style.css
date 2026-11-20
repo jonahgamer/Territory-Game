@@ -1904,6 +1904,13 @@ main:has(.editor-head) .grid-scroll {
   color: var(--muted);
 }
 
+.place-skip-maps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  flex-basis: 100%;
+}
+
 .kind-choices button {
   padding: 8px 12px;
   border: 1px solid var(--line);

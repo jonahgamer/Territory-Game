@@ -2774,6 +2774,8 @@ async function mapCellIndex(db, session) {
   const maps = await db.collection('maps').aggregate([
     { $project: {
       id: 1,
+      name: 1,
+      mode: 1,
       cells: {
         $map: {
           input: {
@@ -2791,6 +2793,7 @@ async function mapCellIndex(db, session) {
   ], options).toArray();
   const usage = {};
   const reserved = [];
+  const placements = [];
   const seen = new Set();
   for (const map of maps) {
     const onMap = new Set();
@@ -2808,8 +2811,18 @@ async function mapCellIndex(db, session) {
         reserved.push({ type: cell.type, index: cell.problemNo });
       }
     }
+    placements.push({
+      id: map.id,
+      name: typeof map.name === 'string' && map.name ? map.name : 'Map',
+      mode: map.mode === 'testing' ? 'testing' : 'official',
+      problems: [...onMap].map((key) => {
+        const split = key.indexOf(':');
+        return { type: key.slice(0, split), index: Number(key.slice(split + 1)) };
+      }),
+    });
   }
-  return { usage, reserved };
+  placements.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return { usage, reserved, placements };
 }
 
 async function clearProblemCells(db, keys, session) {
@@ -2883,6 +2896,7 @@ async function handlePageMap(req, res, db, user) {
     map: pageMap(map, true, { keepPhoto: true }),
     problems: problems.map(problemStub),
     reserved: cellIndex.reserved,
+    mapPlacements: cellIndex.placements,
     revisions,
     serverNow: Date.now(),
   });
