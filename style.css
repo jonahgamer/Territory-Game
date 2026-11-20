@@ -1797,11 +1797,13 @@ main:has(.editor-head) .grid-scroll {
   display: grid;
   place-items: center;
   padding: 16px;
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.62);
 }
 
 .student-problem-card {
   width: min(100%, 68rem);
+  min-height: 0;
   max-height: min(94dvh, 1200px);
   overflow: auto;
   padding: 20px 22px;

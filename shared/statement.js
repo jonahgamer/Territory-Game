@@ -32,8 +32,8 @@ function buildStatementDocument(source, tag = "") {
 <meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="${STATEMENT_KATEX_CSS}" crossorigin="anonymous">
 <style>
-  html { color-scheme: dark; background: #081220; height: 100%; }
-  body { margin: 0; padding: 0; min-height: 100%; background: #081220; color: #d7f6ff; font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }
+  html { color-scheme: dark; background: #081220; }
+  body { margin: 0; padding: 0; background: #081220; color: #d7f6ff; font-family: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; line-height: 1.55; }
   #territory-bridge { display: none; }
   .statement-content { overflow-wrap: anywhere; font-size: 16px; }
   .katex { font-size: 1em; }
@@ -56,7 +56,9 @@ function buildStatementDocument(source, tag = "") {
 (function () {
   function report() {
     try {
-      const height = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+      const content = document.querySelector(".statement-content");
+      if (!content) return;
+      const height = Math.ceil(Math.max(content.scrollHeight, content.getBoundingClientRect().height));
       parent.postMessage({ type: "territory-statement-height", height: height }, "*");
     } catch (e) {}
   }
@@ -79,7 +81,10 @@ function buildStatementDocument(source, tag = "") {
     if (booted) return;
     booted = true;
     renderMath(); report();
-    try { if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement); } catch (e) {}
+    try {
+      const content = document.querySelector(".statement-content");
+      if (content && window.ResizeObserver) new ResizeObserver(report).observe(content);
+    } catch (e) {}
     try { new MutationObserver(report).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true }); } catch (e) {}
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
@@ -166,7 +171,8 @@ export function createStatementView(container, options = {}) {
     if (data.type === "territory-statement-height") {
       const height = Number(data.height);
       if (!Number.isFinite(height)) return;
-      frame.style.height = `${Math.max(48, Math.min(8000, Math.ceil(height) + 16))}px`;
+      const next = Math.max(48, Math.min(4000, Math.ceil(height)));
+      if (frame.style.height !== `${next}px`) frame.style.height = `${next}px`;
       return;
     }
     if (frame !== activeFrame) return;
@@ -200,9 +206,10 @@ export function createStatementView(container, options = {}) {
         const fit = () => {
           try {
             const doc = frame.contentDocument;
-            if (!doc) return;
-            const height = Math.max(doc.documentElement?.scrollHeight || 0, doc.body?.scrollHeight || 0);
-            if (height > 0) frame.style.height = `${Math.min(8000, Math.ceil(height) + 16)}px`;
+            const content = doc?.querySelector?.(".statement-content");
+            if (!content) return;
+            const height = Math.ceil(Math.max(content.scrollHeight, content.getBoundingClientRect().height));
+            if (height > 0) frame.style.height = `${Math.min(4000, height)}px`;
           } catch { /* sandboxed frame reports its height by message */ }
         };
         fit();
