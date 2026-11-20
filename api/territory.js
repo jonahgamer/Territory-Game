@@ -669,6 +669,20 @@ function ruleNotices(contest, maps, now, onlyTeam) {
     });
     if (text) notices.push({ id: `steal:${entry.teamId}:${entry.at}:${index}`, teamId: entry.teamId, text });
   });
+  const claims = cleanClaims(contest?.claims, primaryMapId(contest));
+  for (const claim of claims) {
+    if (!teamIds.has(claim.teamId)) continue;
+    for (const award of claim.awards || []) {
+      if (!award.points) continue;
+      const text = hiddenRuleEffectMessage(contest, award.id, now, { points: award.points });
+      if (!text) continue;
+      notices.push({
+        id: `award:${claim.mapId}:${claim.cell}:${claim.teamId}:${award.id}:${award.points}`,
+        teamId: claim.teamId,
+        text,
+      });
+    }
+  }
   const touch = touchAwards(contest, maps, now);
   if (touch) {
     for (const team of teams) {
@@ -692,7 +706,7 @@ function ruleNotices(contest, maps, now, onlyTeam) {
       });
     }
   }
-  return notices.slice(-40);
+  return notices.slice(-80);
 }
 
 function countTouchingTeams(contest, maps) {
@@ -1261,17 +1275,23 @@ async function handleBootstrap(req, res, db, user) {
     ? problems
     : problems.filter((problem) => neededProblems.has(`${problem.type}:${problem.index}`));
 
-  const cleanMaps = sourceMaps.map(m => ({
+  const cleanMaps = sourceMaps.map((m) => ({
     id: m.id,
     name: m.name,
     cols: m.cols,
     rows: m.rows,
-    cells: m.cells,
+    cells: admin ? m.cells : contestantCells(m, sourceProblems),
     mode: m.mode === 'testing' ? 'testing' : 'official',
     backdrop: m.backdrop === 'photo' && typeof m.photo === 'string' && m.photo ? 'photo' : 'terrain',
     photo: m.backdrop === 'photo' && typeof m.photo === 'string' ? m.photo : '',
   }));
-  const cleanProblems = sourceProblems.map(p => {
+  const cleanProblems = sourceProblems.map((p) => {
+    if (!admin) {
+      return {
+        difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
+        score: problemScore(p),
+      };
+    }
     const problem = {
       index: p.index,
       type: p.type,
@@ -1279,15 +1299,13 @@ async function handleBootstrap(req, res, db, user) {
       difficulty: DIFFICULTIES.includes(p.difficulty) ? p.difficulty : 'normal',
       score: problemScore(p),
     };
-    if (admin) {
-      problem.answer = p.answer;
-      problem.solution = typeof p.solution === 'string' ? p.solution : '';
-      problem.logic = typeof p.logic === 'string' ? p.logic : '';
-    }
+    problem.answer = p.answer;
+    problem.solution = typeof p.solution === 'string' ? p.solution : '';
+    problem.logic = typeof p.logic === 'string' ? p.logic : '';
     return problem;
   });
   const cleanContests = contests.map(c => {
-    const contestMaps = contestMapIds(c).map((id) => cleanMaps.find((item) => item.id === id)).filter(Boolean);
+    const contestMaps = contestMapIds(c).map((id) => sourceMaps.find((item) => item.id === id)).filter(Boolean);
     const play = contestPayload(c, contestMaps, problems, user).contest;
     const teams = play.teams;
     return {
@@ -1966,6 +1984,7 @@ async function handleSolve(req, res, db, user, body) {
           at: now,
         });
       }
+      ledger.push({ teamId: team.id, ruleId: 'cell-steal', points: 0, at: now });
       await col.updateOne(
         { id: contestId },
         {
@@ -1977,18 +1996,22 @@ async function handleSolve(req, res, db, user, body) {
     }
   }
   const names = fresh.map((index) => `(${String.fromCharCode(97 + index)})`).join(', ');
+  const effects = [
+    ...awardSentences(updated, gainedAwards, now),
+    ...(victims?.length ? [hiddenRuleEffectMessage(updated, 'cell-steal', now, { action: 'cell' })] : []),
+  ].filter(Boolean);
   const message = [
     graded.single
       ? 'Answer accepted.'
       : (complete ? `Correct: ${names}.` : `Correct: ${names}. The other parts are still open.`),
-    ...awardSentences(updated, gainedAwards, now),
-    ...(victims?.length ? [hiddenRuleEffectMessage(updated, 'cell-steal', now, { action: 'cell' })] : []),
+    ...effects,
   ].filter(Boolean).join(' ');
   return res.status(200).json({
     ...contestPayload(updated, maps, problems, user),
     complete,
     awarded: gained + bonus + burst,
     message,
+    ...(effects.length ? { effects } : {}),
   });
 }
 
@@ -2685,6 +2708,19 @@ async function pageRevisions(db) {
     if (doc && revisions[doc._id] !== undefined && Number.isInteger(doc.revision)) revisions[doc._id] = doc.revision;
   }
   return revisions;
+}
+
+function contestantCells(map, problems) {
+  const byKey = new Map((problems || []).map((problem) => [problemIdentity(problem.type, problem.index), problem]));
+  return (map.cells || []).map((cell) => {
+    if (cell?.kind !== 'problem') return { kind: cell?.kind || 'empty' };
+    const problem = byKey.get(problemIdentity(cell.type, cell.problemNo));
+    return {
+      kind: 'problem',
+      difficulty: problemDifficulty(problem),
+      score: problemScore(problem),
+    };
+  });
 }
 
 function pageMap(map, withCells, options = {}) {
@@ -3504,8 +3540,12 @@ async function handlePagePlay(req, res, db, user) {
     success: true,
     user: pageUser(user),
     contest: withSchedule(contest, contestPayload(contest, maps, storedProblems, user).contest, user),
-    maps: maps.map((map) => pageMap(map, true)),
-    problems: storedProblems.map(problemStub),
+    maps: maps.map((map) => {
+      const view = pageMap(map, true);
+      if (!isAdmin(user)) view.cells = contestantCells(map, storedProblems);
+      return view;
+    }),
+    problems: isAdmin(user) ? storedProblems.map(problemStub) : [],
     serverNow: Date.now(),
   });
 }
@@ -3577,6 +3617,10 @@ async function handlePageAnswer(req, res, db, user) {
     multipleChoice: false,
   };
   if (stored) problem.multipleChoice = problemIsMultipleChoice(stored);
+  if (!isAdmin(user)) {
+    delete problem.index;
+    delete problem.type;
+  }
   return res.status(200).json({
     success: true,
     contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest, user),

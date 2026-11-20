@@ -1,6 +1,7 @@
 import { requireContestant, getSession, sameContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
+import { showRulePopup, showRulePopupOnce } from "../shared/rule-popup.js";
 import { loadPage } from "../shared/data.js?v=hidden-end";
 import { api } from "../shared/api.js?v=roles";
 import { el, renderList } from "../shared/dom.js";
@@ -9,9 +10,9 @@ import {
 } from "../shared/contest-time.js";
 import { teamForUser, teamColor, teamShort, teamEnergy, agreedSpawnChoices, normalizeTeamCells, normalizeSpawnVotes, normalizeClaims, normalizeTeams, pointsLabel, scoringRule, rulePointsFor } from "../shared/contest-data.js?v=hidden-end";
 import { readEnergySettings } from "../shared/energy.js";
-import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=mem";
+import { layoutMapGrid, mapBackdrop, cellClassName, cellText, cellLabel, paintPhotoGrid } from "../shared/map-render.js?v=no-id";
 import { DIFFICULTY_NAME, ANSWER_OPEN_MODE_KEY } from "../shared/constants.js";
-import { problemDifficulty, problemTag, problemScore } from "../shared/difficulty.js";
+import { problemDifficulty, problemScore } from "../shared/difficulty.js";
 import { contestMapIds, primaryMapId, teleportLabel, teleportPairAt } from "../shared/contest-board.js";
 import { drawTeleportLinks, setTeleportLinesVisible, teleportLinesVisible } from "../shared/teleport-link.js?v=contest-lines";
 import { publishContestPatch, watchContestPatch } from "../shared/contest-sync.js";
@@ -584,7 +585,7 @@ function buildLeaderboard(contest, map) {
       const boardCell = boardMap?.cells?.[claim.cell];
       if (!boardCell || boardCell.kind !== "problem") continue;
       const p = state.problems.find((x) => x.index === boardCell.problemNo && x.type === boardCell.type);
-      const gained = Number.isFinite(Number(claim.score)) ? Number(claim.score) : problemScore(p);
+      const gained = Number.isFinite(Number(claim.score)) ? Number(claim.score) : (Number.isFinite(Number(boardCell.score)) ? Number(boardCell.score) : problemScore(p));
       score = Math.round((score + gained) * 10) / 10;
       solved += 1;
     }
@@ -727,8 +728,8 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
 
     let rgb;
     if (cell.kind === "problem") {
-      const prob = findProblem(cell.problemNo, cell.type);
-      const tier = TIER_VALUE[problemDifficulty(prob)] ?? null;
+      const named = cell.difficulty || problemDifficulty(findProblem(cell.problemNo, cell.type));
+      const tier = TIER_VALUE[named] ?? null;
       rgb = tier != null ? GREEN_ANCHOR[tier] : OTHER_COLOURS.unknown;
     } else if (cell.kind === "obstacle")   rgb = OTHER_COLOURS.obstacle;
     else if (cell.kind === "spawnpoint")   rgb = OTHER_COLOURS.spawnpoint;
@@ -853,7 +854,11 @@ function renderGrid(contest, map, phase, frozen, team, grid = document.querySele
     }
 
     if (state.selectedCell === index && state.selectedMapId === map.id) button.setAttribute("aria-pressed", "true");
-    const place = cellLabel(cell, Math.floor(index / map.cols) + 1, (index % map.cols) + 1);
+    const row = Math.floor(index / map.cols) + 1;
+    const column = (index % map.cols) + 1;
+    const place = cell.kind === "problem"
+      ? `Row ${row}, column ${column}, problem`
+      : cellLabel(cell, row, column);
     if (cell.kind === "problem" && here.length) {
       const names = here.map((item) => (contest.teams || []).find((t) => t.id === item.teamId)?.name).filter(Boolean);
       button.setAttribute("aria-label", `${place}, occupied by ${names.join(", ") || "a team"}`);
@@ -894,9 +899,9 @@ function cellTipLines(contest, map, index, cell) {
   const lines = [`Row ${row}, column ${column}`];
   if (cell.kind === "problem") {
     const problem = findProblem(cell.problemNo, cell.type);
-    const difficulty = problemDifficulty(problem);
-    const points = problemScore(problem);
-    lines.push(`${problemTag(cell.problemNo, cell.type)} · ${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`);
+    const difficulty = cell.difficulty || problemDifficulty(problem);
+    const points = Number.isFinite(Number(cell.score)) ? Number(cell.score) : problemScore(problem);
+    lines.push(`${DIFFICULTY_NAME[difficulty] || "Normal"} · ${points} point${points === 1 ? "" : "s"}`);
   } else if (cell.kind === "obstacle") lines.push("Obstacle");
   else if (cell.kind === "spawnpoint") lines.push("Spawn point");
   else if (cell.kind === "teleport") {
@@ -1061,7 +1066,7 @@ async function onGridClick(event) {
     const mine = (contest.claims || []).find((c) => c.teamId === team.id && (c.mapId || primaryMapId(contest)) === map.id && c.cell === index);
     const mineDone = Boolean(mine && mine.complete !== false);
     if (hiddenRuleBlocksAttempt(contest, map.id, index)) {
-      showPageToast(hiddenAttemptMessage(contest), "warn");
+      showRulePopup(hiddenAttemptMessage(contest));
       return;
     }
     if (mineDone || (!mine && !adjacentToTeam(map, contest, team.id, index))) return;
@@ -1123,11 +1128,13 @@ async function showProblem(contest, map, phase) {
         problem.opened = true;
         problem.openedChoice = data.problem?.multipleChoice === true;
       }
+      if (cell) cell.multipleChoice = data.problem?.multipleChoice === true;
     } catch (err) {
       if (request !== promptRequest) return;
       panel.hidden = true;
       form.hidden = true;
       showPageToast(err.message || "The problem could not be opened.", "warn");
+      if (/hidden rule|only the team on that spawn/i.test(err.message || "")) showRulePopup(err.message);
       return;
     }
   }
@@ -1496,11 +1503,13 @@ function showRuleNotices(contest) {
   let seen = [];
   try { seen = JSON.parse(sessionStorage.getItem(key) || "[]"); } catch { seen = []; }
   const known = new Set(Array.isArray(seen) ? seen : []);
+  const fresh = [];
   for (const notice of contest.notices || []) {
     if (notice.teamId !== team.id || known.has(notice.id)) continue;
     known.add(notice.id);
-    showPageToast(notice.text, "ok");
+    fresh.push(notice.text);
   }
+  if (fresh.length) showRulePopupOnce(fresh);
   try { sessionStorage.setItem(key, JSON.stringify([...known].slice(-100))); } catch { /* The next poll can show a notice again. */ }
 }
 
@@ -1544,16 +1553,17 @@ function paintOpenChoiceLock() {
   const team = contest && teamForUser(contest);
   const mapId = state.selectedMapId || (contest && primaryMapId(contest));
   const cell = state.selectedCell;
-  const problem = contest && mapId != null && cell != null
-    ? findProblem(state.maps.find((map) => map.id === mapId)?.cells?.[cell]?.problemNo, state.maps.find((map) => map.id === mapId)?.cells?.[cell]?.type)
+  const cellData = contest && mapId != null && cell != null
+    ? state.maps.find((map) => map.id === mapId)?.cells?.[cell]
     : null;
+  const problem = cellData?.problemNo != null ? findProblem(cellData.problemNo, cellData.type) : null;
   const lock = team && cell != null ? activeChoiceLock(contest.locks, team.id, mapId, cell, serverNow()) : null;
   return paintChoiceLockControl({
     form: document.querySelector("#student-answer-form"),
     note: document.querySelector("#choice-lock-note"),
     lock,
     now: serverNow(),
-    warnBefore: problem?.multipleChoice === true || problem?.openedChoice === true,
+    warnBefore: cellData?.multipleChoice === true || problem?.multipleChoice === true || problem?.openedChoice === true,
   });
 }
 

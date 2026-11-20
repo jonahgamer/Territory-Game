@@ -10,6 +10,7 @@ import { teamForUser, teamEnergy } from "../shared/contest-data.js";
 import { readEnergySettings } from "../shared/energy.js";
 import { publishContestPatch } from "../shared/contest-sync.js";
 import { beginSubmitCooldown, bindSubmitCooldown, cooldownLeft, cooldownText, releaseSubmitButton } from "../shared/submit-cooldown.js";
+import { showRulePopup, showRulePopupOnce } from "../shared/rule-popup.js";
 
 const params = new URLSearchParams(location.search);
 const contestId = params.get("contest") || "";
@@ -219,6 +220,7 @@ form.addEventListener("submit", async (event) => {
   try {
     const data = await api.solve(contestId, cellIndex, submitted.answer, openMapId, submitted.answers);
     takeServerContest(data.contest, data.serverNow);
+    if (Array.isArray(data.effects) && data.effects.length) showRulePopupOnce(data.effects);
     if (data.complete === false) {
       renderParts(problemParts);
       releaseSubmitButton(submit, label);
@@ -233,6 +235,7 @@ form.addEventListener("submit", async (event) => {
     takeServerContest(err.data?.contest, err.data?.serverNow);
     errorEl.hidden = false;
     errorEl.textContent = err.message;
+    if (/hidden rule|only the team on that spawn/i.test(err.message || "")) showRulePopup(err.message);
     releaseSubmitButton(submit, label);
     paintEnergy();
   }

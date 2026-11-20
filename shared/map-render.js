@@ -64,6 +64,7 @@ export function mapMode(map) {
 }
 
 export function cellDifficulty(cell, findProblem) {
+  if (["easy", "normal", "hard", "insane"].includes(cell?.difficulty)) return cell.difficulty;
   return problemDifficulty(findProblem(cell.problemNo, cell.type));
 }
 
@@ -278,8 +279,11 @@ export function paintPhotoGrid(grid, map, findProblem) {
       button.style.backgroundSize = `${cover.drawW}px ${cover.drawH}px`;
       button.style.backgroundPosition = `${cover.offsetX - col * (cell + gap)}px ${cover.offsetY - row * (cell + gap)}px`;
       const cellData = map.cells?.[index];
-      if (cellData?.kind !== "problem" || !findProblem) continue;
-      const difficulty = problemDifficulty(findProblem(cellData.problemNo, cellData.type));
+      if (cellData?.kind !== "problem") continue;
+      const difficulty = ["easy", "normal", "hard", "insane"].includes(cellData.difficulty)
+        ? cellData.difficulty
+        : (findProblem ? problemDifficulty(findProblem(cellData.problemNo, cellData.type)) : "");
+      if (!difficulty) continue;
       const badge = document.createElement("span");
       badge.className = `cell-difficulty ${difficulty}`;
       badge.textContent = DIFFICULTY_NAME[difficulty] || "Normal";

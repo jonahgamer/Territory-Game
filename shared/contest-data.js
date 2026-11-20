@@ -185,7 +185,7 @@ function cleanNotices(value) {
     if (!notice || typeof notice.id !== "string" || typeof notice.teamId !== "string" || typeof notice.text !== "string") continue;
     notices.push({ id: notice.id.slice(0, 80), teamId: notice.teamId, text: notice.text.slice(0, 240) });
   }
-  return notices.slice(0, 40);
+  return notices.slice(0, 80);
 }
 
 export function formatMark(value) {

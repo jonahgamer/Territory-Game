@@ -1631,6 +1631,50 @@ main:has(.editor-head) .grid-scroll {
   font-family: var(--font-ui);
   cursor: pointer;
 }
+
+.rule-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(2, 7, 14, 0.82);
+}
+
+.rule-popup-dialog {
+  width: min(32rem, 100%);
+  padding: 22px 22px 18px;
+  border: 1px solid #3ee0ff;
+  background: #07111f;
+  box-shadow: 0 0 32px rgba(62, 224, 255, 0.28);
+}
+
+.rule-popup-dialog h2 {
+  margin: 0 0 12px;
+  font-family: var(--font-display, "Orbitron", sans-serif);
+  font-size: 18px;
+  color: #3ee0ff;
+}
+
+.rule-popup-dialog p {
+  margin: 0 0 10px;
+  font-family: var(--font-ui);
+  line-height: 1.45;
+  color: #d7f6ff;
+}
+
+.rule-popup-dialog button {
+  margin-top: 8px;
+  padding: 8px 18px;
+  border: 1px solid #3ee0ff;
+  background: rgba(62, 224, 255, 0.14);
+  color: #3ee0ff;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
 .leaderboard {
   margin: 12px 0 0;
   padding-left: 0;
