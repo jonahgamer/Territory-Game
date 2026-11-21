@@ -3193,8 +3193,10 @@ main:has(.editor-head) .grid-scroll {
 }
 
 .score-grid-wrap {
-  overflow-x: auto;
+  display: block;
+  width: 100%;
   max-width: 100%;
+  overflow-x: auto;
   margin-top: 12px;
 }
 
@@ -4034,7 +4036,6 @@ main:has(.editor-head) .grid-scroll {
   width: min(110rem, calc(100% - 48px));
   margin: 0 auto;
   padding: 28px 0 48px;
-  overflow-x: hidden;
 }
 
 .scoreboard-head {

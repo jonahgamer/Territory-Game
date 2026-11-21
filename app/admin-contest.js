@@ -1219,7 +1219,7 @@ function startClock() {
 
 async function syncContest() {
   const now = Date.now();
-  const gap = document.hidden ? 15000 : 2000;
+  const gap = document.hidden ? 30000 : 8000;
   if (now - state.syncAt < gap) return;
   state.syncAt = now;
   try {

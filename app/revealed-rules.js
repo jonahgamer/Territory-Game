@@ -42,7 +42,7 @@ function paint(contest) {
 
 async function pull() {
   const now = Date.now();
-  const gap = document.hidden ? 15000 : 2000;
+  const gap = document.hidden ? 30000 : 8000;
   if (now - syncAt < gap) return;
   syncAt = now;
   const error = document.querySelector("#load-error");
