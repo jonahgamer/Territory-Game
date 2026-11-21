@@ -2,7 +2,7 @@ import { requireAdmin } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { loadPage } from "../shared/data.js?v=leaderboard";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=poll-stamp";
 import { el, renderList } from "../shared/dom.js";
 import { renderScoreGrid } from "../shared/score-grid.js?v=score-grid";
 import {
@@ -27,10 +27,28 @@ const state = {
   syncAt: 0, clock: null, lastMouse: Date.now(),
 };
 
+async function ensureMapPhotos(maps) {
+  const pending = (maps || []).filter((map) => map && (map.hasPhoto === true || map.backdrop === "photo") && !map.photo);
+  if (!pending.length) return false;
+  await Promise.all(pending.map(async (map) => {
+    try {
+      const data = await api.mapPhoto(map.id);
+      if (data.photo) {
+        map.photo = data.photo;
+        map.backdrop = "photo";
+      } else map.backdrop = "terrain";
+    } catch {
+      map.backdrop = "terrain";
+    }
+  }));
+  return true;
+}
+
 async function run() {
   if (!contestId) throw new Error("No contest selected.");
   const data = await loadPage("page-contest", { id: contestId });
   state.current = data.contest;
+  state.stamp = data.stamp || "";
   state.contests = state.current ? [state.current] : [];
   state.maps = data.maps || [];
   state.catalog = data.catalog || [];
@@ -54,6 +72,7 @@ async function run() {
   if (backLink) backLink.href = `/admin/contest.html?id=${encodeURIComponent(contestId)}`;
   bindEvents();
   render();
+  ensureMapPhotos(state.maps).then((loaded) => { if (loaded) render(); });
   if (document.querySelector("#hidden-rule-list")) renderHiddenRules();
   startClock();
   watchContestPatch(contestId, (patch) => {
@@ -953,7 +972,7 @@ function applyPlayState(data) {
   state.current.spawnChoices = next.spawnChoices || [];
   state.current.spawnVotes = next.spawnVotes || [];
   state.current.spawns = next.spawns || [];
-  state.current.claims = next.claims || [];
+  if (Array.isArray(next.claims)) state.current.claims = next.claims;
   if (Array.isArray(next.energy)) state.current.energy = next.energy;
   if (Array.isArray(next.touchBonus)) state.current.touchBonus = next.touchBonus;
   else if (next.touchBonus === null) state.current.touchBonus = null;
@@ -1223,7 +1242,13 @@ async function syncContest() {
   if (now - state.syncAt < gap) return;
   state.syncAt = now;
   try {
-    const data = await api.contestState(state.current.id);
+    const data = await api.contestState(state.current.id, state.stamp);
+    if (data.unchanged) {
+      if (data.stamp) state.stamp = data.stamp;
+      noteServerTime(data.serverNow);
+      return;
+    }
+    if (data.stamp) state.stamp = data.stamp;
     applyPlayState(data);
     render();
   } catch {}

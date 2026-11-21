@@ -121,7 +121,11 @@ export const api = {
     ...(answers ? { answers } : {}),
   }),
   claimTeleport: (contestId, mapId, cell) => apiCall("claim-teleport", { contestId, mapId, cell }),
-  contestState: (contestId) => apiCall("contest-state", { contestId }),
+  contestState: (contestId, stamp) => apiCall("contest-state", {
+    contestId,
+    ...(stamp ? { stamp } : {}),
+  }),
+  mapPhoto: (mapId) => authedGet(`action=map-photo&map=${encodeURIComponent(mapId)}`),
   listAccounts: () => apiCall("list-accounts"),
   createAccount: (body) => apiCall("create-account", body),
   updateAccount: (body) => apiCall("update-account", body),

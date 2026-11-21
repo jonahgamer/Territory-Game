@@ -1,11 +1,12 @@
 import { requireAdmin } from "../shared/session.js?v=roles";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=poll-stamp";
 import { noteServerTime, phaseClock } from "../shared/contest-time.js";
 import { renderScoreGrid } from "../shared/score-grid.js?v=score-grid";
 
 const contestId = new URLSearchParams(location.search).get("id") || "";
 let contest = null;
 let syncAt = 0;
+let stamp = "";
 
 function paintClock() {
   const node = document.querySelector("#scoreboard-phase");
@@ -36,7 +37,14 @@ async function pull() {
   const error = document.querySelector("#scoreboard-error");
   const status = document.querySelector("#scoreboard-status");
   try {
-    const data = await api.contestState(contestId);
+    const data = await api.contestState(contestId, stamp);
+    if (data.unchanged) {
+      stamp = data.stamp || stamp;
+      noteServerTime(data.serverNow);
+      if (status && contest) status.textContent = "Live";
+      return;
+    }
+    stamp = data.stamp || stamp;
     noteServerTime(data.serverNow);
     paint(data.contest);
     if (error) error.hidden = true;

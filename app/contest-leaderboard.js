@@ -1,11 +1,12 @@
 import { requireContestant } from "../shared/session.js?v=roles";
 import { initNav } from "../shared/nav.js?v=account";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=poll-stamp";
 import { renderScoreGrid } from "../shared/score-grid.js?v=score-grid";
 import { contestPhase, noteServerTime } from "../shared/contest-time.js";
 
 const contestId = new URLSearchParams(location.search).get("contest") || "";
 let syncAt = 0;
+let stamp = "";
 
 function paint(contest) {
   const title = document.querySelector("#leaderboard-title");
@@ -41,7 +42,13 @@ async function pull() {
   syncAt = now;
   const error = document.querySelector("#load-error");
   try {
-    const data = await api.contestState(contestId);
+    const data = await api.contestState(contestId, stamp);
+    if (data.unchanged) {
+      stamp = data.stamp || stamp;
+      noteServerTime(data.serverNow);
+      return;
+    }
+    stamp = data.stamp || stamp;
     noteServerTime(data.serverNow);
     paint(data.contest);
     if (error) error.hidden = true;

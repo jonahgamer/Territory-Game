@@ -1,5 +1,5 @@
 import { readStoredSession } from "../shared/session.js?v=roles";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=poll-stamp";
 import { loadPage } from "../shared/data.js?v=roles";
 import { noteServerTime, serverNow } from "../shared/contest-time.js";
 import { activeChoiceLock, paintChoiceLockControl } from "../shared/choice-lock.js?v=choice-lock";
@@ -119,14 +119,32 @@ function paintChoiceLock() {
   });
 }
 
-function takeServerContest(next, serverNow) {
+function takeServerContest(next, serverNowMs) {
   if (!contest || !next) return;
   if (Array.isArray(next.energy)) contest.energy = next.energy;
-  if (Array.isArray(next.claims)) contest.claims = next.claims;
   if (Array.isArray(next.locks)) contest.locks = next.locks;
-  noteServerTime(serverNow);
+  if (Array.isArray(next.claims)) contest.claims = next.claims;
+  else if (next.claim || Array.isArray(next.drop)) {
+    const fallback = contest.mapId || "";
+    let list = Array.isArray(contest.claims) ? contest.claims.slice() : [];
+    if (Array.isArray(next.drop)) {
+      list = list.filter((claim) => !next.drop.some((item) => (
+        item && item.teamId === claim.teamId && item.cell === claim.cell
+        && (item.mapId || fallback) === (claim.mapId || fallback)
+      )));
+    }
+    if (next.claim && typeof next.claim.teamId === "string") {
+      list = list.filter((claim) => !(
+        claim.teamId === next.claim.teamId && claim.cell === next.claim.cell
+        && (claim.mapId || fallback) === (next.claim.mapId || fallback)
+      ));
+      list.push(next.claim);
+    }
+    contest.claims = list;
+  }
+  noteServerTime(serverNowMs);
   paintEnergy();
-  publishContestPatch(contestId, next, serverNow);
+  publishContestPatch(contestId, contest, serverNowMs);
 }
 
 const statement = createStatementView(promptEl, {

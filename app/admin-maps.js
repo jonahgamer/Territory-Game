@@ -67,6 +67,16 @@ function renderList_() {
 
 function createPreview(map) {
   const preview = el("div", "map-preview");
+  if (!Array.isArray(map.cells) || !map.cells.length) {
+    preview.classList.add("map-preview-summary");
+    preview.append(
+      el("strong", null, `${map.cols} × ${map.rows}`),
+      el("span", null, `${map.problemCount || 0} problems`),
+      el("span", null, `${map.spawnPoints || 0} spawns`),
+      el("span", null, `${map.obstacleCount || 0} obstacles`)
+    );
+    return preview;
+  }
   const showNumbers = map.cols <= 6 && map.rows <= 6;
   preview.style.gridTemplateColumns = `repeat(${map.cols}, 1fr)`;
   preview.style.gridTemplateRows = `repeat(${map.rows}, 1fr)`;

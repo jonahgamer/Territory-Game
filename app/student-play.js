@@ -3,7 +3,7 @@ import { initNav } from "../shared/nav.js?v=account";
 import { bindToastClose, showPageToast } from "../shared/toast.js";
 import { showRulePopup, showRulePopupOnce } from "../shared/rule-popup.js";
 import { loadPage } from "../shared/data.js?v=leaderboard";
-import { api } from "../shared/api.js?v=roles";
+import { api } from "../shared/api.js?v=poll-stamp";
 import { el } from "../shared/dom.js";
 import {
   contestPhase, phaseSentence, phaseClock, noteServerTime, formatContestTime, serverNow,
@@ -85,10 +85,12 @@ async function run() {
   state.maps = data.maps;
   state.problems = data.problems;
   state.contest = data.contest;
+  state.stamp = data.stamp || "";
   if (!state.contest) throw new Error("Contest not found.");
   if (!teamForUser(state.contest)) throw new Error("You are not on a team in this contest.");
   bindEvents();
   render();
+  ensureMapPhotos(state.maps).then((loaded) => { if (loaded) render(); });
   showRuleNotices(state.contest);
   startClock();
   watchContestPatch(contestId, (patch) => {
@@ -505,7 +507,11 @@ function render() {
     paintClock();
     return;
   }
-  renderMaps(contest, maps, phase, frozen, team);
+  const boardSig = boardSignature(contest, maps, phase, frozen);
+  if (boardSig !== state.boardSig || !document.querySelector("#student-maps .editor-grid")) {
+    state.boardSig = boardSig;
+    renderMaps(contest, maps, phase, frozen, team);
+  }
   renderSpawnAgreement(contest, map, phase);
   paintClock();
 
@@ -539,6 +545,56 @@ function writeStatus(contest, phase, map, frozen) {
     return;
   }
   note.textContent = "Your team does not have a spawn point.";
+}
+
+function boardSignature(contest, maps, phase, frozen) {
+  const claimSig = (contest.claims || []).map((claim) => (
+    `${claim.mapId || ""}:${claim.cell}:${claim.teamId}:${claim.score}:${claim.complete}`
+  )).join("|");
+  const spawnSig = (contest.spawns || []).map((spawn) => `${spawn.mapId || ""}:${spawn.cell}:${spawn.teamId}`).join("|");
+  const stealSig = (contest.stealOpen || []).map((item) => `${item.mapId}:${item.cell}:${item.until}`).join("|");
+  const lockSig = (contest.locks || []).map((lock) => `${lock.mapId || ""}:${lock.cell}:${lock.until}`).join("|");
+  const mapSig = maps.map((map) => `${map.id}:${map.photo ? 1 : 0}`).join(",");
+  return `${phase}:${frozen}:${contest.spawnResolved}:${mapSig}:${claimSig}:${spawnSig}:${stealSig}:${lockSig}`;
+}
+
+async function ensureMapPhotos(maps) {
+  const pending = (maps || []).filter((map) => map && (map.hasPhoto === true || map.backdrop === "photo") && !map.photo);
+  if (!pending.length) return false;
+  await Promise.all(pending.map(async (map) => {
+    try {
+      const data = await api.mapPhoto(map.id);
+      if (data.photo) {
+        map.photo = data.photo;
+        map.backdrop = "photo";
+      } else map.backdrop = "terrain";
+    } catch {
+      map.backdrop = "terrain";
+    }
+  }));
+  return true;
+}
+
+function mergeClaimPatch(claims, next, fallbackMapId) {
+  let list = Array.isArray(claims) ? claims.slice() : [];
+  if (Array.isArray(next.drop)) {
+    list = list.filter((claim) => !next.drop.some((item) => (
+      item
+      && item.teamId === claim.teamId
+      && item.cell === claim.cell
+      && (item.mapId || fallbackMapId) === (claim.mapId || fallbackMapId)
+    )));
+  }
+  const claim = next.claim;
+  if (claim && typeof claim.teamId === "string" && Number.isInteger(claim.cell)) {
+    list = list.filter((item) => !(
+      item.teamId === claim.teamId
+      && item.cell === claim.cell
+      && (item.mapId || fallbackMapId) === (claim.mapId || fallbackMapId)
+    ));
+    list.push(claim);
+  }
+  return list;
 }
 
 function renderRoster(contest, map, phase) {
@@ -1357,7 +1413,7 @@ async function submitAnswer(event) {
   try {
     const data = await api.solve(contest.id, cell, answer, map.id, answers);
     applyPlayState(data);
-    publishContestPatch(contest.id, data.contest, data.serverNow);
+    publishContestPatch(contest.id, state.contest, data.serverNow);
     if (data.checked) {
       const success = document.querySelector("#student-answer-success");
       if (data.correct) {
@@ -1491,6 +1547,9 @@ function applyPlayState(data) {
   if (Array.isArray(next.spawnVotes)) c.spawnVotes = normalizeSpawnVotes(next.spawnVotes, primaryMapId(c));
   if (Array.isArray(next.spawns)) c.spawns = normalizeTeamCells(next.spawns, primaryMapId(c));
   if (Array.isArray(next.claims)) c.claims = normalizeClaims(next.claims, primaryMapId(c));
+  else if (next.claim || Array.isArray(next.drop)) {
+    c.claims = normalizeClaims(mergeClaimPatch(c.claims, next, primaryMapId(c)), primaryMapId(c));
+  }
   if (Array.isArray(next.locks)) c.locks = next.locks;
   if (typeof next.mapId === "string" && next.mapId) c.mapId = next.mapId;
   if (Array.isArray(next.mapIds)) c.mapIds = next.mapIds;
@@ -1632,7 +1691,13 @@ async function syncContest() {
   if (now - state.syncAt < gap) return;
   state.syncAt = now;
   try {
-    const data = await api.contestState(state.contest.id);
+    const data = await api.contestState(state.contest.id, state.stamp);
+    if (data.unchanged) {
+      if (data.stamp) state.stamp = data.stamp;
+      noteServerTime(data.serverNow);
+      return;
+    }
+    if (data.stamp) state.stamp = data.stamp;
     applyPlayState(data);
     render();
   } catch {}

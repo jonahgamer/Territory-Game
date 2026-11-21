@@ -753,6 +753,17 @@ a.create-map-link {
   gap: 2px;
 }
 
+.map-preview-summary {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 7rem;
+  padding: 12px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
 /* Territory connections and claim feedback */
 .editor-grid {
   position: relative;
