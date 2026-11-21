@@ -42,6 +42,7 @@ const state = {
   keys: [],
   reserved: [],
   usage: { cells: 0, maps: 0 },
+  usageMap: {},
   revisions: { problems: 0, maps: 0 },
   draft: null,
   dirty: false,
@@ -53,13 +54,57 @@ previewEl.className = "problem-preview";
 form.appendChild(previewEl);
 
 // ── 函数 ─────────────────────────────────────────────────
+const CACHE_KEY = "territory-problem-catalog";
+
+function readCatalog() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (!raw || !Array.isArray(raw.keys) || !Array.isArray(raw.reserved)) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function writeCatalog() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      keys: state.keys,
+      reserved: state.reserved,
+      usage: state.usageMap,
+      revisions: state.revisions,
+    }));
+  } catch { /* The next visit loads the catalog again. */ }
+}
+
+function usageFor(problemType, problemIndex, usageMap) {
+  const found = usageMap?.[`${problemType}:${problemIndex}`];
+  return found && Number.isFinite(Number(found.cells)) && Number.isFinite(Number(found.maps))
+    ? { cells: found.cells, maps: found.maps }
+    : { cells: 0, maps: 0 };
+}
+
 async function run() {
   if (!Number.isInteger(index) || !typeInfo(type)) throw new Error("Invalid problem link.");
-  const data = await loadPage("page-problem", { type, index });
-  state.keys = data.keys || [];
-  state.reserved = data.reserved || [];
-  state.usage = data.usage || { cells: 0, maps: 0 };
-  state.revisions = data.revisions;
+  const cached = readCatalog();
+  let catalog = cached;
+  let data;
+  if (!cached) {
+    const [keysData, problemData] = await Promise.all([
+      loadPage("page-problem-keys"),
+      loadPage("page-problem", { type, index, detail: 1 }),
+    ]);
+    catalog = keysData;
+    data = problemData;
+  } else {
+    data = await loadPage("page-problem", { type, index, detail: 1 });
+  }
+  state.keys = catalog.keys || [];
+  state.reserved = catalog.reserved || [];
+  state.usageMap = catalog.usage && typeof catalog.usage === "object" ? catalog.usage : {};
+  state.usage = usageFor(type, index, state.usageMap);
+  state.revisions = data.revisions || catalog.revisions || { problems: 0, maps: 0 };
+  if (!cached) writeCatalog();
 
   const existing = data.problem;
   const storedParts = Array.isArray(existing?.parts)
@@ -393,6 +438,7 @@ async function moveProblem(from, to) {
       moving.type = to.type;
       moving.index = to.index;
     }
+    writeCatalog();
     return true;
   } catch (err) {
     showPageToast(err.message || "Could not move that problem.", "warn");
@@ -400,8 +446,8 @@ async function moveProblem(from, to) {
   }
 }
 
-function problemUsage() {
-  return state.usage || { cells: 0, maps: 0 };
+function problemUsage(problemIndex = state.draft?.index, problemType = state.draft?.type) {
+  return usageFor(problemType, problemIndex, state.usageMap);
 }
 
 function updateSaveState() {
@@ -647,6 +693,7 @@ async function save() {
   try {
     const data = await api.saveProblem(problem, state.revisions.problems);
     state.revisions.problems = data.revision;
+    writeCatalog();
     showPageToast("Problem saved.", "ok");
   } catch (err) {
     showPageToast(err.message || "Could not save the problem.", "warn");
@@ -669,6 +716,8 @@ function deleteProblem() {
   const tag = problemTag(draft.index, draft.type);
   if (!window.confirm(`Delete ${tag}?`)) return;
   api.deleteProblems([{ type: draft.type, index: draft.index }], state.revisions.problems).then(() => {
+    state.keys = state.keys.filter((item) => !(item.type === draft.type && item.index === draft.index));
+    writeCatalog();
     location.assign(back);
   }).catch((err) => showPageToast(err.message || "Could not delete the problem.", "warn"));
 }
@@ -696,6 +745,8 @@ async function duplicateProblem() {
   };
   try {
     await api.saveProblem(copy, state.revisions.problems);
+    state.keys.push({ index: copy.index, type: copy.type });
+    writeCatalog();
   } catch (err) {
     showPageToast(err.message || "Could not duplicate the problem.", "warn");
     return;

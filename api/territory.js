@@ -3382,6 +3382,19 @@ async function handlePageProblem(req, res, db, user) {
   if (!PROBLEM_TYPES.includes(type) || !Number.isInteger(index)) {
     return res.status(400).json({ success: false, message: 'Invalid problem link.' });
   }
+  if (req.query.detail === '1') {
+    const [problem, revisions] = await Promise.all([
+      findStoredProblem(db.collection('problems'), type, index),
+      pageRevisions(db),
+    ]);
+    return res.status(200).json({
+      success: true,
+      user: pageUser(user),
+      problem: problem ? pageProblem(problem, true) : null,
+      revisions,
+      serverNow: Date.now(),
+    });
+  }
   const [problem, keys, cellIndex, revisions] = await Promise.all([
     findStoredProblem(db.collection('problems'), type, index),
     db.collection('problems').find({}, { projection: { index: 1, type: 1 } }).toArray(),
@@ -3404,13 +3417,14 @@ async function handlePageProblemKeys(req, res, db, user) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const [keys, cellIndex, revisions] = await Promise.all([
     db.collection('problems').find({}, { projection: { index: 1, type: 1 } }).toArray(),
-    mapCellIndex(db),
+    problemUsageIndex(db),
     pageRevisions(db),
   ]);
   return res.status(200).json({
     success: true,
     keys: keys.filter((item) => PROBLEM_TYPES.includes(item.type) && Number.isInteger(item.index)).map((item) => ({ type: item.type, index: item.index })),
     reserved: cellIndex.reserved,
+    usage: cellIndex.usage,
     revisions,
     serverNow: Date.now(),
   });
