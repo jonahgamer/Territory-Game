@@ -900,9 +900,11 @@ function cleanResolvedTeams(value) {
 
 function playableContestMap(map, contest) {
   if (!map || isTestingContest(contest) || map.mode === 'testing') return map;
+  const cells = map.cells || [];
+  if (!cells.some((cell) => cell?.kind === 'problem' && cell.type === 'testing')) return map;
   return {
     ...map,
-    cells: (map.cells || []).map((cell) => (
+    cells: cells.map((cell) => (
       cell?.kind === 'problem' && cell.type === 'testing' ? { kind: 'empty' } : cell
     )),
   };
@@ -1021,6 +1023,23 @@ function publicLeaderboard(contest, maps, problems, admin, ended, revealedIds, v
   if (!admin && !ended) return rows.map(({ teamId, name, rankScore }) => ({ teamId, name, rankScore }));
   if (!admin) return rows.map(({ teamId, name, rankScore, basic, ruleTotal, rules }) => ({ teamId, name, rankScore, basic, ruleTotal, rules }));
   return rows;
+}
+
+function liveEnergyPatch(contest, user) {
+  const team = teamForUser(contest, user?.username);
+  const admin = isAdmin(user);
+  const fallback = primaryMapId(contest);
+  return {
+    id: contest.id,
+    locks: cleanChoiceLocks(contest?.locks, fallback).filter((lock) => admin || (team && lock.teamId === team.id)),
+    ...energyFields(contest, admin ? null : team?.id, Date.now()),
+  };
+}
+
+function claimsHaveScores(contest) {
+  const claims = contest?.claims;
+  if (!Array.isArray(claims) || !claims.length) return true;
+  return claims.every((claim) => claim && Number.isFinite(Number(claim.score)));
 }
 
 function energyFields(contest, onlyTeamId, now) {
@@ -1588,7 +1607,11 @@ function mapUpdatedAt(map) {
 
 function rememberMap(map) {
   if (!map?.id || !Array.isArray(map.cells)) return;
-  mapCache.set(map.id, { at: mapUpdatedAt(map), map });
+  const stored = { ...map };
+  delete stored.photo;
+  mapCache.delete(map.id);
+  mapCache.set(map.id, { at: mapUpdatedAt(map), map: stored });
+  while (mapCache.size > 8) mapCache.delete(mapCache.keys().next().value);
 }
 
 function forgetMap(id) {
@@ -1612,8 +1635,7 @@ async function loadContestMaps(db, contest, { photo = true } = {}) {
     }
     const cached = mapCache.get(id);
     const at = mapUpdatedAt(head);
-    const needsPhoto = photo && cached && cached.map.photo == null && cached.map.backdrop === 'photo';
-    if (!cached || cached.at !== at || needsPhoto) missing.push(id);
+    if (!cached || cached.at !== at) missing.push(id);
   }
   if (missing.length) {
     const options = photo ? {} : { projection: { photo: 0 } };
@@ -1656,7 +1678,7 @@ function loadContestView(contest, maps, problems, user, stamp) {
   const view = contestPayload(contest, maps, problems, user);
   view.stamp = stamp;
   payloadCache.set(key, { at: Date.now(), view });
-  if (payloadCache.size > 80) payloadCache.delete(payloadCache.keys().next().value);
+  if (payloadCache.size > 4) payloadCache.delete(payloadCache.keys().next().value);
   return view;
 }
 
@@ -1921,7 +1943,7 @@ async function handleChooseSpawn(req, res, db, user, body) {
   );
   const stored = await col.findOne({ id: contestId });
   const updated = await maybeResolveSpawns(db, stored, maps, Date.now());
-  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
+  const problems = claimsHaveScores(updated) ? [] : await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json(contestPayload(updated, maps, problems, user));
 }
 
@@ -1942,7 +1964,6 @@ async function handleSolve(req, res, db, user, body) {
   const maps = (await loadContestMaps(db, contest, { photo: false })).map((item) => playableContestMap(item, contest));
   const mapId = typeof body.mapId === 'string' && contestMapIds(contest).includes(body.mapId) ? body.mapId : primaryMapId(contest);
   const map = maps.find((item) => item.id === mapId) || null;
-  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const now = Date.now();
   contest = await maybeResolveSpawns(db, contest, maps, now);
   const timing = contestWindow(contest);
@@ -1975,7 +1996,7 @@ async function handleSolve(req, res, db, user, body) {
       success: false,
       message: 'That cell is already taken.',
       serverNow: now,
-      contest: contestPayload(contest, maps, problems, user).contest,
+      contest: liveEnergyPatch(contest, user),
     });
   }
   if (spawnGuardBlocks(contest, map, team.id, cell)) {
@@ -1993,7 +2014,7 @@ async function handleSolve(req, res, db, user, body) {
       message: lockWaitMessage(activeLock.until, now),
       lockUntil: activeLock.until,
       serverNow: now,
-      contest: contestPayload(contest, maps, problems, user).contest,
+      contest: liveEnergyPatch(contest, user),
     });
   }
   const difficulty = problemDifficulty(problem);
@@ -2035,7 +2056,7 @@ async function handleSolve(req, res, db, user, body) {
       message: `${verdict} The team has ${preview.value} energy, so this attempt does not take the cell.${lockNote}`,
       ...(lockUntil ? { lockUntil } : {}),
       serverNow: now,
-      contest: contestPayload(latest, maps, problems, user).contest,
+      contest: liveEnergyPatch(latest, user),
     });
   }
 
@@ -2053,14 +2074,14 @@ async function handleSolve(req, res, db, user, body) {
         complete: false,
         message: `${verdict} The team has ${spent.current} energy, so this attempt does not take the cell.`,
         serverNow: now,
-        ...(spent.contest ? { contest: contestPayload(spent.contest, maps, problems, user).contest } : {}),
+        ...(spent.contest ? { contest: liveEnergyPatch(spent.contest, user) } : {}),
       });
     }
     return res.status(400).json({
       success: false,
       message: 'Energy changed while that answer was checked. Try again.',
       serverNow: now,
-      ...(spent.contest ? { contest: contestPayload(spent.contest, maps, problems, user).contest } : {}),
+      ...(spent.contest ? { contest: liveEnergyPatch(spent.contest, user) } : {}),
     });
   }
   if (!correct) {
@@ -2084,7 +2105,7 @@ async function handleSolve(req, res, db, user, body) {
       message: lockUntil ? `${wrong} ${lockWaitMessage(lockUntil, now)}` : wrong,
       ...(lockUntil ? { lockUntil } : {}),
       serverNow: now,
-      contest: contestPayload(latest, maps, problems, user).contest,
+      contest: liveEnergyPatch(latest, user),
     });
   }
 
@@ -2147,7 +2168,7 @@ async function handleSolve(req, res, db, user, body) {
       success: false,
       message: 'That cell changed while the answer was checked. Try again.',
       serverNow: Date.now(),
-      contest: contestPayload(updated, maps, problems, user).contest,
+      contest: liveEnergyPatch(updated, user),
     });
   }
   let victims = [];
@@ -2190,7 +2211,7 @@ async function handleSolve(req, res, db, user, body) {
       : (complete ? `Correct: ${names}.` : `Correct: ${names}. The other parts are still open.`),
     ...effects,
   ].filter(Boolean).join(' ');
-  const payload = contestPayload(updated, maps, problems, user);
+  const payload = contestPayload(updated, maps, claimsHaveScores(updated) ? [] : await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 }), user);
   const view = payload.contest;
   const mine = (view.claims || []).find((item) => item.teamId === team.id && item.mapId === map.id && item.cell === cell) || null;
   const { claims: _claims, ...rest } = view;
@@ -2233,7 +2254,6 @@ async function handleClaimTeleport(req, res, db, user, body) {
   const maps = (await loadContestMaps(db, contest, { photo: false })).map((item) => playableContestMap(item, contest));
   const mapId = typeof body.mapId === 'string' && contestMapIds(contest).includes(body.mapId) ? body.mapId : primaryMapId(contest);
   const map = maps.find((item) => item.id === mapId) || null;
-  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const now = Date.now();
   contest = await maybeResolveSpawns(db, contest, maps, now);
   const timing = contestWindow(contest);
@@ -2292,6 +2312,7 @@ async function handleClaimTeleport(req, res, db, user, body) {
     });
   }
   const updated = await col.findOne({ id: contestId });
+  const problems = claimsHaveScores(updated) ? [] : await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   return res.status(200).json(contestPayload(updated, maps, problems, user));
 }
 
@@ -2397,7 +2418,7 @@ async function handleListAccounts(req, res, db, user) {
   if (!isAdmin(user)) return res.status(403).json({ success: false, message: 'Admin only' });
   const [records, contests] = await Promise.all([
     db.collection('users').find({}, { projection: { password: 0 } }).toArray(),
-    db.collection('contests').find({}).toArray(),
+    db.collection('contests').find({}, { projection: { id: 1, name: 1, teams: 1 } }).toArray(),
   ]);
   const memberships = contestMemberships(contests);
   const accounts = records
@@ -2847,7 +2868,9 @@ async function handleContestState(req, res, db, user, body) {
   let maps = await loadContestMaps(db, contest, { photo: false });
   contest = await maybeResolveSpawns(db, contest, maps, now);
   maps = await loadContestMaps(db, contest, { photo: false });
-  const problems = await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
+  const problems = claimsHaveScores(contest)
+    ? []
+    : await problemsOnMaps(db, maps, { index: 1, type: 1, difficulty: 1, score: 1 });
   const nextStamp = contestStamp(contest, now);
   return res.status(200).json(loadContestView(contest, maps, problems, user, nextStamp));
 }
@@ -3935,10 +3958,16 @@ async function handlePageAnswer(req, res, db, user) {
   }
   const requested = String(req.query.map || '');
   const mapId = contestMapIds(contest).includes(requested) ? requested : primaryMapId(contest);
-  const map = mapId
-    ? await db.collection('maps').findOne({ id: mapId }, { projection: { photo: 0 } })
+  const packed = mapId
+    ? await db.collection('maps').aggregate([
+      { $match: { id: mapId } },
+      { $project: { id: 1, cols: 1, rows: 1, cell: { $arrayElemAt: ['$cells', cell] } } },
+    ]).next()
     : null;
-  const mapCell = map?.cells?.[cell];
+  const mapCell = packed?.cell;
+  const cells = [];
+  if (mapCell) cells[cell] = mapCell;
+  const map = packed ? { id: packed.id, cols: packed.cols, rows: packed.rows, cells } : null;
   if (!map || mapCell?.kind !== 'problem') {
     return res.status(404).json({ success: false, message: 'That problem is not available.' });
   }
@@ -3966,9 +3995,25 @@ async function handlePageAnswer(req, res, db, user) {
     delete problem.index;
     delete problem.type;
   }
+  const team = answerTeam;
+  const admin = isAdmin(user);
+  const fallback = primaryMapId(contest);
+  const ownClaims = cleanClaims(contest.claims, fallback).filter((claim) => (
+    claim.mapId === map.id && claim.cell === cell && (admin || claim.teamId === team?.id)
+  ));
   return res.status(200).json({
     success: true,
-    contest: withSchedule(contest, contestPayload(contest, [map], stored ? [stored] : [], user).contest, user),
+    contest: withSchedule(contest, {
+      id: contest.id,
+      name: contest.name,
+      mapId: fallback,
+      mapIds: contestMapIds(contest),
+      mode: contest.mode === 'testing' ? 'testing' : 'competition',
+      teams: admin ? cleanTeams(contest.teams) : (team ? [team] : []),
+      claims: ownClaims,
+      locks: cleanChoiceLocks(contest.locks, fallback).filter((lock) => admin || lock.teamId === team?.id),
+      ...energyFields(contest, admin ? null : team?.id, Date.now()),
+    }, user),
     mapId,
     problem,
     serverNow: Date.now(),
