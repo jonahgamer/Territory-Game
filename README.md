@@ -1,6 +1,6 @@
 # Territory-Game
 
-Puzzle Territory is a Wah Yan College maths-team contest. Teams claim cells on a shared map by solving problems.
+Puzzle Territory is a Wah Yan College Stem Team contest. Teams claim cells on a shared map by solving problems.
 
 ## Local development
 
